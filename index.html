@@ -16,7 +16,7 @@
 </head>
 <body class="text-purple-50">
   <div id="root" class="min-h-screen w-full">Loading…</div>
-  <pre id="errors" style="display:none;white-space:pre-wrap;background:#2b0f3a;border:1px solid #7e22ce;color:#fca5a5;padding:.75rem;border-radius:.75rem;margin:1rem;max-width:480px;"></pre>
+  <pre id="errors" style="display:none;white-space:pre-wrap;background:#2b0f3a;border:1px solid #7e22ce;color:#fca5a5;padding:.75rem;border-radius:.75rem;margin:1rem;max-width:64rem;"></pre>
 
   <!-- React + Babel -->
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -31,44 +31,43 @@
     const DAY  =["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
     const toAstro = y => y>0 ? y : 1-Math.abs(y);
     const isLeap  = y => (y%400===0)||((y%4===0)&&(y%100!==0));
-    const daysInMonthDisplay = (y,m)=> (m===2 ? (isLeap(toAstro(y))?29:28) : [4,6,9,11].includes(m)?30:31);
+    const dim = (y,m)=> (m===2 ? (isLeap(toAstro(y))?29:28) : [4,6,9,11].includes(m)?30:31);
     function jdnGregorian(y,m,d){ const a=Math.floor((14-m)/12), y2=y+4800-a, m2=m+12*a-3;
       return d+Math.floor((153*m2+2)/5)+365*y2+Math.floor(y2/4)-Math.floor(y2/100)+Math.floor(y2/400)-32045; }
     const wday=(y,m,d)=> (jdnGregorian(toAstro(y),m,d)+1)%7;
     const fmt=(y,m,d)=> `${MONTH[m-1]} ${d} ${y>0?y:Math.abs(y)+' BC'}`;
     const rint=(a,b)=>Math.floor(Math.random()*(b-a+1))+a;
     function randomDate(minY,maxY){ let y; do{ y=rint(minY,maxY);}while(y===0);
-      const m=rint(1,12), d=rint(1,daysInMonthDisplay(y,m)); return {y,m,d}; }
+      const m=rint(1,12), d=rint(1,dim(y,m)); return {y,m,d}; }
     const ALIAS={sun:0,sunday:0,mon:1,monday:1,tue:2,tues:2,tuesday:2,wed:3,weds:3,wednesday:3,thu:4,thur:4,thurs:4,thursday:4,fri:5,friday:5,sat:6,saturday:6};
     function parseAns(s){ const t=s.trim(), low=t.toLowerCase();
       if(!t) return {kind:"invalid"}; if(low==="help") return {kind:"cmd",payload:"help"};
       if(low==="stop") return {kind:"cmd",payload:"stop"}; if(/^\d$/.test(t)){const n=+t; return n>=0&&n<=6?{kind:"ok",payload:n}:{kind:"invalid"};}
       if(low in ALIAS) return {kind:"ok",payload:ALIAS[low]}; return {kind:"invalid"}; }
+
     const isTouch = typeof window!=="undefined" && ("ontouchstart" in window || navigator.maxTouchPoints>0 || matchMedia("(pointer:coarse)").matches);
 
-    function Stat({label,value}) {
-      return (
-        <div className="px-3 py-2 rounded-xl panel text-center">
-          <div className="text-[12px] text-purple-200/80">{label}</div>
-          <div className="text-lg font-semibold tabular-nums">{value}</div>
-        </div>
-      );
-    }
+    const Stat=({label,value})=>(
+      <div className="px-3 py-2 rounded-xl panel text-center">
+        <div className="text-[12px] text-purple-200/80">{label}</div>
+        <div className="text-lg font-semibold tabular-nums">{value}</div>
+      </div>
+    );
 
     function App(){
-      // modes & ranges
+      /* --- mode & ranges --- */
       const [mode,setMode]=useState("classic");          // classic | survival | timed
       const [includeBC,setIncludeBC]=useState(false);
 
-      // Default ranges: AD = 1..10000, BC = -10000..10000
+      // Defaults as requested
       const [adRange,setAdRange] = useState({min:1, max:10000});
       const [bcRange,setBcRange] = useState({min:-10000, max:10000});
 
-      // The currently active range mirrors the chosen mode
+      // Active range mirrors the current era
       const [minY,setMinY]=useState(1);
       const [maxY,setMaxY]=useState(10000);
 
-      // game state
+      /* --- game state --- */
       const [date,setDate]=useState(()=>randomDate(1,10000));
       const correct=useMemo(()=>wday(date.y,date.m,date.d),[date]);
       const [input,setInput]=useState(""), inputRef=useRef(null);
@@ -78,46 +77,47 @@
       const [streak,setStreak]=useState(0), [best,setBest]=useState(0);
       const [secs,setSecs]=useState(60), [run,setRun]=useState(false);
 
-      // avoid keyboard pop on phones each round
+      // UI highlighting: which day should be visually emphasized (typed or clicked)
+      const [hintIdx,setHintIdx]=useState(null);
+
+      // Avoid keyboard pop on phones each round
       useEffect(()=>{ if(!isTouch) inputRef.current?.focus(); else document.activeElement?.blur(); },[date]);
 
+      // Timed mode ticking
       useEffect(()=>{ if(mode!=="timed"||!run||secs<=0) return; const t=setTimeout(()=>setSecs(s=>s-1),1000); return ()=>clearTimeout(t);},[mode,run,secs]);
       useEffect(()=>{ if(mode==="timed"&&secs===0){ setRun(false); setMsg("Time! Session ended."); }},[mode,secs]);
 
-      // Toggle BC remembers its own range values (and AD remembers its own)
+      // While typing, highlight the interpreted day
+      useEffect(()=>{
+        const p=parseAns(input);
+        setHintIdx(p.kind==="ok" ? p.payload : null);
+      },[input]);
+
+      /* --- era toggle with memory --- */
       function handleToggleBC(checked){
         setIncludeBC(checked);
-        if (checked) { setMinY(bcRange.min); setMaxY(bcRange.max); }
-        else { setMinY(Math.max(1, adRange.min)); setMaxY(adRange.max); }
-        setDate(randomDate(checked ? bcRange.min : Math.max(1, adRange.min),
-                           checked ? bcRange.max : adRange.max));
+        if (checked) { setMinY(bcRange.min); setMaxY(bcRange.max); setDate(randomDate(bcRange.min, bcRange.max)); }
+        else         { const min = Math.max(1, adRange.min); setMinY(min); setMaxY(adRange.max); setDate(randomDate(min, adRange.max)); }
       }
 
-      // Range updates (sliders & inputs) – keep per-mode memory
+      /* --- range updates, remembered per era --- */
       function setMinActive(v){
         if (includeBC) {
-          const m = Math.min(v, maxY);
-          setBcRange(r=>({...r, min:m}));
-          setMinY(m===0? -1 : m);
+          const m = Math.min(v, maxY); setBcRange(r=>({...r,min:m===0?-1:m})); setMinY(m===0?-1:m);
         } else {
-          const m = Math.max(1, Math.min(v, maxY));
-          setAdRange(r=>({...r, min:m}));
-          setMinY(m);
+          const m = Math.max(1, Math.min(v, maxY)); setAdRange(r=>({...r,min:m})); setMinY(m);
         }
       }
       function setMaxActive(v){
         if (includeBC) {
-          const m = Math.max(v, minY);
-          setBcRange(r=>({...r, max:m}));
-          setMaxY(m===0? 1 : m);
+          const m = Math.max(v, minY); setBcRange(r=>({...r,max:m===0?1:m})); setMaxY(m===0?1:m);
         } else {
-          const m = Math.max(v, minY, 1);
-          setAdRange(r=>({...r, max:m}));
-          setMaxY(m);
+          const m = Math.max(v, minY, 1); setAdRange(r=>({...r,max:m})); setMaxY(m);
         }
       }
 
-      const resetRound=()=>{ setGuesses([]); setFlawless(true); setInput(""); setDate(randomDate(minY,maxY)); setMsg(""); };
+      /* --- round helpers --- */
+      const resetRound=()=>{ setGuesses([]); setFlawless(true); setInput(""); setHintIdx(null); setDate(randomDate(minY,maxY)); setMsg(""); };
       const summary=()=> `Score: ${good}/${played} (${played?(good/played*100).toFixed(1):"0.0"}%) — Longest: ${best}`;
       const resetStats=()=>{ setPlayed(0); setGood(0); setStreak(0); setBest(0); setMsg("Stats reset."); };
 
@@ -142,15 +142,23 @@
         }
       }
 
-      const onClickDay=i=>{ if(mode==="timed"&&!run&&secs>0) setRun(true); submit(String(i)); setInput(""); if(isTouch) document.activeElement?.blur(); };
+      const onClickDay=i=>{ setHintIdx(i); if(mode==="timed"&&!run&&secs>0) setRun(true); submit(String(i)); setInput(""); if(isTouch) document.activeElement?.blur(); };
       const onSubmit=e=>{ e.preventDefault(); if(mode==="timed"&&!run&&secs>0) setRun(true); submit(input); setInput(""); if(!isTouch) inputRef.current?.focus(); };
 
+      /* --- button class with stronger highlight --- */
+      const btnClass = i => {
+        const base = "w-full rounded-xl border px-3 py-2 text-sm transition shadow-sm";
+        const normal = "border-purple-800/60 bg-purple-900/30 hover:bg-purple-900/60";
+        const active = "bg-purple-700/80 border-purple-300/70 text-white ring-2 ring-purple-400 shadow-lg";
+        return `${base} ${hintIdx===i ? active : normal}`;
+      };
+
       return (
-        <div className="mx-auto px-4 py-5 w-full max-w-[480px]">
+        <div className="mx-auto px-4 py-6 w-full max-w-[480px] md:max-w-3xl lg:max-w-4xl">
           {/* Header */}
-          <div className="flex items-center justify-between gap-2">
-            <h1 className="text-xl font-semibold leading-none">Calendar Game</h1>
-            <div className="flex items-center gap-2">
+          <div className="flex items-center justify-between gap-4">
+            <h1 className="text-xl md:text-2xl font-semibold leading-none">Calendar Game</h1>
+            <div className="flex items-center gap-3">
               <select value={mode} onChange={e=>{setMode(e.target.value); setMsg(""); setStreak(0); setSecs(60); setRun(false);}}
                 className="panel rounded-xl px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400">
                 <option value="classic">Classic</option>
@@ -167,8 +175,8 @@
             </div>
           </div>
 
-          {/* Stats + Reset */}
-          <div className="mt-4 grid grid-cols-2 gap-3">
+          {/* Stats + Reset (mobile 2×2, desktop 4 across) */}
+          <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3">
             <Stat label="Score" value={`${good}/${played}`} />
             <Stat label="Accuracy" value={`${played?(good/played*100).toFixed(1):"0.0"}%`} />
             <Stat label="Streak" value={streak} />
@@ -180,8 +188,10 @@
           </div>
 
           {/* Year range (collapsible) */}
-          <details className="mt-3 rounded-2xl card p-3">
-            <summary className="cursor-pointer text-sm text-purple-200/90">Year range <span className="tabular-nums ml-1">{minY} → {maxY}</span></summary>
+          <details className="mt-3 rounded-2xl card p-3" >
+            <summary className="cursor-pointer text-sm text-purple-200/90">
+              Year range <span className="tabular-nums ml-1">{minY} → {maxY}</span>
+            </summary>
             <div className="mt-3 space-y-3">
               <div className="flex items-center gap-3">
                 <input type="range" min={includeBC?-10000:1} max="10000" step="1" value={minY}
@@ -189,7 +199,7 @@
                 <input type="range" min={includeBC?-10000:1} max="10000" step="1" value={maxY}
                   onChange={e=>setMaxActive(+e.target.value)} className="w-full accent-purple-500"/>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-3 max-w-xl">
                 <input type="number" inputMode="numeric" className="panel rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-400"
                   value={minY} onChange={e=>setMinActive(+e.target.value)} />
                 <input type="number" inputMode="numeric" className="panel rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-400"
@@ -200,24 +210,23 @@
           </details>
 
           {/* Prompt */}
-          <div className="mt-5 p-4 rounded-3xl card">
+          <div className="mt-6 p-5 rounded-3xl card">
             <div className="text-center">
               <div className="text-xs uppercase tracking-widest text-purple-300/70">What day is this?</div>
-              <div className="mt-1 text-3xl font-bold">{fmt(date.y,date.m,date.d)}</div>
+              <div className="mt-1 text-3xl md:text-4xl font-bold">{fmt(date.y,date.m,date.d)}</div>
             </div>
 
-            {/* Day buttons */}
+            {/* Day buttons: 2 cols on phone, 3 on small tablets, 7 on desktop */}
             <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-7 gap-2">
               {DAY.map((n,i)=>(
-                <button key={n} onClick={()=>onClickDay(i)}
-                  className="w-full rounded-xl border border-purple-800/60 bg-purple-900/30 active:bg-purple-900/60 px-3 py-2 text-sm">
+                <button key={n} onClick={()=>onClickDay(i)} className={btnClass(i)}>
                   {n}
                 </button>
               ))}
             </div>
 
             {/* Input row */}
-            <form onSubmit={onSubmit} className="mt-3 grid grid-cols-[1fr_auto_auto] gap-2 items-center">
+            <form onSubmit={onSubmit} className="mt-3 grid grid-cols-[1fr_auto_auto] md:grid-cols-[1fr_auto_auto] gap-2 items-center max-w-3xl mx-auto">
               <input ref={inputRef} value={input} onChange={e=>setInput(e.target.value)}
                 placeholder="Type a day (e.g., Monday) or 0–6"
                 className="panel rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-400" />
