@@ -84,7 +84,9 @@
       const [played,setPlayed]=useState(0), [good,setGood]=useState(0);
       const [streak,setStreak]=useState(0), [best,setBest]=useState(0);
       const [secs,setSecs]=useState(60), [run,setRun]=useState(false);
-      const [flash,setFlash]=useState(null);
+
+      const [flash,setFlash]=useState(null);                 // {type:'good'|'bad', idx}
+      const [status,setStatus]=useState(null);               // null | 'correct' | 'incorrect'
 
       useEffect(()=>{ if(!isTouch) inputRef.current?.focus(); else document.activeElement?.blur(); },[date]);
       useEffect(()=>{ if(mode!=="timed"||!run||secs<=0) return; const t=setTimeout(()=>setSecs(s=>s-1),1000); return ()=>clearTimeout(t);},[mode,run,secs]);
@@ -104,11 +106,11 @@
         else { const m=Math.max(v,minY,1); setAdRange(r=>({...r,max:m})); setMaxY(m); }
       }
 
-      const nextRound=()=>{ setGuesses([]); setFlawless(true); setInput(""); setFlash(null); setDate(randomDate(minY,maxY)); setMsg(""); };
+      const nextRound=()=>{ setGuesses([]); setFlawless(true); setInput(""); setFlash(null); setStatus(null); setDate(randomDate(minY,maxY)); setMsg(""); };
       const summary =()=>`Score: ${good}/${played} (${played?(good/played*100).toFixed(1):"0.0"}%) — Longest: ${best}`;
-      const resetStats=()=>{ setPlayed(0); setGood(0); setStreak(0); setBest(0); setMsg("Stats reset."); };
+      const resetStats=()=>{ setPlayed(0); setGood(0); setStreak(0); setBest(0); setMsg("Stats reset."); setStatus(null); };
 
-      const skip=()=>{ setMsg(`Skipped — Answer: ${DAY[correct]}.`); setPlayed(p=>p+1); setStreak(0);
+      const skip=()=>{ setStatus(null); setMsg(`Skipped — Answer: ${DAY[correct]}.`); setPlayed(p=>p+1); setStreak(0);
         if(mode==="survival"){ setMsg(m=>m+" Game over."); return; } nextRound(); };
 
       function handleFlash(type, idx, then=()=>{}){ setFlash({type,idx}); setTimeout(()=>{ setFlash(null); then(); },450); }
@@ -117,32 +119,46 @@
         const {kind,payload}=parseAns(txt);
         if(kind==="cmd"&&payload==="stop"){ setMsg(summary()); setRun(false); return; }
         if(kind==="cmd"&&payload==="skip"){ skip(); return; }
-        if(kind==="invalid"){ setMsg("Invalid input. Type a day or 0–6. Use 'skip' or 'stop'."); return; }
+        if(kind==="invalid"){ setStatus(null); setMsg("Invalid input. Type a day or 0–6. Use 'skip' or 'stop'."); return; }
 
         if(payload===correct){
+          setStatus('correct');
           if(flawless){
-            setMsg("Correct ✔");
             handleFlash('good',payload,()=>{ setPlayed(p=>p+1); setGood(c=>c+1);
               setStreak(s=>{const ns=s+1; if(ns>best) setBest(ns); return ns;}); nextRound(); });
           } else {
-            setMsg("Correct — but this round is scored incorrect due to an earlier miss.");
+            // No extra message—still counts as incorrect per rules
             handleFlash('good',payload,()=>{ setPlayed(p=>p+1); setStreak(0);
-              if(mode==="survival"){ setMsg(m=>m+" Game over."); return; } nextRound(); });
+              if(mode==="survival"){ setMsg("Game over."); return; } nextRound(); });
           }
         } else {
-          setMsg("Incorrect ✖"); handleFlash('bad',payload);
+          setStatus('incorrect');
+          handleFlash('bad',payload);
           const label=DAY[payload]; setGuesses(g=>g.includes(label)?g:[...g,label]);
-          if(mode==="survival"){ setPlayed(p=>p+1); setStreak(0); setMsg(m=>`${m} Answer: ${DAY[correct]}. Game over.`); }
+          if(mode==="survival"){ setPlayed(p=>p+1); setStreak(0); setMsg(`Answer: ${DAY[correct]}. Game over.`); }
           setFlawless(false);
         }
       }
 
-      const onClickDay=i=>{ if(mode==="timed"&&!run&&secs>0) setRun(true); submit(String(i)); setInput(""); if(isTouch) document.activeElement?.blur(); };
+      const onClickDay=(i,e)=>{ e?.currentTarget?.blur(); if(mode==="timed"&&!run&&secs>0) setRun(true); submit(String(i)); setInput(""); if(isTouch) document.activeElement?.blur(); };
       const onSubmit=e=>{ e.preventDefault(); if(mode==="timed"&&!run&&secs>0) setRun(true); submit(input); setInput(""); if(!isTouch) inputRef.current?.focus(); };
 
-      const baseBtn="w-full rounded-2xl border px-4 py-3 text-base md:text-sm transition shadow-sm select-none";
+      const baseBtn="w-full rounded-2xl border px-4 py-3 text-base md:text-sm transition shadow-sm select-none focus:outline-none focus-visible:outline-none";
       const idleBtn="border-purple-800/60 bg-purple-900/30 hover:bg-purple-900/60";
       const btnClass=i=> (flash && flash.idx===i) ? `${baseBtn} ${flash.type==='good'?'flash-good':'flash-bad'} border-transparent` : `${baseBtn} ${idleBtn}`;
+
+      const StatusPill = () => {
+        if(!status) return <div className="lg:hidden" />;
+        const ok = status==='correct';
+        const cls = ok
+          ? "bg-emerald-500/20 text-emerald-200 border border-emerald-500/40"
+          : "bg-rose-500/20 text-rose-200 border border-rose-500/40";
+        return (
+          <div className="lg:hidden flex items-center justify-end">
+            <span className={`px-2.5 py-1 rounded-lg text-xs font-medium ${cls}`}>{ok?'Correct':'Incorrect'}</span>
+          </div>
+        );
+      };
 
       return (
         <div className="mx-auto px-4 py-5 w-full max-w-[480px] md:max-w-3xl lg:max-w-4xl">
@@ -204,8 +220,10 @@
 
             <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3">
               {DAY.map((n,i)=>(
-                <button key={n} onClick={()=>onClickDay(i)} className={btnClass(i)}>{n}</button>
+                <button type="button" key={n} onClick={(e)=>onClickDay(i,e)} className={btnClass(i)}>{n}</button>
               ))}
+              {/* Mobile: status pill sits to the right of Saturday */}
+              <StatusPill />
             </div>
 
             <form onSubmit={onSubmit} className="mt-3 flex items-stretch gap-2">
@@ -219,9 +237,10 @@
               </div>
             </form>
 
-            {msg && (
+            {/* Keep guesses list below; 'msg' now only for skip/invalid/etc. */}
+            { (msg || guesses.length>0) && (
               <div className="mt-3 text-purple-100/90 text-sm">
-                <div>{msg}</div>
+                {msg && <div>{msg}</div>}
                 {guesses.length>0 && (
                   <div className="mt-2 flex flex-wrap gap-1 items-center">
                     <span className="text-purple-300/80 text-xs mr-1">Guesses so far:</span>
@@ -232,11 +251,11 @@
             )}
           </div>
 
-          {/* Full guidance moved here so it never truncates on phones */}
+          {/* Typing guidance (never truncated) */}
           <div className="mt-3 text-[11px] text-purple-300/80 text-center leading-snug px-3">
-            <span className="font-medium">Typing:</span> day name (e.g., <span class="italic">Monday</span> / <span class="italic">Mon</span>)
-            or digits <span class="tabular-nums">0–6</span> (<span class="tabular-nums">Sun=0 … Sat=6</span>).
-            Commands: <span class="font-medium">skip</span>, <span class="font-medium">stop</span>.
+            <span className="font-medium">Typing:</span> day name (e.g., <span className="italic">Monday</span> / <span className="italic">Mon</span>)
+            or digits <span className="tabular-nums">0–6</span> (<span className="tabular-nums">Sun=0 … Sat=6</span>).
+            Commands: <span className="font-medium">skip</span>, <span className="font-medium">stop</span>.
           </div>
         </div>
       );
