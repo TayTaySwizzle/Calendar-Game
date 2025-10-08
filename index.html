@@ -28,6 +28,20 @@
   <div id="root" class="min-h-screen w-full">Loading…</div>
   <pre id="errors" style="display:none;white-space:pre-wrap;background:#2b0f3a;border:1px solid #7e22ce;color:#fca5a5;padding:.75rem;border-radius:.75rem;margin:1rem;max-width:64rem;"></pre>
 
+  <!-- Show JS errors visibly (helps if Babel/JSX hiccups again) -->
+  <script>
+    window.addEventListener('error', e => {
+      const er = document.getElementById('errors'); if (!er) return;
+      er.style.display = 'block';
+      er.textContent = '⚠️ ' + (e.error?.message || e.message || 'Unknown error');
+    });
+    window.addEventListener('unhandledrejection', e => {
+      const er = document.getElementById('errors'); if (!er) return;
+      er.style.display = 'block';
+      er.textContent = '⚠️ ' + (e.reason?.message || String(e.reason));
+    });
+  </script>
+
   <!-- React + Babel -->
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -72,7 +86,7 @@
       const [mode,setMode]=useState("classic");          // classic | survival | timed
       const [includeBC,setIncludeBC]=useState(false);
 
-      // Defaults as requested
+      // Defaults as requested (AD: 1..10000)
       const [adRange,setAdRange] = useState({min:1, max:10000});
       const [bcRange,setBcRange] = useState({min:-10000, max:10000});
 
@@ -174,7 +188,7 @@
       const onClickDay=i=>{ if(mode==="timed"&&!run&&secs>0) setRun(true); submit(String(i)); setInput(""); if(isTouch) document.activeElement?.blur(); };
       const onSubmit=e=>{ e.preventDefault(); if(mode==="timed"&&!run&&secs>0) setRun(true); submit(input); setInput(""); if(!isTouch) inputRef.current?.focus(); };
 
-      /* --- button class; stronger highlight comes from flash classes --- */
+      /* --- button class; stronger highlight via flash classes --- */
       const baseBtn = "w-full rounded-2xl border px-4 py-3 text-base md:text-sm transition shadow-sm select-none";
       const idleBtn = "border-purple-800/60 bg-purple-900/30 hover:bg-purple-900/60";
       const btnClass = i => {
@@ -247,14 +261,14 @@
 
             {/* Day buttons: large on phone; adaptive layout */}
             <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3">
-              {DAY.map((n,i)=>(
+              {["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"].map((n,i)=>(
                 <button key={n} onClick={()=>onClickDay(i)} className={btnClass(i)}>
                   {n}
                 </button>
               ))}
             </div>
 
-            <!-- Input row: flex so buttons never spill; input can shrink -->
+            {/* Input row: flex so buttons never spill; input can shrink */}
             <form onSubmit={onSubmit} className="mt-3 flex items-stretch gap-2">
               <input ref={inputRef} value={input} onChange={e=>setInput(e.target.value)}
                 placeholder="Type a day (Mon) or 0–6"
@@ -284,8 +298,7 @@
       );
     }
 
-    try { ReactDOM.createRoot(document.getElementById("root")).render(<App/>); }
-    catch (e) { const er=document.getElementById("errors"); er.style.display="block"; er.textContent=String(e?.message||e); }
+    ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
   </script>
 </body>
 </html>
