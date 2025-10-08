@@ -174,7 +174,7 @@
       const onClickDay=i=>{ if(mode==="timed"&&!run&&secs>0) setRun(true); submit(String(i)); setInput(""); if(isTouch) document.activeElement?.blur(); };
       const onSubmit=e=>{ e.preventDefault(); if(mode==="timed"&&!run&&secs>0) setRun(true); submit(input); setInput(""); if(!isTouch) inputRef.current?.focus(); };
 
-      /* --- button class; stronger highlight happens via flash classes --- */
+      /* --- button class; stronger highlight comes from flash classes --- */
       const baseBtn = "w-full rounded-2xl border px-4 py-3 text-base md:text-sm transition shadow-sm select-none";
       const idleBtn = "border-purple-800/60 bg-purple-900/30 hover:bg-purple-900/60";
       const btnClass = i => {
@@ -254,14 +254,16 @@
               ))}
             </div>
 
-            {/* Input row */}
-            <form onSubmit={onSubmit} className="mt-3 grid grid-cols-[1fr_auto_auto] md:grid-cols-[1fr_auto_auto] gap-2 items-center max-w-3xl mx-auto">
+            <!-- Input row: flex so buttons never spill; input can shrink -->
+            <form onSubmit={onSubmit} className="mt-3 flex items-stretch gap-2">
               <input ref={inputRef} value={input} onChange={e=>setInput(e.target.value)}
-                placeholder="Type a day (e.g., Monday) or 0–6"
-                className="panel rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-400" />
-              <button className="px-4 py-2 rounded-xl bg-purple-600 text-white text-sm font-medium">Submit</button>
-              <button type="button" onClick={skip}
-                className="px-4 py-2 rounded-xl border border-purple-700/60 text-sm font-medium bg-purple-900/50">Skip</button>
+                placeholder="Type a day (Mon) or 0–6"
+                className="panel rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-400 flex-1 min-w-0" />
+              <div className="flex gap-2 shrink-0">
+                <button className="px-4 py-2 rounded-xl bg-purple-600 text-white text-sm font-medium">Submit</button>
+                <button type="button" onClick={skip}
+                  className="px-4 py-2 rounded-xl border border-purple-700/60 text-sm font-medium bg-purple-900/50">Skip</button>
+              </div>
             </form>
 
             {msg && (
