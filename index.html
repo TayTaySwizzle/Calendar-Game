@@ -13,10 +13,11 @@
     .card  { background: rgba(26,15,43,.85); border: 1px solid rgba(120,53,175,.45); }
     .panel { background: rgba(88,28,135,.25); border: 1px solid rgba(120,53,175,.45); }
 
-    /* Kill sticky tap highlight/focus glow on iOS */
+    /* Mobile tap feel */
     button, input, select, textarea { -webkit-tap-highlight-color: transparent; }
     button:focus, button:focus-visible { outline: none; box-shadow: none; }
 
+    /* Correct/incorrect flash */
     @keyframes flashPulse {
       0%   { box-shadow: 0 0 0 0 var(--f-ring); background-color: var(--f-bg0); transform: translateY(0); }
       30%  { box-shadow: 0 0 0 8px var(--f-ring); background-color: var(--f-bg1); transform: translateY(-1px); }
@@ -28,6 +29,9 @@
     .chip { background: rgba(120,53,175,.25); border:1px solid rgba(120,53,175,.45); padding:.25rem .5rem; border-radius:.75rem; font-size:12px; }
     .bar { height: 6px; border-radius: 6px; overflow: hidden; background: rgba(120,53,175,.25); border: 1px solid rgba(120,53,175,.45); }
     .bar > span { display:block; height:100%; background: linear-gradient(90deg,#a855f7,#7c3aed); }
+
+    /* Flip animation: slower, consistent */
+    .flipable { transition: transform 450ms ease-in-out; transform-origin: 50% 50%; }
   </style>
 </head>
 <body class="text-purple-50">
@@ -52,7 +56,7 @@
     const toAstro = y => y>0 ? y : 1-Math.abs(y);
     const isLeap  = y => (y%400===0)||((y%4===0)&&(y%100!==0));
     const dim = (y,m)=> (m===2 ? (isLeap(toAstro(y))?29:28) : [4,6,9,11].includes(m)?30:31);
-    function jdnGregorian(y,m,d){ const a=Math.floor((14-m)/12), y2=y+4800-a, m2=m+12*a-3;
+    function jdnGregorian(y,m,d){ const a=Math.floor((14-m)/12), y2=y+4800-a, m2=m+12+a*-1-3;
       return d+Math.floor((153*m2+2)/5)+365*y2+Math.floor(y2/4)-Math.floor(y2/100)+Math.floor(y2/400)-32045; }
     const safeWday=(y,m,d)=> { try { const v=(jdnGregorian(toAstro(y),m,d)+1)%7; return (v+7)%7; } catch { return 0; } };
     const fmt=(y,m,d)=> `${MONTH[m-1]} ${d}, ${y>0?y:Math.abs(y)+' BC'}`;
@@ -75,12 +79,19 @@
       return {kind:"invalid"}; }
 
     const isTouch = typeof window!=="undefined" && ("ontouchstart" in window || navigator.maxTouchPoints>0 || matchMedia("(pointer:coarse)").matches);
+    const isTimerMode = (m)=> (m==="blitz"||m==="sudden"||m==="flash");
 
     /* ---------------- UI atoms ---------------- */
     const Stat=({label,value})=>(
       <div className="px-3 py-2 rounded-xl panel text-center">
         <div className="text-[12px] text-purple-200/80">{label}</div>
         <div className="text-lg font-semibold tabular-nums">{value}</div>
+      </div>
+    );
+    const StatTwo=({label,left,right})=>(
+      <div className="px-3 py-2 rounded-xl panel text-center">
+        <div className="text-[12px] text-purple-200/80">{label}</div>
+        <div className="text-sm mt-0.5"><span className="tabular-nums font-semibold">{left}</span> <span className="mx-1 opacity-70">/</span> <span className="tabular-nums font-semibold">{right}</span></div>
       </div>
     );
     const Pill=({ok,label})=>{
@@ -114,14 +125,16 @@
       const [status,setStatus]=useState(null);             // 'correct'|'incorrect'|null
       const [flip,setFlip]=useState(false);
 
-      // Run state for timer modes
-      const isTimerMode = (m)=> (m==="blitz"||m==="sudden"||m==="flash");
-      const [active,setActive]=useState(false);           // Begin/Reset control
+      // Begin/Reset run state for timer modes
+      const [active,setActive]=useState(false);
 
-      // Stopwatch for Avg correct time
+      // Avg correct time
+      const [trackAvgClassic,setTrackAvgClassic]=useState(false);
+      const [trackAvgDed,setTrackAvgDed]=useState(false);
       const tStartRef = useRef(null);
       const [timeSum,setTimeSum]=useState(0);
       const [timeCnt,setTimeCnt]=useState(0);
+      const trackingOn = (isTimerMode(mode) || (mode==="classic" && trackAvgClassic) || (mode==="deduction" && trackAvgDed));
 
       // Blitz session timer
       const [blitzSec,setBlitzSec]=useState(60);
@@ -148,7 +161,6 @@
       const [dedRange,setDedRange]=useState(null);   // {a,b} inclusive
       const [dedGuess,setDedGuess]=useState("");
 
-      // Focus behavior
       useEffect(()=>{ if(!isTouch) inputRef.current?.focus(); else document.activeElement?.blur(); },[date,mode,active]);
 
       /* ---- Pause timers on background ---- */
@@ -217,6 +229,8 @@
         if(mode==="sudden"){ const now=performance.now(); qDeadlineRef.current = now + qSec*1000; qPausedAccRef.current=0; qPausedAtRef.current=null; setQRemain(qSec); }
         if(mode==="flash"){ setFlashVisible(true); clearTimeout(flashTimerRef.current); flashTimerRef.current = setTimeout(()=>setFlashVisible(false), Math.max(50, flashMs)); }
         tStartRef.current = performance.now();
+        // Fresh prompt when beginning
+        nextDate();
       };
 
       const nextDate = () => {
@@ -233,10 +247,10 @@
             qDeadlineRef.current = now + qSec*1000;
             qPausedAccRef.current = 0; qPausedAtRef.current = null; setQRemain(qSec);
           }
-          tStartRef.current = performance.now();
+          if(trackingOn) tStartRef.current = performance.now();
         }else{
-          // armed but not running: hide date until Begin
           if(mode==="flash"){ setFlashVisible(false); }
+          if(trackingOn) tStartRef.current = performance.now();
         }
       };
 
@@ -261,8 +275,7 @@
         if(kind==="invalid"){ setStatus(null); setMsg("Invalid input. Type a day or 0–6. Use 'skip' or 'stop'."); return; }
 
         const onCorrect = ()=>{
-          // stopwatch sample (flawless only)
-          if(flawless && tStartRef.current!=null){
+          if(flawless && tStartRef.current!=null && trackingOn){
             const dt = (performance.now()-tStartRef.current)/1000;
             setTimeSum(s=>s+dt); setTimeCnt(c=>c+1);
           }
@@ -323,9 +336,12 @@
         setDedRange({a,b});
         setDedGuess("");
         setStatus(null); setMsg("");
+        if((mode==="deduction" && trackAvgDed) || isTimerMode(mode) || (mode==="classic" && trackAvgClassic))
+          tStartRef.current = performance.now();
       }
 
       function submitDeduction(){
+        const trackingHere = (mode==="deduction" && trackAvgDed);
         if(!dedTarget || !dedRange) return;
         const g = String(dedGuess).trim();
         if(!/^[-]?\d+$/.test(g)){ setMsg("Enter a valid year (e.g., 1977 or -44 for 44 BC)."); return; }
@@ -333,6 +349,10 @@
         if(y===0){ setMsg("There is no year 0 — use -1 for 1 BC."); return; }
         if(y<dedRange.a || y>dedRange.b){ setMsg("Pick a year within the shown range."); return; }
         if(y===dedTarget.y){
+          if(tStartRef.current!=null && trackingHere){
+            const dt = (performance.now()-tStartRef.current)/1000;
+            setTimeSum(s=>s+dt); setTimeCnt(c=>c+1);
+          }
           setPlayed(p=>p+1); setGood(c=>c+1); setStatus('correct');
           setStreak(s=>{const ns=s+1; if(ns>best) setBest(ns); return ns;});
         } else {
@@ -344,10 +364,10 @@
 
       /* ---- Mode changes ---- */
       useEffect(()=>{
-        armMode(); // armed by default; wait for Begin in timer modes
-        if(mode==="classic"){ nextDate(); }          // classic shows immediately
-        if(mode==="deduction"){ spawnDeduction(); } // deduction ready immediately
-        if(mode==="flash"){ setFlashVisible(false);} // hide ellipsis until Begin
+        armMode(); // armed by default (dash shown) for timer modes
+        if(mode==="classic"){ nextDate(); }
+        if(mode==="deduction"){ spawnDeduction(); }
+        if(mode==="flash"){ setFlashVisible(false); }
         // eslint-disable-next-line react-hooks/exhaustive-deps
       },[mode]);
 
@@ -378,15 +398,19 @@
         </div>
       );
 
-      // In Flash: don't flip the ellipsis; render separate nodes
-      const dateText     = fmt(date.y,date.m,date.d);
-      const showEllipsis = (mode==="flash" && (!active || !flashVisible));
-      const shouldFlip   = flip && !(mode==="flash" && showEllipsis);
-      const dateClass    = `mt-1 text-3xl md:text-4xl font-bold transition ${shouldFlip?'rotate-180':''}`;
+      // Display state for headline
+      const dashHidden  = (isTimerMode(mode) && !active);                 // before Begin / after Reset
+      const flashHidden = (mode==="flash" && active && !flashVisible);    // during flash hide window
+      const headlineText= dashHidden ? "—" : (flashHidden ? "…" : fmt(date.y,date.m,date.d));
 
-      // Avg time card (timer modes only)
+      // Flip application: never flip dash/ellipsis
+      const shouldFlip  = flip && !(dashHidden || flashHidden);
+      const flipCls     = shouldFlip ? "rotate-180" : "";
+
       const avgTime = timeCnt ? (timeSum/timeCnt) : 0;
-      const avgStr  = timeCnt ? `${avgTime.toFixed(2)}s` : "—";
+      const avgStr  = (isTimerMode(mode) || (mode==="classic"&&trackAvgClassic) || (mode==="deduction"&&trackAvgDed))
+                        ? (timeCnt ? `${avgTime.toFixed(2)}s` : "—")
+                        : "—";
 
       /* ---------------- Render ---------------- */
       return (
@@ -413,16 +437,15 @@
             </div>
           </div>
 
-          {/* Stats */}
-          <div className="mt-4 grid grid-cols-2 md:grid-cols-5 gap-3">
+          {/* Stats (Score, Accuracy, Streak/Longest, Avg) */}
+          <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3">
             <Stat label="Score" value={`${good}/${played}`} />
             <Stat label="Accuracy" value={`${played?(good/played*100).toFixed(1):"0.0"}%`} />
-            <Stat label="Streak" value={streak} />
-            <Stat label="Longest" value={best} />
-            {isTimerMode(mode) ? <Stat label="Avg correct" value={avgStr} /> : <div className="hidden md:block" />}
+            <StatTwo label="Streak / Longest" left={streak} right={best} />
+            <Stat label="Avg correct" value={avgStr} />
           </div>
 
-          {/* Controls row (wraps on mobile) */}
+          {/* Controls row */}
           <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-wrap items-center gap-3">
               <label className="flex items-center gap-2 text-sm">
@@ -437,7 +460,7 @@
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-purple-300/80">Duration:</span>
                   <input type="range" min="15" max="180" step="5" value={blitzSec}
-                         onChange={e=>{ setBlitzSec(+e.target.value); setBlitzRemain(+e.target.value); if(active){/* keep current run length display */} }}
+                         onChange={e=>{ setBlitzSec(+e.target.value); if(!active) setBlitzRemain(+e.target.value); }}
                          className="accent-purple-500"/>
                   <span className="tabular-nums text-xs w-10 text-right">{blitzSec}s</span>
                 </div>
@@ -459,6 +482,18 @@
                          className="accent-purple-500"/>
                   <span className="tabular-nums text-xs w-12 text-right">{flashMs}ms</span>
                 </div>
+              )}
+
+              {(mode==="classic" || mode==="deduction") && (
+                <label className="flex items-center gap-2 text-sm">
+                  <input type="checkbox" className="sr-only"
+                         checked={mode==="classic"?trackAvgClassic:trackAvgDed}
+                         onChange={e=> mode==="classic" ? setTrackAvgClassic(e.target.checked) : setTrackAvgDed(e.target.checked)} />
+                  <span className={`w-10 h-6 rounded-full relative ${(mode==="classic"?trackAvgClassic:trackAvgDed)?"bg-purple-500":"bg-zinc-600"}`}>
+                    <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${(mode==="classic"?trackAvgClassic:trackAvgDed)?"translate-x-4":""}`}></span>
+                  </span>
+                  <span>Track avg</span>
+                </label>
               )}
             </div>
 
@@ -516,23 +551,18 @@
                 {mode==="deduction" ? "What year is this?" : "What day is this?"}
               </div>
 
-              {/* Show date text and ellipsis as separate nodes so ellipsis never flips */}
+              {/* Headline: dash before begin, ellipsis during Flash hide, date otherwise */}
               {mode!=="deduction" ? (
-                <div className="relative h-[2.5rem] md:h-[3rem] mt-1">
-                  {!showEllipsis && (
-                    <div className={dateClass} style={{position:'absolute',left:0,right:0}}>{dateText}</div>
-                  )}
-                  {showEllipsis && (
-                    <div className="mt-1 text-3xl md:text-4xl font-bold" style={{position:'absolute',left:0,right:0}}>…</div>
-                  )}
+                <div className={`mt-1 text-3xl md:text-4xl font-bold flipable ${flipCls}`}>
+                  {headlineText}
                 </div>
               ) : (
                 <>
-                  <div className={`mt-1 text-3xl md:text-4xl font-bold ${flip?'rotate-180':''}`}>
-                    {dedTarget ? `${MONTH[dedTarget.m-1]} ${dedTarget.d}` : "…"}
+                  <div className={`mt-1 text-3xl md:text-4xl font-bold flipable ${flip?'rotate-180':''}`}>
+                    {dedTarget ? `${MONTH[dedTarget.m-1]} ${dedTarget.d}` : "—"}
                   </div>
                   {dedTarget && (
-                    <div className="mt-1 text-sm text-purple-200/90">
+                    <div className="mt-1 text-base md:text-lg text-purple-100">
                       Weekday: <span className="font-semibold">{DAY[dedTarget.w]}</span>
                     </div>
                   )}
@@ -540,35 +570,33 @@
               )}
             </div>
 
-            {/* Day buttons */}
+            {/* Day buttons & controls */}
             {mode!=="deduction" && (
               <>
                 <div className={`mt-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3 ${(!active && isTimerMode(mode))?'opacity-60 pointer-events-none':''}`}>
                   {DAY.map((n,i)=>(
                     <button type="button" key={n}
                             onClick={(e)=>{ e.currentTarget.blur(); submitDoW(String(i)); setInput(""); if(isTouch) document.activeElement?.blur(); }}
-                            className={btnClass(i)}>{n}</button>
+                            className={`${baseBtn} ${flash && flash.idx===i ? (flash.type==='good'?'flash-good':'flash-bad')+' border-transparent' : idleBtn}`}>{n}</button>
                   ))}
-                  <StatusPillRight />
+                  <div className="lg:hidden flex items-center justify-end">{status && <Pill ok={status==='correct'} label={status==='correct'?'Correct':'Incorrect'} />}</div>
                 </div>
 
-                {/* Mobile: Begin/Reset/Skip control row (replaces keyboard) */}
+                {/* Mobile Begin/Reset/Skip (no keyboard) */}
                 {isTimerMode(mode) && (
                   <div className="mt-3 flex gap-2 sm:hidden">
                     {!active
-                      ? <button className="flex-1 px-4 py-2 rounded-xl bg-purple-600 text-white text-sm font-medium" onClick={()=>{startRun(); if(mode!=="classic") nextDate();}}>
-                          Begin
-                        </button>
-                      : <button className="flex-1 px-4 py-2 rounded-xl bg-rose-600/90 text-white text-sm font-medium" onClick={()=>{armMode();}}>
-                          Reset
-                        </button>
+                      ? <button className="flex-1 px-4 py-2 rounded-xl bg-purple-600 text-white text-sm font-medium"
+                                onClick={()=>startRun()}>Begin</button>
+                      : <button className="flex-1 px-4 py-2 rounded-xl bg-rose-600/90 text-white text-sm font-medium"
+                                onClick={()=>armMode()}>Reset</button>
                     }
                     <button type="button" onClick={skip}
                       className="px-4 py-2 rounded-xl border border-purple-700/60 text-sm font-medium bg-purple-900/50">Skip</button>
                   </div>
                 )}
 
-                {/* Desktop input + submit + skip (hidden on mobile) */}
+                {/* Desktop input row (hidden on mobile) */}
                 <form onSubmit={(e)=>{ e.preventDefault(); submitDoW(input); setInput(""); if(!isTouch) inputRef.current?.focus(); }}
                       className={`mt-3 items-stretch gap-2 hidden sm:flex ${(!active && isTimerMode(mode))?'opacity-60 pointer-events-none':''}`}>
                   <input ref={inputRef} value={input} onChange={e=>setInput(e.target.value)}
@@ -577,7 +605,7 @@
                   <div className="flex gap-2 shrink-0">
                     {!active && isTimerMode(mode)
                       ? <button type="button" className="px-4 py-2 rounded-xl bg-purple-600 text-white text-sm font-medium"
-                                onClick={()=>{startRun(); nextDate();}}>Begin</button>
+                                onClick={()=>startRun()}>Begin</button>
                       : <button className="px-4 py-2 rounded-xl bg-purple-600 text-white text-sm font-medium">Submit</button>}
                     {active && isTimerMode(mode)
                       ? <button type="button" className="px-4 py-2 rounded-xl bg-rose-600/90 text-white text-sm font-medium"
@@ -631,13 +659,6 @@
                 {msg && <div className="mt-2 text-sm">{msg}</div>}
               </>
             )}
-          </div>
-
-          {/* Typing guidance (desktop only for space) */}
-          <div className="mt-3 text-[11px] text-purple-300/80 text-center leading-snug px-3 hidden sm:block">
-            <span className="font-medium">Typing:</span> day name (e.g., <span className="italic">Monday</span> / <span className="italic">Mon</span>)
-            or digits <span className="tabular-nums">0–6</span> (<span className="tabular-nums">Sun=0 … Sat=6</span>).
-            Commands: <span className="font-medium">skip</span>, <span className="font-medium">stop</span>.
           </div>
         </div>
       );
