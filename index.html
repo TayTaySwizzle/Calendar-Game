@@ -12,6 +12,16 @@
     body { background: linear-gradient(180deg,#0b0714,#140b22); }
     .card { background: rgba(26,15,43,.85); border: 1px solid rgba(120,53,175,.45); }
     .panel { background: rgba(88,28,135,.25); border: 1px solid rgba(120,53,175,.45); }
+
+    /* Flash feedback */
+    @keyframes flashPulse {
+      0%   { box-shadow: 0 0 0 0 var(--f-ring); background-color: var(--f-bg0); transform: translateY(0); }
+      30%  { box-shadow: 0 0 0 8px var(--f-ring); background-color: var(--f-bg1); transform: translateY(-1px); }
+      100% { box-shadow: 0 0 0 0 transparent; background-color: var(--f-bg0); transform: translateY(0); }
+    }
+    .flash-good { --f-ring: rgba(74,222,128,.55); --f-bg0: rgba(16,185,129,.10); --f-bg1: rgba(16,185,129,.25); animation: flashPulse .45s ease-in-out; }
+    .flash-bad  { --f-ring: rgba(248,113,113,.55); --f-bg0: rgba(239,68,68,.10); --f-bg1: rgba(239,68,68,.25); animation: flashPulse .45s ease-in-out; }
+    .chip { background: rgba(120,53,175,.25); border:1px solid rgba(120,53,175,.45); padding:.25rem .5rem; border-radius:.75rem; font-size:12px; }
   </style>
 </head>
 <body class="text-purple-50">
@@ -39,11 +49,14 @@
     const rint=(a,b)=>Math.floor(Math.random()*(b-a+1))+a;
     function randomDate(minY,maxY){ let y; do{ y=rint(minY,maxY);}while(y===0);
       const m=rint(1,12), d=rint(1,dim(y,m)); return {y,m,d}; }
+
     const ALIAS={sun:0,sunday:0,mon:1,monday:1,tue:2,tues:2,tuesday:2,wed:3,weds:3,wednesday:3,thu:4,thur:4,thurs:4,thursday:4,fri:5,friday:5,sat:6,saturday:6};
     function parseAns(s){ const t=s.trim(), low=t.toLowerCase();
-      if(!t) return {kind:"invalid"}; if(low==="help") return {kind:"cmd",payload:"help"};
-      if(low==="stop") return {kind:"cmd",payload:"stop"}; if(/^\d$/.test(t)){const n=+t; return n>=0&&n<=6?{kind:"ok",payload:n}:{kind:"invalid"};}
-      if(low in ALIAS) return {kind:"ok",payload:ALIAS[low]}; return {kind:"invalid"}; }
+      if(!t) return {kind:"invalid"}; if(low==="skip") return {kind:"cmd",payload:"skip"};
+      if(low==="stop") return {kind:"cmd",payload:"stop"};
+      if(/^\d$/.test(t)){const n=+t; return n>=0&&n<=6?{kind:"ok",payload:n}:{kind:"invalid"};}
+      if(low in ALIAS) return {kind:"ok",payload:ALIAS[low]};
+      return {kind:"invalid"}; }
 
     const isTouch = typeof window!=="undefined" && ("ontouchstart" in window || navigator.maxTouchPoints>0 || matchMedia("(pointer:coarse)").matches);
 
@@ -71,14 +84,14 @@
       const [date,setDate]=useState(()=>randomDate(1,10000));
       const correct=useMemo(()=>wday(date.y,date.m,date.d),[date]);
       const [input,setInput]=useState(""), inputRef=useRef(null);
-      const [msg,setMsg]=useState(""), [guesses,setGuesses]=useState([]);
+      const [msg,setMsg]=useState(""), [guesses,setGuesses]=useState([]); // incorrect guesses list
       const [flawless,setFlawless]=useState(true);
       const [played,setPlayed]=useState(0), [good,setGood]=useState(0);
       const [streak,setStreak]=useState(0), [best,setBest]=useState(0);
       const [secs,setSecs]=useState(60), [run,setRun]=useState(false);
 
-      // UI highlighting: which day should be visually emphasized (typed or clicked)
-      const [hintIdx,setHintIdx]=useState(null);
+      // Flash feedback: {idx, type: 'good'|'bad'} or null
+      const [flash,setFlash]=useState(null);
 
       // Avoid keyboard pop on phones each round
       useEffect(()=>{ if(!isTouch) inputRef.current?.focus(); else document.activeElement?.blur(); },[date]);
@@ -86,12 +99,6 @@
       // Timed mode ticking
       useEffect(()=>{ if(mode!=="timed"||!run||secs<=0) return; const t=setTimeout(()=>setSecs(s=>s-1),1000); return ()=>clearTimeout(t);},[mode,run,secs]);
       useEffect(()=>{ if(mode==="timed"&&secs===0){ setRun(false); setMsg("Time! Session ended."); }},[mode,secs]);
-
-      // While typing, highlight the interpreted day
-      useEffect(()=>{
-        const p=parseAns(input);
-        setHintIdx(p.kind==="ok" ? p.payload : null);
-      },[input]);
 
       /* --- era toggle with memory --- */
       function handleToggleBC(checked){
@@ -102,59 +109,81 @@
 
       /* --- range updates, remembered per era --- */
       function setMinActive(v){
-        if (includeBC) {
-          const m = Math.min(v, maxY); setBcRange(r=>({...r,min:m===0?-1:m})); setMinY(m===0?-1:m);
-        } else {
-          const m = Math.max(1, Math.min(v, maxY)); setAdRange(r=>({...r,min:m})); setMinY(m);
-        }
+        if (includeBC) { const m = Math.min(v, maxY); setBcRange(r=>({...r,min:m===0?-1:m})); setMinY(m===0?-1:m); }
+        else { const m = Math.max(1, Math.min(v, maxY)); setAdRange(r=>({...r,min:m})); setMinY(m); }
       }
       function setMaxActive(v){
-        if (includeBC) {
-          const m = Math.max(v, minY); setBcRange(r=>({...r,max:m===0?1:m})); setMaxY(m===0?1:m);
-        } else {
-          const m = Math.max(v, minY, 1); setAdRange(r=>({...r,max:m})); setMaxY(m);
-        }
+        if (includeBC) { const m = Math.max(v, minY); setBcRange(r=>({...r,max:m===0?1:m})); setMaxY(m===0?1:m); }
+        else { const m = Math.max(v, minY, 1); setAdRange(r=>({...r,max:m})); setMaxY(m); }
       }
 
       /* --- round helpers --- */
-      const resetRound=()=>{ setGuesses([]); setFlawless(true); setInput(""); setHintIdx(null); setDate(randomDate(minY,maxY)); setMsg(""); };
-      const summary=()=> `Score: ${good}/${played} (${played?(good/played*100).toFixed(1):"0.0"}%) — Longest: ${best}`;
-      const resetStats=()=>{ setPlayed(0); setGood(0); setStreak(0); setBest(0); setMsg("Stats reset."); };
+      const nextRound = () => { setGuesses([]); setFlawless(true); setInput(""); setFlash(null); setDate(randomDate(minY,maxY)); setMsg(""); };
+      const summary   = () => `Score: ${good}/${played} (${played?(good/played*100).toFixed(1):"0.0"}%) — Longest: ${best}`;
+      const resetStats= () => { setPlayed(0); setGood(0); setStreak(0); setBest(0); setMsg("Stats reset."); };
+
+      const skip = () => {
+        setMsg(`Skipped — Answer: ${DAY[correct]}.`);
+        setPlayed(p=>p+1); setStreak(0);
+        if(mode==="survival"){ setMsg(m=>m+" Game over."); return; }
+        nextRound();
+      };
+
+      function handleFlash(type, idx, then=()=>{}) {
+        setFlash({type, idx});
+        setTimeout(()=>{ setFlash(null); then(); }, 450);
+      }
 
       function submit(txt){
         const {kind,payload}=parseAns(txt);
+
         if(kind==="cmd"&&payload==="stop"){ setMsg(summary()); setRun(false); return; }
-        if(kind==="cmd"&&payload==="help"){ setMsg(`Answer: ${DAY[correct]}.`); setPlayed(p=>p+1); setStreak(0); if(mode==="survival"){ setMsg(m=>m+" Game over."); return; } resetRound(); return; }
-        if(kind==="invalid"){ setMsg("Invalid input. Type a day or 0–6. Use 'help' or 'stop'."); return; }
+        if(kind==="cmd"&&payload==="skip"){ skip(); return; }
+        if(kind==="invalid"){ setMsg("Invalid input. Type a day or 0–6. Use 'skip' or 'stop'."); return; }
+
         if(payload===correct){
           if(flawless){
-            setMsg("Correct ✔"); setPlayed(p=>p+1); setGood(c=>c+1);
-            setStreak(s=>{ const ns=s+1; if(ns>best) setBest(ns); return ns; }); resetRound();
+            setMsg("Correct ✔");
+            handleFlash('good', payload, () => {
+              setPlayed(p=>p+1); setGood(c=>c+1);
+              setStreak(s=>{ const ns=s+1; if(ns>best) setBest(ns); return ns; });
+              nextRound();
+            });
           } else {
             setMsg("Correct — but this round is scored incorrect due to an earlier miss.");
-            setPlayed(p=>p+1); setStreak(0);
-            if(mode==="survival"){ setMsg(m=>m+" Game over."); return; } resetRound();
+            handleFlash('good', payload, () => {
+              setPlayed(p=>p+1); setStreak(0);
+              if(mode==="survival"){ setMsg(m=>m+" Game over."); return; }
+              nextRound();
+            });
           }
-        } else {
-          setFlawless(false); setMsg("Incorrect ✖");
-          const label=DAY[payload]; setGuesses(g=>g.includes(label)?g:[...g,label]);
-          if(mode==="survival"){ setPlayed(p=>p+1); setStreak(0); setMsg(m=>`${m} Answer: ${DAY[correct]}. Game over.`); }
+        }else{
+          // Wrong guess: flash red and keep round; remember the guess
+          setMsg("Incorrect ✖");
+          handleFlash('bad', payload);
+          const label=DAY[payload];
+          setGuesses(g=>g.includes(label)?g:[...g,label]);
+          if(mode==="survival"){
+            setPlayed(p=>p+1); setStreak(0);
+            setMsg(m=>`${m} Answer: ${DAY[correct]}. Game over.`);
+          }
+          setFlawless(false);
         }
       }
 
-      const onClickDay=i=>{ setHintIdx(i); if(mode==="timed"&&!run&&secs>0) setRun(true); submit(String(i)); setInput(""); if(isTouch) document.activeElement?.blur(); };
+      const onClickDay=i=>{ if(mode==="timed"&&!run&&secs>0) setRun(true); submit(String(i)); setInput(""); if(isTouch) document.activeElement?.blur(); };
       const onSubmit=e=>{ e.preventDefault(); if(mode==="timed"&&!run&&secs>0) setRun(true); submit(input); setInput(""); if(!isTouch) inputRef.current?.focus(); };
 
-      /* --- button class with stronger highlight --- */
+      /* --- button class; stronger highlight happens via flash classes --- */
+      const baseBtn = "w-full rounded-2xl border px-4 py-3 text-base md:text-sm transition shadow-sm select-none";
+      const idleBtn = "border-purple-800/60 bg-purple-900/30 hover:bg-purple-900/60";
       const btnClass = i => {
-        const base = "w-full rounded-xl border px-3 py-2 text-sm transition shadow-sm";
-        const normal = "border-purple-800/60 bg-purple-900/30 hover:bg-purple-900/60";
-        const active = "bg-purple-700/80 border-purple-300/70 text-white ring-2 ring-purple-400 shadow-lg";
-        return `${base} ${hintIdx===i ? active : normal}`;
+        if (flash && flash.idx===i) return `${baseBtn} ${flash.type==='good' ? 'flash-good' : 'flash-bad'} border-transparent`;
+        return `${baseBtn} ${idleBtn}`;
       };
 
       return (
-        <div className="mx-auto px-4 py-6 w-full max-w-[480px] md:max-w-3xl lg:max-w-4xl">
+        <div className="mx-auto px-4 py-5 w-full max-w-[480px] md:max-w-3xl lg:max-w-4xl">
           {/* Header */}
           <div className="flex items-center justify-between gap-4">
             <h1 className="text-xl md:text-2xl font-semibold leading-none">Calendar Game</h1>
@@ -175,7 +204,7 @@
             </div>
           </div>
 
-          {/* Stats + Reset (mobile 2×2, desktop 4 across) */}
+          {/* Stats + Reset */}
           <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3">
             <Stat label="Score" value={`${good}/${played}`} />
             <Stat label="Accuracy" value={`${played?(good/played*100).toFixed(1):"0.0"}%`} />
@@ -188,7 +217,7 @@
           </div>
 
           {/* Year range (collapsible) */}
-          <details className="mt-3 rounded-2xl card p-3" >
+          <details className="mt-3 rounded-2xl card p-3">
             <summary className="cursor-pointer text-sm text-purple-200/90">
               Year range <span className="tabular-nums ml-1">{minY} → {maxY}</span>
             </summary>
@@ -210,14 +239,14 @@
           </details>
 
           {/* Prompt */}
-          <div className="mt-6 p-5 rounded-3xl card">
+          <div className="mt-5 p-5 rounded-3xl card">
             <div className="text-center">
               <div className="text-xs uppercase tracking-widest text-purple-300/70">What day is this?</div>
               <div className="mt-1 text-3xl md:text-4xl font-bold">{fmt(date.y,date.m,date.d)}</div>
             </div>
 
-            {/* Day buttons: 2 cols on phone, 3 on small tablets, 7 on desktop */}
-            <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-7 gap-2">
+            {/* Day buttons: large on phone; adaptive layout */}
+            <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3">
               {DAY.map((n,i)=>(
                 <button key={n} onClick={()=>onClickDay(i)} className={btnClass(i)}>
                   {n}
@@ -231,18 +260,24 @@
                 placeholder="Type a day (e.g., Monday) or 0–6"
                 className="panel rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-400" />
               <button className="px-4 py-2 rounded-xl bg-purple-600 text-white text-sm font-medium">Submit</button>
-              <button type="button" onClick={()=>submit('help')}
-                className="px-4 py-2 rounded-xl border border-purple-700/60 text-sm font-medium bg-purple-900/50">Help</button>
+              <button type="button" onClick={skip}
+                className="px-4 py-2 rounded-xl border border-purple-700/60 text-sm font-medium bg-purple-900/50">Skip</button>
             </form>
 
             {msg && (
               <div className="mt-3 text-purple-100/90 text-sm">
                 <div>{msg}</div>
+                {guesses.length>0 && (
+                  <div className="mt-2 flex flex-wrap gap-1 items-center">
+                    <span className="text-purple-300/80 text-xs mr-1">Guesses so far:</span>
+                    {guesses.map(g=><span key={g} className="chip">{g}</span>)}
+                  </div>
+                )}
               </div>
             )}
           </div>
 
-          <div className="mt-3 text-[11px] text-purple-300/60 text-center">Keyboard: Enter=submit, digits 0–6, “help”, “stop”.</div>
+          <div className="mt-3 text-[11px] text-purple-300/60 text-center">Keyboard: Enter=submit, digits 0–6, “skip”, “stop”.</div>
         </div>
       );
     }
