@@ -13,7 +13,7 @@
     .card  { background: rgba(26,15,43,.85); border: 1px solid rgba(120,53,175,.45); }
     .panel { background: rgba(88,28,135,.25); border: 1px solid rgba(120,53,175,.45); }
 
-    /* Remove sticky tap highlight / focus glow on iOS */
+    /* No sticky highlight on iOS tap */
     button, input, select, textarea { -webkit-tap-highlight-color: transparent; }
     button:focus, button:focus-visible { outline: none; box-shadow: none; }
 
@@ -29,6 +29,11 @@
 
     .bar { height: 6px; border-radius: 6px; overflow: hidden; background: rgba(120,53,175,.25); border: 1px solid rgba(120,53,175,.45); }
     .bar > span { display:block; height:100%; background: linear-gradient(90deg,#a855f7,#7c3aed); }
+
+    /* Flash mode: two stacked layers; only opacity animates, not transform */
+    .date-stack { position: relative; display: inline-block; }
+    .date-layer, .dots-layer { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; }
+    .date-fade { transition: opacity .18s ease; }
   </style>
 </head>
 <body class="text-purple-50">
@@ -55,7 +60,8 @@
     const dim = (y,m)=> (m===2 ? (isLeap(toAstro(y))?29:28) : [4,6,9,11].includes(m)?30:31);
     function jdnGregorian(y,m,d){ const a=Math.floor((14-m)/12), y2=y+4800-a, m2=m+12*a-3;
       return d+Math.floor((153*m2+2)/5)+365*y2+Math.floor(y2/4)-Math.floor(y2/100)+Math.floor(y2/400)-32045; }
-    const wday=(y,m,d)=> (jdnGregorian(toAstro(y),m,d)+1)%7;
+    const mod7 = n => ((n%7)+7)%7; // safe non-negative modulo
+    const wday=(y,m,d)=> mod7(jdnGregorian(toAstro(y),m,d)+1);
     const fmt=(y,m,d)=> `${MONTH[m-1]} ${d}, ${y>0?y:Math.abs(y)+' BC'}`;
     const rint=(a,b)=>Math.floor(Math.random()*(b-a+1))+a;
     function randomDate(minY,maxY){ let y; do{ y=rint(minY,maxY);}while(y===0);
@@ -108,6 +114,10 @@
       const [status,setStatus]=useState(null);             // 'correct'|'incorrect'|null
       const [flip,setFlip]=useState(false);
 
+      // Timed mode "session" state
+      const isTimed = (m)=> m==="blitz" || m==="sudden" || m==="flash";
+      const [started,setStarted]=useState(false);          // Begin/Reset gate
+
       // Blitz session timer
       const [blitzSec,setBlitzSec]=useState(60);
       const [blitzRunning,setBlitzRunning]=useState(false);
@@ -125,12 +135,12 @@
 
       // Flash mode visibility
       const [flashMs,setFlashMs]=useState(1200);
-      const [flashVisible,setFlashVisible]=useState(true);
+      const [flashVisible,setFlashVisible]=useState(false); // hidden until Begin
       const flashTimerRef = useRef(null);
 
       // Deduction mode
       const [dedTarget,setDedTarget]=useState(null); // {y,m,d,w}
-      const [dedRange,setDedRange]=useState(null);   // {a,b} inclusive
+      const [dedRange,setDedRange]=useState(null);   // {a,b}
       const [dedGuess,setDedGuess]=useState("");
 
       useEffect(()=>{ if(!isTouch) inputRef.current?.focus(); else document.activeElement?.blur(); },[date,mode]);
@@ -175,7 +185,7 @@
               qDeadlineRef.current = null;
               setStatus('incorrect');
               setPlayed(p=>p+1); setStreak(0);
-              setMsg(`Time! Answer: ${DAY[correct]}. Game over.`);
+              setMsg(`Time! Answer: ${DAY[correct]||"?"}. Game over.`);
             }
           }
           raf = requestAnimationFrame(tick);
@@ -186,15 +196,50 @@
 
       const resetStats=()=>{ setPlayed(0); setGood(0); setStreak(0); setBest(0); setMsg(""); setStatus(null); setGuesses([]); setFlawless(true); };
 
-      const nextDate = () => {
-        const nd = randomDate(minY,maxY); setDate(nd);
-        setGuesses([]); setFlawless(true); setInput(""); setFlash(null); setStatus(null);
-        if(mode==="flash"){
+      const hardResetMode=()=>{
+        // Stop any timers and hide date until Begin
+        setStarted(false);
+        setMsg(""); setStatus(null); setGuesses([]); setFlawless(true);
+        setFlash(null);
+        setBlitzRunning(false); setBlitzRemain(blitzSec); blitzStartRef.current=null; blitzPausedAccRef.current=0; blitzPausedAtRef.current=null;
+        qDeadlineRef.current=null; qPausedAccRef.current=0; qPausedAtRef.current=null; setQRemain(qSec);
+        clearTimeout(flashTimerRef.current); setFlashVisible(false);
+      };
+
+      const beginMode=()=>{
+        setStarted(true);
+        setMsg(""); setStatus(null); setGuesses([]); setFlawless(true);
+        if(mode==="blitz"){
+          blitzStartRef.current = performance.now();
+          blitzPausedAccRef.current = 0;
+          blitzPausedAtRef.current = null;
+          setBlitzRemain(blitzSec);
+          setBlitzRunning(true);
+          setDate(randomDate(minY,maxY));
+        } else if(mode==="sudden"){
+          setDate(randomDate(minY,maxY));
+          const now = performance.now();
+          qDeadlineRef.current = now + qSec*1000;
+          qPausedAccRef.current = 0;
+          qPausedAtRef.current = null;
+          setQRemain(qSec);
+        } else if(mode==="flash"){
+          setDate(randomDate(minY,maxY));
           setFlashVisible(true);
           clearTimeout(flashTimerRef.current);
           flashTimerRef.current = setTimeout(()=>setFlashVisible(false), Math.max(50, flashMs));
         }
-        if(mode==="sudden"){
+      };
+
+      const nextDate = () => {
+        const nd = randomDate(minY,maxY); setDate(nd);
+        setGuesses([]); setFlawless(true); setInput(""); setFlash(null); setStatus(null);
+        if(mode==="flash" && started){
+          setFlashVisible(true);
+          clearTimeout(flashTimerRef.current);
+          flashTimerRef.current = setTimeout(()=>setFlashVisible(false), Math.max(50, flashMs));
+        }
+        if(mode==="sudden" && started){
           const now = performance.now();
           qDeadlineRef.current = now + qSec*1000;
           qPausedAccRef.current = 0;
@@ -203,7 +248,7 @@
         }
       };
 
-      const ensureBlitz=()=>{ if(mode!=="blitz"||blitzRunning) return;
+      const ensureBlitz=()=>{ if(mode!=="blitz"||!started||blitzRunning) return;
         blitzStartRef.current = performance.now();
         blitzPausedAccRef.current = 0;
         blitzPausedAtRef.current = null;
@@ -212,8 +257,9 @@
       };
 
       const skip=()=>{
+        if(isTimed(mode) && !started){ setMsg("Press Begin to start."); return; }
         setStatus(null);
-        setMsg(`Skipped — Answer: ${DAY[correct]}.`);
+        setMsg(`Skipped — Answer: ${DAY[correct]||"?"}.`);
         setPlayed(p=>p+1); setStreak(0);
         if(mode==="sudden"){ setMsg("Skipped — Game over."); return; }
         nextDate();
@@ -221,8 +267,8 @@
 
       function handleFlash(type, idx, then=()=>{}){ setFlash({type,idx}); setTimeout(()=>{ setFlash(null); then(); },450); }
 
-      /* ---------- Submit handlers ---------- */
       function submitDoW(txt){
+        if(isTimed(mode) && !started){ setMsg("Press Begin to start."); return; }
         const {kind,payload}=parseAns(txt);
         if(kind==="cmd"&&payload==="stop"){ setMsg(`Score: ${good}/${played} (${played?(good/played*100).toFixed(1):"0.0"}%) — Longest: ${best}`); if(mode==="blitz") setBlitzRunning(false); return; }
         if(kind==="cmd"&&payload==="skip"){ skip(); return; }
@@ -244,23 +290,19 @@
           setStatus('incorrect');
           handleFlash('bad',payload);
           const label=DAY[payload]; setGuesses(g=>g.includes(label)?g:[...g,label]);
-          if(mode==="sudden"){ setPlayed(p=>p+1); setStreak(0); setMsg(`Answer: ${DAY[correct]}. Game over.`); return; }
+          if(mode==="sudden"){ setPlayed(p=>p+1); setStreak(0); setMsg(`Answer: ${DAY[correct]||"?"}. Game over.`); return; }
           setFlawless(false);
         }
       }
 
-      /* ---------- Deduction mode generation (unique year in range) ---------- */
+      /* ---------- Deduction (unique year in range) ---------- */
       function spawnDeduction(){
-        // pick month/day that exists broadly (allow Feb 29)
         let m = rint(1,12);
-        let d = rint(1, dim(2000,m)); // 2000 is leap; dim(y,m) with y not needed for day range here
-
-        // choose a base year in allowed range (skip 0)
+        let d = rint(1, dim(2000,m));
         let y;
-        do{ y = rint(minY, maxY); } while(y===0 || d>dim(y,m)); // ensure date exists (e.g., Feb 29)
+        do{ y = rint(minY, maxY); } while(y===0 || d>dim(y,m));
         const w = wday(y,m,d);
 
-        // search nearest lower/higher years with same weekday for this (m,d)
         function nearestSame(dir){
           const step = dir>0 ? 1 : -1;
           for(let k=1;k<=800;k++){
@@ -275,10 +317,8 @@
         const upper = nearestSame(+1);
         let a = lower==null ? minY : Math.max(minY, lower+1);
         let b = upper==null ? maxY : Math.min(maxY, upper-1);
-        if(a===0) a=1; if(b===0) b=-1; // exclude year 0 if boundaries cross it
-
-        // guarantee uniqueness and non-empty
-        if(a>b){ a=b=y; }
+        if(a===0) a=1; if(b===0) b=-1;
+        if(a>b){ a=b=y; } // fallback
         setDedTarget({y,m,d,w});
         setDedRange({a,b});
         setDedGuess("");
@@ -305,35 +345,44 @@
 
       /* ---------- Mode changes ---------- */
       useEffect(()=>{
-        setMsg(""); setStatus(null); setGuesses([]); setFlawless(true);
-        if(mode==="classic"||mode==="blitz"||mode==="sudden"||mode==="flash"){ nextDate(); }
-        if(mode==="blitz"){ setBlitzRunning(false); setBlitzRemain(blitzSec); }
+        setMsg(""); setStatus(null); setGuesses([]); setFlawless(true); setFlash(null);
+        setStarted(false); // gate all timed modes until Begin
+        setBlitzRunning(false); setBlitzRemain(blitzSec); blitzStartRef.current=null; blitzPausedAccRef.current=0; blitzPausedAtRef.current=null;
+        qDeadlineRef.current=null; qPausedAccRef.current=0; qPausedAtRef.current=null; setQRemain(qSec);
+        clearTimeout(flashTimerRef.current); setFlashVisible(false);
+        if(mode==="classic"){ setDate(randomDate(minY,maxY)); }
         if(mode==="deduction"){ spawnDeduction(); }
+        // other modes: wait for Begin
         // eslint-disable-next-line react-hooks/exhaustive-deps
       },[mode]);
 
       /* ---------- Range & toggles ---------- */
       function handleToggleBC(checked){
         setIncludeBC(checked);
-        if (checked) { setMinY(bcRange.min); setMaxY(bcRange.max); setDate(randomDate(bcRange.min, bcRange.max)); }
-        else         { const min=Math.max(1,adRange.min); setMinY(min); setMaxY(adRange.max); setDate(randomDate(min,adRange.max)); }
+        if (checked) { setMinY(bcRange.min); setMaxY(bcRange.max); }
+        else         { const min=Math.max(1,adRange.min); setMinY(min); setMaxY(adRange.max); }
         if(mode==="deduction") spawnDeduction();
+        if(mode==="classic") setDate(randomDate(checked?bcRange.min:Math.max(1,adRange.min), checked?bcRange.max:adRange.max));
+        hardResetMode(); // force re-begin for timed modes
       }
       function setMinActive(v){
         if (includeBC) { const m=Math.min(v,maxY); setBcRange(r=>({...r,min:m===0?-1:m})); setMinY(m===0?-1:m); }
         else { const m=Math.max(1,Math.min(v,maxY)); setAdRange(r=>({...r,min:m})); setMinY(m); }
+        if(mode==="deduction") spawnDeduction();
       }
       function setMaxActive(v){
         if (includeBC) { const m=Math.max(v,minY); setBcRange(r=>({...r,max:m===0?1:m})); setMaxY(m===0?1:m); }
         else { const m=Math.max(v,minY,1); setAdRange(r=>({...r,max:m})); setMaxY(m); }
+        if(mode==="deduction") spawnDeduction();
       }
 
-      const baseBtn="w-full rounded-2xl border px-4 py-3 text-base md:text-sm transition shadow-sm select-none focus:outline-none focus-visible:outline-none";
+      const baseBtn="w-full rounded-2xl border px-4 py-3 text-base md:text-sm transition shadow-sm select-none";
       const idleBtn="border-purple-800/60 bg-purple-900/30 hover:bg-purple-900/60";
       const btnClass=i=> (flash && flash.idx===i) ? `${baseBtn} ${flash.type==='good'?'flash-good':'flash-bad'} border-transparent` : `${baseBtn} ${idleBtn}`;
+      const disabledBtn="opacity-50 pointer-events-none";
 
       const StatusPillRight = () => {
-        if(!status) return <div className="lg:hidden" />;
+        if(!status || (isTimed(mode) && !started)) return <div className="lg:hidden" />;
         return (
           <div className="lg:hidden flex items-center justify-end">
             <Pill ok={status==='correct'} label={status==='correct'?'Correct':'Incorrect'} />
@@ -341,9 +390,23 @@
         );
       };
 
-      const showDate = mode==="flash" ? (flashVisible ? fmt(date.y,date.m,date.d) : "…") : fmt(date.y,date.m,date.d);
-      const shouldFlip = flip && !(mode==="flash" && !flashVisible);  // don't flip ellipsis
-      const dateClass = `mt-1 text-3xl md:text-4xl font-bold transition ${shouldFlip?'rotate-180':''}`;
+      const dateBaseClass = "mt-1 text-3xl md:text-4xl font-bold";
+      const dateNode = (
+        mode==="flash"
+          ? (
+            <span className="date-stack" style={{minWidth:'12ch'}}>
+              {/* Flippable date layer */}
+              <span className={`date-layer date-fade ${flip?'rotate-180':''}`} style={{opacity: flashVisible?1:0}}>
+                {fmt(date.y,date.m,date.d)}
+              </span>
+              {/* Non-flipped dots */}
+              <span className="dots-layer date-fade" style={{opacity: flashVisible?0:1}}>…</span>
+            </span>
+          )
+          : <span className={`${flip?'rotate-180':''}`}>{fmt(date.y,date.m,date.d)}</span>
+        );
+
+      const showGate = (!isTimed(mode) || started);
 
       return (
         <div className="mx-auto px-4 py-5 w-full max-w-[480px] md:max-w-3xl lg:max-w-4xl">
@@ -377,7 +440,7 @@
             <Stat label="Longest" value={best} />
           </div>
 
-          {/* Controls row - wraps nicely on mobile */}
+          {/* Controls row */}
           <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-wrap items-center gap-3">
               <label className="flex items-center gap-2 text-sm">
@@ -417,11 +480,18 @@
               )}
             </div>
 
+            {/* Begin / Reset for timed modes */}
+            {isTimed(mode) && (
+              !started
+                ? <button className="text-xs px-3 py-1.5 rounded-lg bg-purple-700 hover:bg-purple-600" onClick={beginMode}>Begin</button>
+                : <button className="text-xs px-3 py-1.5 rounded-lg bg-purple-700 hover:bg-purple-600" onClick={hardResetMode}>Reset</button>
+            )}
+
             <button className="text-xs px-3 py-1.5 rounded-lg bg-purple-700 hover:bg-purple-600"
                     onClick={resetStats}>Reset stats</button>
           </div>
 
-          {/* Year range (shared) */}
+          {/* Year range */}
           <details className="mt-3 rounded-2xl card p-3">
             <summary className="cursor-pointer text-sm text-purple-200/90">
               Year range <span className="tabular-nums ml-1">{minY} → {maxY}</span>
@@ -446,7 +516,7 @@
           {/* Main card */}
           <div className="mt-5 p-5 rounded-3xl card">
             {/* Timers */}
-            {mode==="blitz" && (
+            {mode==="blitz" && started && (
               <div className="mb-3">
                 <div className="flex items-center justify-between text-xs text-purple-200/80 mb-1">
                   <div>Blitz</div>
@@ -455,7 +525,7 @@
                 <div className="bar"><span style={{width: `${Math.max(0, Math.min(100, (blitzRemain/blitzSec)*100))}%`}}></span></div>
               </div>
             )}
-            {mode==="sudden" && qDeadlineRef.current && (
+            {mode==="sudden" && started && qDeadlineRef.current && (
               <div className="mb-3">
                 <div className="flex items-center justify-between text-xs text-purple-200/80 mb-1">
                   <div>Per-question</div>
@@ -470,13 +540,20 @@
               <div className="text-xs uppercase tracking-widest text-purple-300/70">
                 {mode==="deduction" ? "What year is this?" : "What day is this?"}
               </div>
+
+              {/* Show gate: for timed modes hide until Begin */}
               {mode==="deduction" ? (
-                <div className={dateClass}>
-                  {dedTarget ? `${MONTH[dedTarget.m-1]} ${dedTarget.d}` : "…"}
+                <div className={`${dateBaseClass} ${flip?'rotate-180':''}`}>
+                  {dedTarget ? `${MONTH[dedTarget.m-1]} ${dedTarget.d}` : (isTimed(mode)&&!started ? "—" : "…")}
                 </div>
               ) : (
-                <div className={dateClass}>{showDate}</div>
+                <div className={dateBaseClass}>
+                  {(!isTimed(mode) || started)
+                    ? dateNode
+                    : <span>—</span>}
+                </div>
               )}
+
               {mode==="deduction" && dedTarget && (
                 <div className="mt-1 text-sm text-purple-200/90">
                   Weekday: <span className="font-semibold">{DAY[dedTarget.w]}</span>
@@ -491,20 +568,23 @@
                   {DAY.map((n,i)=>(
                     <button type="button" key={n}
                             onClick={(e)=>{ e.currentTarget.blur(); submitDoW(String(i)); setInput(""); if(isTouch) document.activeElement?.blur(); }}
-                            className={btnClass(i)}>{n}</button>
+                            className={`${btnClass(i)} ${(isTimed(mode)&&!started)?disabledBtn:""}`}
+                            disabled={isTimed(mode)&&!started}>{n}</button>
                   ))}
-                  <StatusPillRight />
+                  <div className="lg:hidden flex items-center justify-end">
+                    {status && (!isTimed(mode) || started) && <Pill ok={status==='correct'} label={status==='correct'?'Correct':'Incorrect'} />}
+                  </div>
                 </div>
 
                 <form onSubmit={(e)=>{ e.preventDefault(); submitDoW(input); setInput(""); if(!isTouch) inputRef.current?.focus(); }}
                       className="mt-3 flex items-stretch gap-2">
                   <input ref={inputRef} value={input} onChange={e=>setInput(e.target.value)}
                     placeholder="Type here"
-                    className="panel rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-400 flex-1 min-w-0" />
+                    className={`panel rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-400 flex-1 min-w-0 ${(isTimed(mode)&&!started)?'opacity-50 pointer-events-none':''}`} disabled={isTimed(mode)&&!started}/>
                   <div className="flex gap-2 shrink-0">
-                    <button className="px-4 py-2 rounded-xl bg-purple-600 text-white text-sm font-medium">Submit</button>
+                    <button className={`px-4 py-2 rounded-xl bg-purple-600 text-white text-sm font-medium ${(isTimed(mode)&&!started)?'opacity-50 pointer-events-none':''}`} disabled={isTimed(mode)&&!started}>Submit</button>
                     <button type="button" onClick={skip}
-                      className="px-4 py-2 rounded-xl border border-purple-700/60 text-sm font-medium bg-purple-900/50">Skip</button>
+                      className={`px-4 py-2 rounded-xl border border-purple-700/60 text-sm font-medium bg-purple-900/50 ${(isTimed(mode)&&!started)?'opacity-50 pointer-events-none':''}`} disabled={isTimed(mode)&&!started}>Skip</button>
                   </div>
                 </form>
 
@@ -534,7 +614,7 @@
                 <form onSubmit={(e)=>{ e.preventDefault(); submitDeduction(); }}
                       className="mt-3 flex items-stretch gap-2">
                   <input inputMode="numeric" value={dedGuess} onChange={e=>setDedGuess(e.target.value)}
-                    placeholder="Enter year"
+                    placeholder="Year"
                     className="panel rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-400 flex-1 min-w-0" />
                   <div className="flex gap-2 shrink-0">
                     <button className="px-4 py-2 rounded-xl bg-purple-600 text-white text-sm font-medium">Submit</button>
