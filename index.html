@@ -28,18 +28,10 @@
   <div id="root" class="min-h-screen w-full">Loading…</div>
   <pre id="errors" style="display:none;white-space:pre-wrap;background:#2b0f3a;border:1px solid #7e22ce;color:#fca5a5;padding:.75rem;border-radius:.75rem;margin:1rem;max-width:64rem;"></pre>
 
-  <!-- Show JS errors visibly (helps if Babel/JSX hiccups again) -->
+  <!-- Visible JS error catcher -->
   <script>
-    window.addEventListener('error', e => {
-      const er = document.getElementById('errors'); if (!er) return;
-      er.style.display = 'block';
-      er.textContent = '⚠️ ' + (e.error?.message || e.message || 'Unknown error');
-    });
-    window.addEventListener('unhandledrejection', e => {
-      const er = document.getElementById('errors'); if (!er) return;
-      er.style.display = 'block';
-      er.textContent = '⚠️ ' + (e.reason?.message || String(e.reason));
-    });
+    addEventListener('error', e => { const er=document.getElementById('errors'); er.style.display='block'; er.textContent='⚠️ '+(e.error?.message||e.message); });
+    addEventListener('unhandledrejection', e => { const er=document.getElementById('errors'); er.style.display='block'; er.textContent='⚠️ '+(e.reason?.message||String(e.reason)); });
   </script>
 
   <!-- React + Babel -->
@@ -59,7 +51,13 @@
     function jdnGregorian(y,m,d){ const a=Math.floor((14-m)/12), y2=y+4800-a, m2=m+12*a-3;
       return d+Math.floor((153*m2+2)/5)+365*y2+Math.floor(y2/4)-Math.floor(y2/100)+Math.floor(y2/400)-32045; }
     const wday=(y,m,d)=> (jdnGregorian(toAstro(y),m,d)+1)%7;
-    const fmt=(y,m,d)=> `${MONTH[m-1]} ${d} ${y>0?y:Math.abs(y)+' BC'}`;
+
+    // "July 11, 3072" or "July 11, 3072 BC"
+    const fmt=(y,m,d)=> {
+      const yy = y>0 ? String(y) : `${Math.abs(y)} BC`;
+      return `${MONTH[m-1]} ${d}, ${yy}`;
+    };
+
     const rint=(a,b)=>Math.floor(Math.random()*(b-a+1))+a;
     function randomDate(minY,maxY){ let y; do{ y=rint(minY,maxY);}while(y===0);
       const m=rint(1,12), d=rint(1,dim(y,m)); return {y,m,d}; }
@@ -86,11 +84,9 @@
       const [mode,setMode]=useState("classic");          // classic | survival | timed
       const [includeBC,setIncludeBC]=useState(false);
 
-      // Defaults as requested (AD: 1..10000)
+      // Defaults (AD: 1..10000), BC memory kept
       const [adRange,setAdRange] = useState({min:1, max:10000});
       const [bcRange,setBcRange] = useState({min:-10000, max:10000});
-
-      // Active range mirrors the current era
       const [minY,setMinY]=useState(1);
       const [maxY,setMaxY]=useState(10000);
 
@@ -259,9 +255,9 @@
               <div className="mt-1 text-3xl md:text-4xl font-bold">{fmt(date.y,date.m,date.d)}</div>
             </div>
 
-            {/* Day buttons: large on phone; adaptive layout */}
+            {/* Day buttons */}
             <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3">
-              {["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"].map((n,i)=>(
+              {DAY.map((n,i)=>(
                 <button key={n} onClick={()=>onClickDay(i)} className={btnClass(i)}>
                   {n}
                 </button>
@@ -271,7 +267,7 @@
             {/* Input row: flex so buttons never spill; input can shrink */}
             <form onSubmit={onSubmit} className="mt-3 flex items-stretch gap-2">
               <input ref={inputRef} value={input} onChange={e=>setInput(e.target.value)}
-                placeholder="Type a day (Mon) or 0–6"
+                placeholder="Type here"
                 className="panel rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-400 flex-1 min-w-0" />
               <div className="flex gap-2 shrink-0">
                 <button className="px-4 py-2 rounded-xl bg-purple-600 text-white text-sm font-medium">Submit</button>
@@ -293,7 +289,12 @@
             )}
           </div>
 
-          <div className="mt-3 text-[11px] text-purple-300/60 text-center">Keyboard: Enter=submit, digits 0–6, “skip”, “stop”.</div>
+          <!-- Full guidance moved here so it never truncates on phones -->
+          <div className="mt-3 text-[11px] text-purple-300/80 text-center leading-snug px-3">
+            <span className="font-medium">Typing:</span> day name (e.g., <span class="italic">Monday</span> or <span class="italic">Mon</span>)
+            or digits <span class="tabular-nums">0–6</span> (<span class="tabular-nums">Sun=0 … Sat=6</span>).
+            Commands: <span class="font-medium">skip</span>, <span class="font-medium">stop</span>.
+          </div>
         </div>
       );
     }
