@@ -32,6 +32,15 @@
       background-image:url('./mandelbrot-purple.png');
       background-size:cover;background-position:center;
     }
+  
+    /* page background image */
+    body {
+      background-image: url('./mandelbrot-purple.png');
+      background-size: cover;
+      background-position: center;
+      background-attachment: fixed;
+    }
+
   </style>
 </head>
 <body class="text-purple-50">
@@ -63,8 +72,11 @@
     const isTimer = m => m==="blitz"||m==="sudden"||m==="flash" ;
 
     /* ---------- atoms ---------- */
-    const Stat=({label,value,disabled})=>(<div className={`px-3 py-2 rounded-xl panel text-center ${disabled?'opacity-60':''}`}><div className="text-[12px] text-purple-200/80">{label}</div><div className="text-lg font-semibold tabular-nums">{disabled?'—':value}</div></div>);
-    const StatTwo=({label,left,right,disabled})=>(<div className={`px-3 py-2 rounded-xl panel text-center ${disabled?'opacity-60':''}`}><div className="text-[12px] text-purple-200/80">{label}</div><div className="text-sm mt-0.5">{disabled?'—':(<><span className="tabular-nums font-semibold">{left}</span><span className="mx-1 opacity-70">/</span><span className="tabular-nums font-semibold">{right}</span></>)}</div></div>);
+    /* Make score and streak/longest value sizes consistent */
+    .stat-size .tabular-nums{font-size:1.25rem;}
+
+    const Stat=({label,value,disabled})=>(<div className={`px-3 stat-size py-2 rounded-xl w-24 panel text-center ${disabled?'opacity-60':''}`}><div className="text-[12px] text-purple-200/80">{label}</div><div className="text-lg font-semibold tabular-nums">{disabled?'—':value}</div></div>);
+    const StatTwo=({label,left,right,disabled})=>(<div className="stat-size " + const StatTwo=({label,left,right,disabled})={`px-3 py-2 rounded-xl w-24 panel text-center ${disabled?'opacity-60':''}`}><div className="text-[12px] text-purple-200/80">{label}</div><div className="text-sm mt-0.5">{disabled?'—':(<><span className="tabular-nums font-semibold">text-2xl {left}</span><span className="mx-1 opacity-70">/</span><span className="tabular-nums font-semibold">{right}</span></>)}</div></div>);
     const Pill=({ok,label})=>{const cls=ok?"bg-emerald-500/20 text-emerald-200 border border-emerald-500/40":"bg-rose-500/20 text-rose-200 border border-rose-500/40";return <span className={`px-2.5 py-1 rounded-lg text-xs font-medium ${cls}`}>{label}</span>;};
 
     /* ======================= App ======================= */
@@ -87,7 +99,19 @@
       const [msg,setMsg]=useState("");
 
       // stats
-      const [statsOff,setStatsOff]=useState(false);
+      
+      // per-mode stats store (in-memory for this session)
+      const statsRef = useRef({
+        classic:{played:0,good:0,streak:0,best:0,timeSum:0,timeCnt:0},
+        blitz:{played:0,good:0,streak:0,best:0,timeSum:0,timeCnt:0},
+        sudden:{played:0,good:0,streak:0,best:0,timeSum:0,timeCnt:0},
+        flash:{played:0,good:0,streak:0,best:0,timeSum:0,timeCnt:0},
+        deduction:{played:0,good:0,streak:0,best:0,timeSum:0,timeCnt:0},
+      });
+      const saveStats=(m)=>{ const x=statsRef.current[m]; x.played=played; x.good=good; x.streak=streak; x.best=best; x.timeSum=timeSum; x.timeCnt=timeCnt; };
+      const loadStats=(m)=>{ const x=statsRef.current[m]; setPlayed(x.played||0); setGood(x.good||0); setStreak(x.streak||0); setBest(x.best||0); setTimeSum(x.timeSum||0); setTimeCnt(x.timeCnt||0); };
+      const switchMode=(m)=>{ saveStats(mode); setMode(m); setMsg(""); setStatus(null); setGuesses([]); setFlash(null); setPhase('dash'); loadStats(m); };
+const [statsOff,setStatsOff]=useState(false);
       const [played,setPlayed]=useState(0), [good,setGood]=useState(0);
       const [streak,setStreak]=useState(0), [best,setBest]=useState(0);
       const [timeSum,setTimeSum]=useState(0), [timeCnt,setTimeCnt]=useState(0);
@@ -111,12 +135,18 @@
 
       // flash mode
       const [flashMs,setFlashMs]=useState(1200);
+      const [flashRemain,setFlashRemain]=useState(0);
+      const flashStartRef=useRef(null);
+      const flashRafRef=useRef(null);
+
       const [phase,setPhase]=useState('dash'); // 'dash' | 'show' | 'hide'
       const flashTimerRef=useRef(null);
 
       // deduction
       const [dedType,setDedType]=useState("year"); // 'year'|'month'|'day'
       const [ded,setDed]=useState(null);
+      const [lastPick,setLastPick]=useState(null);
+
 
       const inputRef=useRef(null), [input,setInput]=useState("");
 
@@ -160,16 +190,34 @@
         return ()=>cancelAnimationFrame(raf);
       },[mode,blitzSec,statsOff]);
 
-      /* ---- helpers ---- */
+      
+      /* parse desktop input: accepts 0-6 or day names/abbreviations */
+      function parseDayInput(s){
+        if(s==null) return null;
+        const t = String(s).trim().toLowerCase();
+        const map = {
+          '0':0,'sun':0,'su':0,'sunday':0,
+          '1':1,'mon':1,'mo':1,'monday':1,
+          '2':2,'tue':2,'tu':2,'tues':2,'tuesday':2,
+          '3':3,'wed':3,'we':3,'weds':3,'wednesday':3,
+          '4':4,'thu':4,'th':4,'thur':4,'thurs':4,'thursday':4,
+          '5':5,'fri':5,'fr':5,'friday':5,
+          '6':6,'sat':6,'sa':6,'saturday':6
+        };
+        if(t in map) return map[t];
+        const n = Number(t);
+        if(Number.isInteger(n) && n>=0 && n<=6) return n;
+        return null;
+      }
+/* ---- helpers ---- */
       const resetStats=()=>{ setPlayed(0); setGood(0); setStreak(0); setBest(0); setMsg(""); setGuesses([]); setStatus(null); setTimeSum(0); setTimeCnt(0); };
       const toggleStatsOff=(on)=>{
         setStatsOff(on);
-        resetStats();
       };
 
       const arm=()=>{ // prepare timers; hide date
         setActive(false); setMsg(""); setGuesses([]); setStatus(null); setFlash(null);
-        setPhase('dash'); clearTimeout(flashTimerRef.current);
+        setPhase('dash'); clearTimeout(flashTimerRef.current); cancelAnimationFrame(flashRafRef.current); setFlashRemain(0);
         setBlitzRemain(blitzSec); blitzStartRef.current=null; blitzPausedAtRef.current=null; blitzPausedAccRef.current=0; setBlitzRunning(false);
         qDeadlineRef.current=null; qPausedAtRef.current=null; qPausedAccRef.current=0; setQRemain(qSec);
         tStartRef.current=null;
@@ -179,7 +227,7 @@
         setActive(true); setMsg("");
         if(mode==="blitz"){ blitzStartRef.current=performance.now(); blitzPausedAccRef.current=0; blitzPausedAtRef.current=null; setBlitzRunning(true); setBlitzRemain(blitzSec); }
         if(mode==="sudden"){ const now=performance.now(); qDeadlineRef.current=now + qSec*1000; qPausedAccRef.current=0; qPausedAtRef.current=null; setQRemain(qSec); }
-        if(mode==="flash"){ setPhase('show'); clearTimeout(flashTimerRef.current); flashTimerRef.current=setTimeout(()=>setPhase('hide'),Math.max(50,flashMs)); }
+        if(mode==="flash"){ setPhase('show'); clearTimeout(flashTimerRef.current); flashStartRef.current=performance.now(); setFlashRemain(flashMs/1000); const loop=()=>{ const now=performance.now(); const elapsed=now - flashStartRef.current; const rem=Math.max(0,(flashMs - elapsed)/1000); setFlashRemain(rem); if(rem>0){ flashRafRef.current=requestAnimationFrame(loop);} }; cancelAnimationFrame(flashRafRef.current); flashRafRef.current=requestAnimationFrame(loop); flashTimerRef.current=setTimeout(()=>{ setPhase('hide'); cancelAnimationFrame(flashRafRef.current); }, Math.max(50,flashMs)); }
         tStartRef.current=performance.now();
         pushAndNext();
       };
@@ -198,6 +246,8 @@
 
       /* ---- REVEAL: counts as wrong once (unless stats disabled) ---- */
       function reveal(){
+        if(mode==="flash"){ arm(); return; }
+
         if(mode==="deduction"){
           if(!ded) return;
           if(!statsOff){ setPlayed(p=>p+1); setStreak(0); }
@@ -244,6 +294,7 @@
 
       /* --------- Deduction generation ---------- */
       function spawnDed(){
+        setLastPick(null);
         if(dedType==="year"){
           // given m,d,w -> choose unique window for year
           let m=rint(1,12), d=rint(1,31), y, w;
@@ -282,7 +333,7 @@
         }
       }
 
-      function submitDedAnswer(val){
+      function submitDedAnswer(val){ setLastPick(val);
         if(!ded) return;
         if(ded.type==="year"){
           const ok = (+val)===ded.y;
@@ -374,7 +425,7 @@
           <div className="flex items-center justify-between gap-4">
             <h1 className="text-xl md:text-2xl font-semibold leading-none">Calendar Game</h1>
             <div className="flex items-center gap-3">
-              <select value={mode} onChange={e=>setMode(e.target.value)}
+              <select value={mode} onChange={e=>switchMode(e.target.value)}
                       className="panel rounded-xl px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400">
                 <option value="classic">Classic</option>
                 <option value="blitz">Blitz</option>
@@ -398,11 +449,11 @@
           {/* Stats (hidden on lookup) + Disable toggle */}
           {mode!=="lookup" && (
             <>
-              <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3 stat-size">
                 <Stat label="Score" value={scoreStr} disabled={statsOff}/>
                 <Stat label="Accuracy" value={accStr} disabled={statsOff}/>
                 <StatTwo label="Streak / Longest" left={streakBest.left} right={streakBest.right} disabled={statsOff}/>
-                <Stat label="Avg time (correct)" value={avgStr} disabled={statsOff}/>
+                {(() => { const avgOff = (!isTimer(mode) && ((mode==="classic" && !trackClassic) || (mode==="deduction" && !trackDed))); return (<div className={avgOff ? "opacity-50" : ""}><Stat label="Avg time (correct)" value={avgStr} disabled={statsOff}/></div>); })()}
               </div>
               <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
                 {/* Left controls */}
@@ -413,8 +464,24 @@
                       <span className={`w-10 h-6 rounded-full relative ${flip?"bg-purple-500":"bg-zinc-600"}`}>
                         <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${flip?"translate-x-4":""}`}></span>
                       </span>
-                      <span>Flip date</span>
+                      
                     </label>
+                    {(mode==="classic"||mode==="deduction") && (
+                      <label className="flex items-center gap-2 text-sm">
+                        {/* Disable ave time (default enabled, red when enabled) */}
+                        <input type="checkbox" className="sr-only" checked={(mode==='classic'? !trackClassic : !trackDed)} 
+                               onChange={e=>{
+                                 const on=e.target.checked;
+                                 if(mode==='classic'){ setTrackClassic(!on); setTimeSum(0); setTimeCnt(0); }
+                                 else { setTrackDed(!on); setTimeSum(0); setTimeCnt(0); }
+                               }} />
+                        <span className={`w-10 h-6 rounded-full relative ${(mode==='classic'? !trackClassic : !trackDed) ? "bg-rose-500/70":"bg-zinc-600"}`}>
+                          <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${(mode==='classic'? !trackClassic : !trackDed) ? "translate-x-4":""}`}></span>
+                        </span>
+                        <span>Disable ave time</span>
+                      </label>
+                    )}
+
                   )}
                   {mode==="blitz" && (
                     <div className="flex items-center gap-2">
@@ -486,8 +553,18 @@
           )}
 
           {/* MAIN CARD */}
-          <div className={`mt-5 p-5 rounded-3xl ${mode==="lookup"?"lookup-bg":""} ${mode==="lookup"?"thin":""} ${mode==="lookup"?"":'card'}`}>
-            {/* Blitz/Sudden bars */}
+          <div className={`mt-5 p-5 rounded-3xl ${mode==="lookup"?"thin":""} ${mode==="lookup"?"":'card'}`}>
+            {/* Blitz/Sudden bars */
+            {mode==="flash" && active && (
+              <div className="mb-3">
+                <div className="flex items-center justify-between text-xs">
+                  <div className="uppercase tracking-widest opacity-80">Flash</div>
+                  <div className="tabular-nums">{flashRemain.toFixed(2)}s</div>
+                </div>
+                <div className="bar"><span style={{width:`${Math.max(0,Math.min(100,(flashRemain*1000/flashMs)*100))}%`}}></span></div>
+              </div>
+            )}
+}
             {mode==="blitz" && (
               <div className="mb-3">
                 <div className="flex items-center justify-between text-xs text-purple-200/80 mb-1"><div>Blitz</div><div className="tabular-nums">{Math.floor(blitzRemain).toString().padStart(2,'0')}s</div></div>
@@ -539,23 +616,23 @@
 
                 {/* Action bubble below options */}
                 <div className="mt-4 rounded-2xl panel p-3">
-                  <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex flex-wrap items-center justify-center gap-2">
                     {isTimer(mode) && (!active
-                      ? <button className="px-4 py-2 rounded-xl bg-purple-600 text-white text-sm font-medium" onClick={begin}>Begin</button>
+                      ? <button className="px-4 py-2 rounded-xl w-32 bg-purple-600 text-white text-sm font-medium" onClick={begin}>Begin</button>
                       : <button className="px-4 py-2 rounded-xl bg-rose-600/90 text-white text-sm font-medium" onClick={arm}>Reset</button>
                     )}
-                    <button className="px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm" onClick={doNew}>New</button>
-                    <button className="px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm" onClick={reveal}>Reveal</button>
-                    <button className="px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm" onClick={goBack}>Back</button>
+                    <button className="px-3 py-2 rounded-xl w-24 border border-purple-700/60 bg-purple-900/50 text-sm" onClick={doNew}>New</button>
+                    <button className="px-3 py-2 rounded-xl w-24 border border-purple-700/60 bg-purple-900/50 text-sm" onClick={reveal}>Reveal</button>
+                    <button className="px-3 py-2 rounded-xl w-24 border border-purple-700/60 bg-purple-900/50 text-sm" onClick={goBack}>Back</button>
                     <div className="ml-auto">{status && <Pill ok={status==='correct'} label={status==='correct'?'Correct':'Incorrect'} />}</div>
                   </div>
                   {/* Desktop input (hidden on mobile) */}
-                  <form onSubmit={(e)=>{e.preventDefault();submitDoW(Number(input));setInput(""); if(!isTouch) inputRef.current?.focus();}}
+                  <form onSubmit={(e)=>{e.preventDefault(); const idx=parseDayInput(input); if(idx==null){ setMsg("Enter 0–6 or a day name (Sun..Sat)."); return;} submitDoW(idx); setInput(""); if(!isTouch) inputRef.current?.focus();}}
                         className="mt-3 items-stretch gap-2 hidden sm:flex">
                     <input ref={inputRef} value={input} onChange={e=>setInput(e.target.value)}
-                          placeholder="Type 0–6 or day name. Commands: new, stop."
+                          placeholder="Type Sun–Sat or 0–6"
                           className="panel rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-400 flex-1 min-w-0"/>
-                    <button className="px-4 py-2 rounded-xl bg-purple-600 text-white text-sm font-medium">Submit</button>
+                    <button className="px-4 py-2 rounded-xl w-32 bg-purple-600 text-white text-sm font-medium">Submit</button>
                   </form>
                   {(msg || guesses.length>0) && (
                     <div className="mt-3 text-purple-100/90 text-sm">
@@ -585,7 +662,7 @@
                     <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
                       {Array.from({length: ded.b - ded.a + 1}, (_,i)=>ded.a+i).map(y=>(
                         <button key={y} onClick={()=>submitDedAnswer(y)}
-                          className={`${baseBtn} ${idleBtn} py-2 text-sm`}>{fmtYear(y)}</button>
+                          className={`${baseBtn} ${idleBtn} py-2 text-sm ${lastPick===y ? ((y===ded.y)?'ring-2 ring-emerald-400 bg-emerald-900/40 border-emerald-700/60':'ring-2 ring-rose-400 bg-rose-900/40 border-rose-700/60') : ''}`}>{fmtYear(y)}</button>
                       ))}
                     </div>
                   )}
@@ -593,7 +670,7 @@
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
                       {MONTH.map((m,i)=>(
                         <button key={m} onClick={()=>submitDedAnswer(i+1)}
-                          className={`${baseBtn} ${idleBtn}`}>{m}</button>
+                          className={`${baseBtn} ${idleBtn} ${lastPick===i+1 ? ((i+1===ded.m)?'ring-2 ring-emerald-400 bg-emerald-900/40 border-emerald-700/60':'ring-2 ring-rose-400 bg-rose-900/40 border-rose-700/60') : ''}`}>{m}</button>
                       ))}
                     </div>
                   )}
@@ -601,7 +678,7 @@
                     <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-2">
                       {ded.options.map(dv=>(
                         <button key={dv} onClick={()=>submitDedAnswer(dv)}
-                          className={`${baseBtn} ${idleBtn}`}>{dv}</button>
+                          className={`${baseBtn} ${idleBtn} ${lastPick===i+1 ? ((i+1===ded.m)?'ring-2 ring-emerald-400 bg-emerald-900/40 border-emerald-700/60':'ring-2 ring-rose-400 bg-rose-900/40 border-rose-700/60') : ''}`}>{dv}</button>
                       ))}
                     </div>
                   )}
@@ -610,9 +687,9 @@
                 {/* Action bubble */}
                 <div className="mt-4 rounded-2xl panel p-3">
                   <div className="flex flex-wrap gap-2">
-                    <button className="px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm" onClick={()=>{setDedStack(s=>[...s,ded]); spawnDed(); setStatus(null); setMsg("");}}>New</button>
-                    <button className="px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm" onClick={reveal}>Reveal</button>
-                    <button className="px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm" onClick={goBack}>Back</button>
+                    <button className="px-3 py-2 rounded-xl w-24 border border-purple-700/60 bg-purple-900/50 text-sm" onClick={()=>{setDedStack(s=>[...s,ded]); spawnDed(); setStatus(null); setMsg("");}}>New</button>
+                    <button className="px-3 py-2 rounded-xl w-24 border border-purple-700/60 bg-purple-900/50 text-sm" onClick={reveal}>Reveal</button>
+                    <button className="px-3 py-2 rounded-xl w-24 border border-purple-700/60 bg-purple-900/50 text-sm" onClick={goBack}>Back</button>
                     <div className="ml-auto">{status && <Pill ok={status==='correct'} label={status==='correct'?'Correct':'Incorrect'} />}</div>
                   </div>
                   {msg && <div className="mt-3 text-sm">{msg}</div>}
@@ -629,7 +706,7 @@
                 <div className="flex items-stretch gap-2">
                   <input value={lookupIn} onChange={e=>setLookupIn(e.target.value)} placeholder="7/4/1776"
                          className="panel rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-400 flex-1 min-w-0"/>
-                  <button onClick={runLookup} className="px-4 py-2 rounded-xl bg-purple-600 text-white text-sm font-medium">Lookup</button>
+                  <button onClick={runLookup} className="px-4 py-2 rounded-xl w-32 bg-purple-600 text-white text-sm font-medium">Lookup</button>
                   <button onClick={clearLookup} className="px-4 py-2 rounded-xl bg-zinc-700 text-white text-sm font-medium">Clear</button>
                 </div>
                 {lookupOut && <div className="mt-3 text-sm">{lookupOut}</div>}
