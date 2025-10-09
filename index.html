@@ -16,28 +16,22 @@
     .panel{background:rgba(88,28,135,.25);border:1px solid rgba(120,53,175,.45)}
     button,input,select{-webkit-tap-highlight-color:transparent}
 
-    /* small pulse when right/wrong */
     @keyframes flashPulse{0%{box-shadow:0 0 0 0 var(--ring);background:var(--bg0)}
       35%{box-shadow:0 0 0 10px var(--ring);background:var(--bg1)}
       100%{box-shadow:0 0 0 0 transparent;background:var(--bg0)}}
     .flash-good{--ring:rgba(16,185,129,.5);--bg0:rgba(16,185,129,.10);--bg1:rgba(16,185,129,.25);animation:flashPulse .45s ease-in-out}
     .flash-bad{--ring:rgba(239,68,68,.5);--bg0:rgba(239,68,68,.10);--bg1:rgba(239,68,68,.25);animation:flashPulse .45s ease-in-out}
 
-    /* flip animation (classic & deduction only), always clockwise */
     .flipable{transition:transform 450ms ease-in-out;transform-origin:50% 50%}
     .no-anim{transition:none!important}
 
-    /* timer bars */
     .bar{height:6px;border-radius:6px;overflow:hidden;background:rgba(120,53,175,.25);border:1px solid rgba(120,53,175,.45)}
     .bar>span{display:block;height:100%;background:linear-gradient(90deg,#a855f7,#7c3aed)}
 
-    /* stat card typography restored */
     .stat-title{font-size:12px;color:rgba(221,214,254,.85)}
-    .stat-big{font-size:22px;line-height:1.1;font-weight:600}
-    .stat-slashed{font-size:22px;line-height:1.1;font-weight:600} /* same as Score */
+    .stat-big,.stat-slashed{font-size:22px;line-height:1.1;font-weight:600}
     .stat-dim{opacity:.6}
 
-    /* action buttons */
     .btn{border:1px solid rgba(120,53,175,.5);background:rgba(88,28,135,.35);padding:.55rem .9rem;border-radius:14px;transition:all .15s;box-shadow:0 1px 0 rgba(0,0,0,.25)}
     .btn:hover{background:rgba(88,28,135,.55)}
     .btn-primary{padding:.65rem 1.2rem;border-radius:14px;background:#7c3aed;color:#fff;border-color:#7c3aed}
@@ -55,9 +49,22 @@
     addEventListener('unhandledrejection',e=>{const x=document.getElementById('errors');x.style.display='block';x.textContent='⚠️ '+(e.reason?.message||String(e.reason))});
   </script>
 
-  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <!-- React & Babel (pinned versions + CORS) -->
+  <script src="https://unpkg.com/react@18.2.0/umd/react.production.min.js" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.2.0/umd/react-dom.production.min.js" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.25.0/babel.min.js" crossorigin="anonymous"></script>
+
+  <!-- Fallback to jsDelivr if unpkg fails/blocked -->
+  <script>
+  (function(){
+    function inject(src){var s=document.createElement('script');s.src=src;s.crossOrigin='anonymous';document.head.appendChild(s);}
+    setTimeout(function(){
+      if(!window.React){inject('https://cdn.jsdelivr.net/npm/react@18.2.0/umd/react.production.min.js');}
+      if(!window.ReactDOM){inject('https://cdn.jsdelivr.net/npm/react-dom@18.2.0/umd/react-dom.production.min.js');}
+      if(!window.Babel){inject('https://cdn.jsdelivr.net/npm/@babel/standalone@7.25.0/babel.min.js');}
+    },1200);
+  })();
+  </script>
 
   <script type="text/babel" data-presets="env,react">
     const {useEffect,useMemo,useRef,useState} = React;
@@ -65,11 +72,11 @@
     /* ===== Calendar helpers ===== */
     const MONTH=["January","February","March","April","May","June","July","August","September","October","November","December"];
     const DAY=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
-    const toAstro = y => y>0?y:1-Math.abs(y);                       // 1 BC -> 0
+    const toAstro = y => y>0?y:1-Math.abs(y);
     const isLeap = y => { y=toAstro(y); return y%400===0 || (y%4===0 && y%100!==0); };
     const dim = (y,m)=> m===2 ? (isLeap(y)?29:28) : [4,6,9,11].includes(m)?30:31;
     function jdnGregorian(y,m,d){ const a=Math.floor((14-m)/12),y2=y+4800-a,m2=m-3+12*a; return d+Math.floor((153*m2+2)/5)+365*y2+Math.floor(y2/4)-Math.floor(y2/100)+Math.floor(y2/400)-32045; }
-    const wday=(y,m,d)=> (jdnGregorian(toAstro(y),m,d)+1)%7;        // 0=Sun..6=Sat
+    const wday=(y,m,d)=> (jdnGregorian(toAstro(y),m,d)+1)%7;
     const fmtYear = y => y>0?String(y):`${Math.abs(y)} BC`;
     const fmt=(y,m,d)=> `${MONTH[m-1]} ${d}, ${fmtYear(y)}`;
     const rint=(a,b)=>Math.floor(Math.random()*(b-a+1))+a;
@@ -80,7 +87,6 @@
 
     function App(){
       const [mode,setMode]=useState("classic");
-      /* full-page Mandelbrot only on Lookup */
       useEffect(()=>{ document.body.classList.toggle("lookup-bg", mode==="lookup"); },[mode]);
 
       const [includeBC,setIncludeBC]=useState(false);
@@ -95,20 +101,20 @@
       const [guesses,setGuesses]=useState([]); const [status,setStatus]=useState(null);
       const [msg,setMsg]=useState("");
 
-      /* ===== per-mode stats (lookup excluded) ===== */
+      /* ===== per-mode stats ===== */
       const emptyStat={played:0,good:0,streak:0,best:0,timeSum:0,timeCnt:0};
       const makeAll=()=>({classic:{...emptyStat},blitz:{...emptyStat},sudden:{...emptyStat},flash:{...emptyStat},deduction:{...emptyStat}});
       const [stats,setStats]=useState(makeAll);
       const [statsOff,setStatsOff]=useState({classic:false,blitz:false,sudden:false,flash:false,deduction:false});
-      const cur = stats[mode] || emptyStat;   // guard: lookup returns emptyStat so no crash
-      const off = statsOff[mode]??true;       // lookup -> true (acts disabled)
+      const cur = stats[mode] || emptyStat;
+      const off = statsOff[mode]??true;
 
       const [trackClassic,setTrackClassic]=useState(false);
       const [trackDed,setTrackDed]=useState(false);
       const trackOn = ()=> isTimer(mode) || (mode==="classic"&&trackClassic) || (mode==="deduction"&&trackDed);
 
       const tStartRef=useRef(null);
-      const [flashFx,setFlashFx]=useState(null); // {type, idx}
+      const [flashFx,setFlashFx]=useState(null);
       function pulse(type,idx,after=()=>{}){ setFlashFx({type,idx}); setTimeout(()=>{ setFlashFx(null); after(); },450); }
 
       const [flip,setFlip]=useState(false); const [rot,setRot]=useState(0);
@@ -122,7 +128,7 @@
       const qDeadlineRef=useRef(null), qPausedAtRef=useRef(null), qPausedAccRef=useRef(0);
 
       const [flashMs,setFlashMs]=useState(1200), [flashRemain,setFlashRemain]=useState(0);
-      const [phase,setPhase]=useState('dash'); // 'dash' | 'show' | 'hide'
+      const [phase,setPhase]=useState('dash');
       const flashTimerRef=useRef(null), flashStartRef=useRef(null);
 
       const [active,setActive]=useState(false);
@@ -130,7 +136,6 @@
 
       useEffect(()=>{ if(!isTouch) inputRef.current?.focus(); else document.activeElement?.blur(); },[date,mode,active]);
 
-      /* pause on background */
       useEffect(()=>{
         const onVis=()=>{
           const now=performance.now();
@@ -146,7 +151,6 @@
         return ()=>document.removeEventListener("visibilitychange", onVis);
       },[blitzRunning]);
 
-      /* raf loop */
       useEffect(()=>{
         let raf;
         const loop=()=>{
@@ -244,10 +248,8 @@
         setMsg(`Answer: ${DAY[wday(prev.y,prev.m,prev.d)]}.`); setStatus(null); setGuesses([]);
       }
 
-      /* mode change */
       useEffect(()=>{ arm(); setGuesses([]); setStatus(null); setStack([]); setMsg(""); },[mode]);
 
-      /* ranges / BC */
       function toggleBC(ch){
         setIncludeBC(ch);
         if(ch){ setMinY(bcRange.min); setMaxY(bcRange.max); setDate(randomDate(bcRange.min,bcRange.max)); }
@@ -256,7 +258,6 @@
       function setMinActive(v){ if(includeBC){ if(v===0) v=-1; setBcRange(r=>({...r,min:Math.min(v,maxY)})); setMinY(Math.min(v,maxY)); } else { v=Math.max(1,Math.min(v,maxY)); setAdRange(r=>({...r,min:v})); setMinY(v); } }
       function setMaxActive(v){ if(includeBC){ if(v===0) v=1; setBcRange(r=>({...r,max:Math.max(v,minY)})); setMaxY(Math.max(v,minY)); } else { v=Math.max(v,minY,1); setAdRange(r=>({...r,max:v})); setMaxY(v); } }
 
-      /* headline */
       const showDash = isTimer(mode) && !active;
       const showDots = (mode==="flash" && active && phase==='hide');
       const headline = showDash ? "—" : showDots ? "…" : fmt(date.y,date.m,date.d);
@@ -280,17 +281,16 @@
       }
       function clearLookup(){ setLookupIn(""); if(document.activeElement) document.activeElement.blur(); }
 
-      /* deduction (restored: year input within a window) */
-      const [dedWin,setDedWin]=useState(100); // +/- window
+      /* deduction (year window) */
+      const [dedWin,setDedWin]=useState(100);
       const [dedInput,setDedInput]=useState("");
-      const dedMin = (y=>y-dedWin)(date.y), dedMax = (y=>y+dedWin)(date.y);
       function submitDeduction(e){
         e?.preventDefault();
         if(isTimer(mode) && !active){ setMsg("Press Begin to start."); return; }
         if(!dedInput) return;
         const guess = parseInt(dedInput,10);
         const ans = date.y;
-        if(guess===ans){ addCorrectTime(); markRight(); setStatus('correct'); setMsg("Correct"); pushAndNext(); setDedInput(""); }
+        if(guess===ans){ if(tStartRef.current){const dt=(performance.now()-tStartRef.current)/1000; if((mode==="deduction"&&trackDed)&&!off){ setStats(s=>{const t={...s[mode]}; t.timeSum+=dt; t.timeCnt++; return {...s,[mode]:t};}); } } markRight(); setStatus('correct'); setMsg("Correct"); setDedInput(""); pushAndNext(); }
         else{ markWrong(); setStatus('incorrect'); setMsg(`Answer: ${fmtYear(ans)}`); }
       }
 
@@ -304,7 +304,6 @@
 
       return (
         <div className="mx-auto px-4 py-5 w-full max-w-[480px] md:max-w-3xl lg:max-w-4xl">
-          {/* header */}
           <div className="flex items-center justify-between gap-4">
             <h1 className="text-xl md:text-2xl font-semibold leading-none">Calendar Game</h1>
             <div className="flex items-center gap-3">
@@ -329,7 +328,6 @@
             </div>
           </div>
 
-          {/* stats (lookup hides) */}
           {mode!=="lookup" && (
             <>
               <div className="mt-4 grid grid-cols-2 md:grid-cols-5 gap-3 items-stretch">
@@ -354,7 +352,6 @@
                 </div>
               </div>
 
-              {/* top controls row (positions restored) */}
               <div className="mt-3 flex flex-wrap items-center gap-4">
                 <label className="flex items-center gap-2 text-sm">
                   <input type="checkbox" className="sr-only" checked={flip} onChange={e=>toggleFlip(e.target.checked)} />
@@ -403,7 +400,6 @@
                 </div>
               </div>
 
-              {/* Year range (unchanged) */}
               <details className="mt-3 rounded-2xl card p-3">
                 <summary className="cursor-pointer text-sm text-purple-200/90">Year range <span className="tabular-nums ml-1">{minY} → {maxY}</span></summary>
                 <div className="mt-3 space-y-3">
@@ -421,9 +417,7 @@
             </>
           )}
 
-          {/* Main card */}
           <div className="mt-5 p-5 rounded-3xl card">
-            {/* timer bars */}
             {mode==="blitz" && (
               <div className="mb-3">
                 <div className="flex items-center justify-between text-xs text-purple-200/80 mb-1"><div>Blitz</div><div className="tabular-nums">{Math.floor(blitzRemain).toString().padStart(2,'0')}s</div></div>
@@ -443,7 +437,6 @@
               </div>
             )}
 
-            {/* title + headline */}
             <div className="text-center">
               <div className="text-xs uppercase tracking-widest text-purple-100/80">
                 {mode==="lookup" ? "Lookup" : mode==="deduction" ? "What year is this?" : "What day is this?"}
@@ -454,7 +447,6 @@
               </div>
             </div>
 
-            {/* Classic / Blitz / Sudden / Flash options */}
             {["classic","blitz","sudden","flash"].includes(mode) && (
               <>
                 <div className={`mt-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3 ${(!active && isTimer(mode))?'opacity-60 pointer-events-none':''}`}>
@@ -464,7 +456,6 @@
                   ))}
                 </div>
 
-                {/* actions bubble (smaller pills, centered) */}
                 <div className="mt-4 rounded-2xl panel px-3 py-3">
                   <div className="flex flex-wrap items-center justify-center gap-2">
                     {isTimer(mode)
@@ -476,7 +467,6 @@
                     <button className="btn" onClick={goBack}>Back</button>
                   </div>
 
-                  {/* desktop input (hidden on mobile) */}
                   <form onSubmit={(e)=>{e.preventDefault();submitDoW(Number(input));setInput(""); if(!isTouch) inputRef.current?.focus();}}
                         className="mt-3 items-stretch gap-2 hidden sm:flex justify-center">
                     <input ref={inputRef} value={input} onChange={e=>setInput(e.target.value)}
@@ -495,7 +485,6 @@
               </>
             )}
 
-            {/* Deduction (restored) */}
             {mode==="deduction" && (
               <>
                 <div className="mt-4 text-center text-sm text-purple-200/90">
@@ -509,7 +498,6 @@
                   <button type="button" className="btn" onClick={()=>{setDedInput(""); pushAndNext();}}>New</button>
                 </form>
 
-                {/* Actions bubble (Reveal/Back centered like others) */}
                 <div className="mt-3 rounded-2xl panel px-3 py-3">
                   <div className="flex flex-wrap items-center justify-center gap-2">
                     <button className="btn" onClick={reveal}>Reveal</button>
@@ -526,7 +514,6 @@
               </>
             )}
 
-            {/* Lookup */}
             {mode==="lookup" && (
               <div className="mt-1 bg-black/35 p-4 rounded-2xl">
                 <div className="text-sm text-purple-100/90 mb-2">
