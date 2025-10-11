@@ -32,13 +32,13 @@
   <script>
     const __errBox = () => document.getElementById('errors');
     const __hideErr = () => { const x=__errBox(); if(x){ x.style.display='none'; x.textContent=''; } };
-    window.addEventListener('error', e=>{
+    addEventListener('error', e=>{
       const x=__errBox(); if(!x) return;
       x.style.display='block';
       const loc = e.filename? `\n at ${e.filename}:${e.lineno}:${e.colno}` : '';
       x.textContent = `⚠️ ${e.message||String(e)}${loc}\n${e.error?.stack||''}`;
     });
-    window.addEventListener('unhandledrejection', e=>{
+    addEventListener('unhandledrejection', e=>{
       const x=__errBox(); if(!x) return;
       x.style.display='block';
       const msg = e.reason?.message || String(e.reason);
@@ -98,7 +98,7 @@
 
       // Remember separate ranges
       const [adRange,setAdRange]=useState({min:1,max:10000});
-      const [bcRange,setBcRange]=useState({min:-10000,max:10000}); // used for BOTH and BC
+      const [bcRange,setBcRange]=useState({min:-10000,max:10000}); // BOTH/BC
       const [minY,setMinY]=useState(1), [maxY,setMaxY]=useState(10000);
 
       // Date + stacks
@@ -118,8 +118,8 @@
       const S = statsByMode[mode] || blankStats();
 
       // Toggles
-      const [statsOff,setStatsOff]=useState(false);         // hide/unhide only
-      const [trackClassic,setTrackClassic]=useState(false); // Disable avg time = ON by default
+      const [statsOff,setStatsOff]=useState(false); // hide/unhide only
+      const [trackClassic,setTrackClassic]=useState(false); // "Disable avg time" default ON
       const [trackDed,setTrackDed]=useState(false);
 
       // timing ref for averages
@@ -202,8 +202,7 @@
       function sanitizeForEra(v,e){
         if(e==='AD') return Math.max(1, v);
         if(e==='BC') return Math.min(-1, v===0?-1:v);
-        // BOTH
-        return v===0 ? -1 : v;
+        return v===0 ? -1 : v; // BOTH
       }
       function applyEra(newEra){
         try{
@@ -312,7 +311,7 @@
           if(mode==="classic"||mode==="flash"||mode==="blitz"||mode==="sudden"){
             setStack(s=>[...s,{...date}]);
             setDate(randomDate(minY,maxY));
-            setGuesses([]); setStatus(null);
+            setGuesses([]); // NOTE: keep status/msg so the “Correct/Incorrect” pill/text remains visible
             setCountedWrong(false);
           }
           if(mode==="deduction"){ setDedStack(s=>[...s, ded]); spawnDed(); }
@@ -370,14 +369,15 @@
         }catch(e){ reportError(e,{where:'goBack'}); }
       }
 
-      /* ---- CORRECT/WRONG submission (immediate next) ---- */
+      /* ---- CORRECT/WRONG submission ---- */
       function submitDoW(val){
         try{
           if(isTimer(mode) && !active){ setMsg("Press Begin to start."); return; }
           const idx = typeof val==="number"?val: Number(val);
           if(idx===wday(date.y,date.m,date.d)){
-            // flash green but go to next immediately
+            // show green + record stats
             setFlash({type:'good', idx}); setTimeout(()=>setFlash(null),450);
+            setStatus('correct'); setMsg('Correct!');
             if(!statsOff && tStartRef.current && trackOn()){
               const dt=(performance.now()-tStartRef.current)/1000;
               updateStats(cur=>{ cur.timeSum+=dt; cur.timeCnt+=1; });
@@ -387,11 +387,28 @@
                 cur.played+=1; cur.good+=1; cur.streak+=1; if(cur.streak>cur.best) cur.best=cur.streak;
               });
             }
+            // Per-question reset for Sudden Death
+            if(mode==="sudden"){
+              const now=performance.now();
+              qDeadlineRef.current = now + qSec*1000;
+              qPausedAccRef.current = 0;
+              qPausedAtRef.current = null;
+              setQRemain(qSec);
+            }
+            // Flash: correct => reset back to dash/begin
+            if(mode==="flash"){
+              clearTimeout(flashTimerRef.current);
+              setPhase('dash');
+              setActive(false);
+              flashDeadlineRef.current=null;
+              setFlashRemainMs(flashMs);
+            }
+            // Immediately show next date (keep message visible)
             pushAndNext();
           }else{
             if(!statsOff && !countedWrong){ updateStats(cur=>{ cur.played+=1; cur.streak=0; }); }
             setCountedWrong(true);
-            setStatus('incorrect'); setGuesses(g=>g.includes(DAY[idx])?g:[...g,DAY[idx]]);
+            setStatus('incorrect'); setMsg('Incorrect.');
             if(mode==="sudden"){ setMsg(`Answer: ${DAY[correct]}. Game over.`); setActive(false); }
             setFlash({type:'bad', idx}); setTimeout(()=>setFlash(null),450);
           }
@@ -443,42 +460,36 @@
       function submitDedAnswer(val){
         try{
           if(!ded) return;
+          const setCorrectThenNext = ()=>{
+            setStatus('correct'); setMsg('Correct!');
+            // push next almost immediately but allow one paint for the green flash
+            requestAnimationFrame(()=>setTimeout(spawnDed, 60));
+          };
+          const setWrong = ()=>{ setStatus('incorrect'); setMsg('Incorrect.'); };
+
           if(ded.type==="year"){
             const ok = (+val)===ded.y; flashDed('year', +val, ok);
             if(ok){
               if(!statsOff && trackDed && tStartRef.current){ const dt=(performance.now()-tStartRef.current)/1000; updateStats(cur=>{cur.timeSum+=dt; cur.timeCnt+=1;}); }
               if(!statsOff){ updateStats(cur=>{ cur.played+=1; cur.good+=1; cur.streak+=1; if(cur.streak>cur.best) cur.best=cur.streak; }); }
-              setStatus('correct');
-              // show green then next immediately (next frame) for speed
-              requestAnimationFrame(()=>requestAnimationFrame(spawnDed));
-            }else{
-              if(!statsOff){ updateStats(cur=>{ cur.played+=1; cur.streak=0; }); }
-              setStatus('incorrect');
-            }
+              setCorrectThenNext();
+            }else{ if(!statsOff){ updateStats(cur=>{ cur.played+=1; cur.streak=0; }); } setWrong(); }
           }
           if(ded.type==="month"){
             const ok = (+val)===ded.m; flashDed('month', +val, ok);
             if(ok){
               if(!statsOff && trackDed && tStartRef.current){ const dt=(performance.now()-tStartRef.current)/1000; updateStats(cur=>{cur.timeSum+=dt; cur.timeCnt+=1;}); }
               if(!statsOff){ updateStats(cur=>{ cur.played+=1; cur.good+=1; cur.streak+=1; if(cur.streak>cur.best) cur.best=cur.streak; }); }
-              setStatus('correct');
-              requestAnimationFrame(()=>requestAnimationFrame(spawnDed));
-            }else{
-              if(!statsOff){ updateStats(cur=>{ cur.played+=1; cur.streak=0; }); }
-              setStatus('incorrect');
-            }
+              setCorrectThenNext();
+            }else{ if(!statsOff){ updateStats(cur=>{ cur.played+=1; cur.streak=0; }); } setWrong(); }
           }
           if(ded.type==="day"){
             const ok = (+val)===ded.d; flashDed('day', +val, ok);
             if(ok){
               if(!statsOff && trackDed && tStartRef.current){ const dt=(performance.now()-tStartRef.current)/1000; updateStats(cur=>{cur.timeSum+=dt; cur.timeCnt+=1;}); }
               if(!statsOff){ updateStats(cur=>{ cur.played+=1; cur.good+=1; cur.streak+=1; if(cur.streak>cur.best) cur.best=cur.streak; }); }
-              setStatus('correct');
-              requestAnimationFrame(()=>requestAnimationFrame(spawnDed));
-            }else{
-              if(!statsOff){ updateStats(cur=>{ cur.played+=1; cur.streak=0; }); }
-              setStatus('incorrect');
-            }
+              setCorrectThenNext();
+            }else{ if(!statsOff){ updateStats(cur=>{ cur.played+=1; cur.streak=0; }); } setWrong(); }
           }
         }catch(e){ reportError(e,{where:'submitDedAnswer', val}); }
       }
@@ -494,22 +505,14 @@
         try{
           let val = sanitizeForEra(+v, era);
           if(era==='AD'){ setAdRange(r=>({...r,min:Math.min(val,maxY)})); setMinY(Math.min(val,maxY)); }
-          else if(era==='BC' || era==='BOTH'){ 
-            setBcRange(r=>({...r,min:val})); 
-            const clamped = era==='BC' ? Math.min(val, -1) : (val===0?-1:val);
-            setMinY(Math.min(clamped,maxY));
-          }
+          else { setBcRange(r=>({...r,min:val})); const clamped = era==='BC' ? Math.min(val, -1) : (val===0?-1:val); setMinY(Math.min(clamped,maxY)); }
         }catch(e){ reportError(e,{where:'setMinActive', v}); }
       }
       function setMaxActive(v){
         try{
           let val = sanitizeForEra(+v, era);
           if(era==='AD'){ val=Math.max(val,minY,1); setAdRange(r=>({...r,max:val})); setMaxY(val); }
-          else if(era==='BC' || era==='BOTH'){
-            setBcRange(r=>({...r,max:val}));
-            const clamped = era==='BC' ? Math.min(val, -1) : (val===0?1:val);
-            setMaxY(Math.max(clamped,minY));
-          }
+          else { setBcRange(r=>({...r,max:val})); const clamped = era==='BC' ? Math.min(val, -1) : (val===0?1:val); setMaxY(Math.max(clamped,minY)); }
         }catch(e){ reportError(e,{where:'setMaxActive', v}); }
       }
 
@@ -554,7 +557,6 @@
       const avgDisabled = (statsOff || !(isTimer(mode)||(mode==="classic"&&trackClassic)||(mode==="deduction"&&trackDed)));
       const avgStr = avgDisabled ? "—" : (S.timeCnt?`${(S.timeSum/S.timeCnt).toFixed(2)}s`:"—");
 
-      // era segmented options
       const EraSeg = () => (
         <div className="flex rounded-xl overflow-hidden border border-purple-800/60">
           {[
