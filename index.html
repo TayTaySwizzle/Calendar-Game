@@ -111,6 +111,9 @@
       const [dedType,setDedType]=useState("year"); // 'year'|'month'|'day'
       const [ded,setDed]=useState(null);
 
+      // NEW: track whether current date has already been counted as wrong (for classic/blitz/sudden/flash).
+      const [countedWrong,setCountedWrong]=useState(false);
+
       const inputRef=useRef(null), [input,setInput]=useState("");
 
       useEffect(()=>{ if(!isTouch) inputRef.current?.focus(); else document.activeElement?.blur(); },[date,mode,active]);
@@ -154,7 +157,7 @@
         };
         raf=requestAnimationFrame(loop);
         return ()=>cancelAnimationFrame(raf);
-      },[mode,blitzSec,statsOff,blitzRunning]);
+      },[mode,blitzSec,statsOff,blitzRunning,active]);  <!-- (1) add 'active' so Sudden timer moves -->
 
       /* ---- helpers ---- */
       const resetStats=()=>{ setPlayed(0); setGood(0); setStreak(0); setBest(0); setMsg(""); setGuesses([]); setStatus(null); setTimeSum(0); setTimeCnt(0); };
@@ -165,6 +168,7 @@
 
       const arm=()=>{ // prepare timers; hide date
         setActive(false); setMsg(""); setGuesses([]); setStatus(null); setFlash(null);
+        setCountedWrong(false);                              /* (5) reset per-question wrong flag */
         setPhase('dash'); clearTimeout(flashTimerRef.current);
         setBlitzRemain(blitzSec); blitzStartRef.current=null; blitzPausedAtRef.current=null; blitzPausedAccRef.current=0; setBlitzRunning(false);
         qDeadlineRef.current=null; qPausedAtRef.current=null; qPausedAccRef.current=0; setQRemain(qSec);
@@ -181,10 +185,24 @@
       };
 
       function pushAndNext(){
-        if(mode==="classic"){ setStack(s=>[...s,{...date}]); setDate(randomDate(minY,maxY)); setGuesses([]); setStatus(null); }
-        if(mode==="flash"||mode==="blitz"||mode==="sudden"){ setStack(s=>[...s,{...date}]); setDate(randomDate(minY,maxY)); setGuesses([]); setStatus(null); }
+        if(mode==="classic"){
+          setStack(s=>[...s,{...date}]);
+          setDate(randomDate(minY,maxY));
+          setGuesses([]); setStatus(null);
+          setCountedWrong(false);                            /* (5) reset per-question wrong flag */
+          if(trackClassic){ tStartRef.current=performance.now(); }  /* (2) start timer for classic */
+        }
+        if(mode==="flash"||mode==="blitz"||mode==="sudden"){
+          setStack(s=>[...s,{...date}]);
+          setDate(randomDate(minY,maxY));
+          setGuesses([]); setStatus(null);
+          setCountedWrong(false);                            /* (5) reset per-question wrong flag */
+        }
         if(mode==="deduction"){ setDedStack(s=>[...s, ded]); spawnDed(); }
       }
+
+      // Also ensure classic timing starts on first question / when toggled on
+      useEffect(()=>{ if(mode==="classic" && trackClassic) tStartRef.current=performance.now(); },[mode,trackClassic,date]);  /* (2) */
 
       const trackOn = ()=> isTimer(mode) || (mode==="classic"&&trackClassic) || (mode==="deduction"&&trackDed);
       const avg = timeCnt ? (timeSum/timeCnt) : 0;
@@ -204,7 +222,8 @@
           setStatus('incorrect');
           return;
         }
-        if(!statsOff){ setPlayed(p=>p+1); setStreak(0); }
+        if(!statsOff && !countedWrong){ setPlayed(p=>p+1); setStreak(0); }  /* (5) only once */
+        setCountedWrong(true);                                               /* (5) mark counted */
         setMsg(`Answer: ${DAY[correct]}.`); setStatus('incorrect');
       }
 
@@ -219,6 +238,7 @@
         }
         const prev = stack[stack.length-1]; if(!prev){ setMsg("Nothing to go back to."); return; }
         setStack(s=>s.slice(0,-1)); setDate(prev);
+        setCountedWrong(false);                                              /* (5) new attempt instance */
         setMsg(`Answer: ${DAY[wday(prev.y,prev.m,prev.d)]}.`); setStatus(null); setGuesses([]);
       }
 
@@ -231,7 +251,8 @@
           if(!statsOff){ setPlayed(p=>p+1); setGood(c=>c+1); setStreak(s=>{const ns=s+1; if(ns>best) setBest(ns); return ns;}); }
           setStatus('correct'); pulse('good',idx,()=>pushAndNext());
         }else{
-          if(!statsOff){ setPlayed(p=>p+1); setStreak(0); }
+          if(!statsOff && !countedWrong){ setPlayed(p=>p+1); setStreak(0); }  /* (5) only once */
+          setCountedWrong(true);                                              /* (5) mark counted */
           setStatus('incorrect'); setGuesses(g=>g.includes(DAY[idx])?g:[...g,DAY[idx]]);
           if(mode==="sudden"){ setMsg(`Answer: ${DAY[correct]}. Game over.`); setActive(false); }
           pulse('bad',idx);
@@ -372,7 +393,11 @@
                 <option value="deduction">Deduction</option>
                 <option value="lookup">Lookup</option>
               </select>
-              {/* (BC toggle moved below, where Flip used to be) */}
+              {/* (4) visual hint that this opens a menu */}
+              <div className="flex flex-col items-center leading-none text-[10px] text-purple-200/80 select-none">
+                <span>▲</span><span>▼</span>
+              </div>
+              {/* (BC toggle remains below) */}
             </div>
           </div>
 
@@ -423,13 +448,16 @@
                   )}
                   {(mode==="classic"||mode==="deduction") && (
                     <label className="flex items-center gap-2 text-sm">
-                      <input type="checkbox" className="sr-only"
-                            checked={mode==="classic"?trackClassic:trackDed}
-                            onChange={e=> mode==="classic"?setTrackClassic(e.target.checked):setTrackDed(e.target.checked)} />
-                      <span className={`w-10 h-6 rounded-full relative ${(mode==="classic"?trackClassic:trackDed)?"bg-purple-500":"bg-zinc-600"}`}>
-                        <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${(mode==="classic"?trackClassic:trackDed)?"translate-x-4":""}`}></span>
+                      {/* (3) change to 'Disable avg time', default enabled, and red when enabled */}
+                      <input
+                        type="checkbox"
+                        className="sr-only"
+                        checked={!(mode==="classic"?trackClassic:trackDed)}                               
+                        onChange={e=> mode==="classic"?setTrackClassic(!e.target.checked):setTrackDed(!e.target.checked)} />
+                      <span className={`w-10 h-6 rounded-full relative ${(!(mode==="classic"?trackClassic:trackDed))?"bg-rose-500/70":"bg-zinc-600"}`}>
+                        <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${(!(mode==="classic"?trackClassic:trackDed))?"translate-x-4":""}`}></span>
                       </span>
-                      <span>Track avg</span>
+                      <span>Disable avg time</span>
                     </label>
                   )}
                 </div>
