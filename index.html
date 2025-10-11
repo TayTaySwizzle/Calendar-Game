@@ -132,6 +132,9 @@
 
       /* ---- timers loop ---- */
       useEffect(()=>{
+        // Only run while a timer is active (saves battery / avoids idle RAF)
+        const needLoop = (blitzRunning || (mode==="sudden" && qDeadlineRef.current));
+        if(!needLoop) return;
         let raf;
         const loop=()=>{
           const now=performance.now();
@@ -150,7 +153,7 @@
         };
         raf=requestAnimationFrame(loop);
         return ()=>cancelAnimationFrame(raf);
-      },[mode,blitzSec,statsOff]);
+      },[mode,blitzSec,statsOff,blitzRunning]);
 
       /* ---- helpers ---- */
       const resetStats=()=>{ setPlayed(0); setGood(0); setStreak(0); setBest(0); setMsg(""); setGuesses([]); setStatus(null); setTimeSum(0); setTimeCnt(0); };
@@ -327,9 +330,7 @@
                        : (showDash ? "—" : showDots ? "…" : fmt(date.y,date.m,date.d));
 
       const headlineIsDate = !(showDash||showDots) || (mode==="deduction" && ded);
-      const wantAnim = (headlineIsDate && (mode==="classic"||mode==="deduction"));
-      const wantStaticFlip = (headlineIsDate && !(mode==="classic"||mode==="deduction") && flip);
-
+            
       const baseBtn="w-full rounded-2xl border px-4 py-3 text-base  transition shadow-sm select-none";
       const idleBtn="border-purple-800/60 bg-purple-900/30 hover:bg-purple-900/60";
 
@@ -338,10 +339,10 @@
       function runLookup(){
         const s=lookupIn.replace(/\u2212/g,'-').trim();
         const m = /^(\d{1,2})\/(\d{1,2})\/(-?\d{1,5})$/.exec(s);
-        if(!m){ setLookupOut("Enter date in month/day/year format, e.g., 7/4/1776. Years allowed -10000…10000 (no year 0)."); return; }
+        if(!m){ setLookupOut("Enter date in month/day/year format, e.g., 7/4/1776. Years allowed −10000…10000 (no year 0)."); return; }
         let mm=+m[1], dd=+m[2], yy=+m[3];
         if(yy===0){ setLookupOut("There is no year 0. Use -1 for 1 BC."); return; }
-        if(yy<-10000 || yy>10000){ setLookupOut("Year must be between −10000 and 10000."); return; }
+        if(yy<-10000 || yy>10000){ setLookupOut("Year must be between -10000 and 10000."); return; }
         if(mm<1||mm>12){ setLookupOut("Month must be 1–12."); return; }
         const maxd=dim(yy,mm);
         if(dd<1||dd>maxd){ setLookupOut(`Day must be 1–${maxd} for ${MONTH[mm-1]}.`); return; }
@@ -397,7 +398,7 @@
                       <span className="tabular-nums text-xs w-12 text-right">{flashMs}ms</span>
                     </div>
                   )}
-                  {(mode==="classic"||mode==="deduction") && (
+                  {mode!=="lookup" && (<label className="flex items-center gap-2 text-sm"><input type="checkbox" className="sr-only" checked={includeBC} onChange={e=>toggleBC(e.target.checked)} /><span className={`w-10 h-6 rounded-full relative ${includeBC?"bg-purple-500":"bg-zinc-600"}`}><span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${includeBC?"translate-x-4":""}`}></span></span><span>BC</span></label>)}{(mode==="classic"||mode==="deduction") && (
                     <label className="flex items-center gap-2 text-sm">
                       <input type="checkbox" className="sr-only"
                             checked={mode==="classic"?trackClassic:trackDed}
@@ -573,7 +574,7 @@
             {mode==="lookup" && (
               <div className="mt-1 bg-black/35 p-4 rounded-2xl">
                 <div className="text-sm text-purple-100/90 mb-2">
-                  Provide a date in <b>month/day/year</b> format (e.g., <b>7/4/1776</b>). Years allowed <b>−10000…10000</b> (no year 0).
+                  Provide a date in <b>month/day/year</b> format (e.g., <b>7/4/1776</b>). Years allowed <b>-10000…10000</b> (no year 0).
                 </div>
                 <div className="flex items-stretch gap-2">
                   <input value={lookupIn} onChange={e=>setLookupIn(e.target.value)} placeholder="7/4/1776"
