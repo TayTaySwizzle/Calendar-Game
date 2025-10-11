@@ -31,20 +31,25 @@
   <div id="root" class="min-h-screen w-full">Loading…</div>
   <pre id="errors" style="display:none;white-space:pre-wrap;background:#2b0f3a;border:1px solid #7e22ce;color:#fca5a5;padding:.75rem;border-radius:.75rem;margin:1rem;max-width:64rem"></pre>
 
+  <!-- FIXED: removed optional chaining from this script -->
   <script>
-    const __errBox = () => document.getElementById('errors');
-    const __hideErr = () => { const x=__errBox(); if(x){ x.style.display='none'; x.textContent=''; } };
-    addEventListener('error', e=>{
-      const x=__errBox(); if(!x) return;
+    function __errBox(){ return document.getElementById('errors'); }
+    function __hideErr(){ var x=__errBox(); if(x){ x.style.display='none'; x.textContent=''; } }
+    addEventListener('error', function(e){
+      var x=__errBox(); if(!x) return;
       x.style.display='block';
-      const loc = e.filename? `\n at ${e.filename}:${e.lineno}:${e.colno}` : '';
-      x.textContent = `⚠️ ${e.message||String(e)}${loc}\n${e.error?.stack||''}`;
+      var msg = (e.error && e.error.message) || e.message || String(e);
+      var loc = e.filename? ("\n at "+e.filename+":"+e.lineno+":"+e.colno) : '';
+      var stack = (e.error && e.error.stack) ? ("\n"+e.error.stack) : '';
+      x.textContent = "⚠️ "+msg+loc+stack;
     });
-    addEventListener('unhandledrejection', e=>{
-      const x=__errBox(); if(!x) return;
-      const msg = e.reason?.message || String(e.reason);
+    addEventListener('unhandledrejection', function(e){
+      var x=__errBox(); if(!x) return;
+      var r = e.reason || {};
+      var msg = r.message || String(e.reason);
+      var stack = r.stack ? ("\n"+r.stack) : '';
       x.style.display='block';
-      x.textContent = `⚠️ Promise rejection: ${msg}\n${e.reason?.stack||''}`;
+      x.textContent = "⚠️ Promise rejection: "+msg+stack;
     });
   </script>
 
