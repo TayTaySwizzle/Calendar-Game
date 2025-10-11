@@ -23,6 +23,8 @@
     .chip{background:rgba(120,53,175,.25);border:1px solid rgba(120,53,175,.45);padding:.25rem .5rem;border-radius:.75rem;font-size:12px}
     .bar{height:6px;border-radius:6px;overflow:hidden;background:rgba(120,53,175,.25);border:1px solid rgba(120,53,175,.45)}
     .bar>span{display:block;height:100%;background:linear-gradient(90deg,#a855f7,#7c3aed)}
+    /* smooth expand/collapse for year-range */
+    .expander{transition:max-height .3s ease;overflow:hidden}
   </style>
 </head>
 <body class="text-purple-50">
@@ -92,67 +94,49 @@
     /* ======================= App ======================= */
     function App(){
       const [mode,setMode]=useState("classic");
-
-      // era: 'AD' | 'BOTH' | 'BC'
-      const [era,setEra]=useState('AD');
-
-      // Remember separate ranges
+      const [era,setEra]=useState('AD');                   // 'AD' | 'BOTH' | 'BC'
       const [adRange,setAdRange]=useState({min:1,max:10000});
-      const [bcRange,setBcRange]=useState({min:-10000,max:10000}); // BOTH/BC
+      const [bcRange,setBcRange]=useState({min:-10000,max:10000});
       const [minY,setMinY]=useState(1), [maxY,setMaxY]=useState(10000);
 
-      // Date + stacks
       const [date,setDate]=useState(()=>randomDate(1,10000));
-      const [stack,setStack]=useState([]);        // classic/timers history
-      const [dedStack,setDedStack]=useState([]);  // deduction history
+      const [stack,setStack]=useState([]), [dedStack,setDedStack]=useState([]);
 
       const correct=useMemo(()=>wday(date.y,date.m,date.d),[date]);
       const [guesses,setGuesses]=useState([]); const [status,setStatus]=useState(null);
       const [msg,setMsg]=useState("");
+      const pillTimerRef=useRef(null);
 
-      // Stats-by-mode (per-page stats)
       const blankStats=()=>({played:0,good:0,streak:0,best:0,timeSum:0,timeCnt:0});
-      const [statsByMode,setStatsByMode]=useState({
-        classic:blankStats(), blitz:blankStats(), sudden:blankStats(), flash:blankStats(), deduction:blankStats()
-      });
+      const [statsByMode,setStatsByMode]=useState({classic:blankStats(), blitz:blankStats(), sudden:blankStats(), flash:blankStats(), deduction:blankStats()});
       const S = statsByMode[mode] || blankStats();
 
-      // Toggles
-      const [statsOff,setStatsOff]=useState(false); // hide/unhide only
-      const [trackClassic,setTrackClassic]=useState(false); // "Disable avg time" default ON
+      const [statsOff,setStatsOff]=useState(false);
+      const [trackClassic,setTrackClassic]=useState(false);
       const [trackDed,setTrackDed]=useState(false);
 
-      // timing ref for averages
       const tStartRef=useRef(null);
-
-      // feedback flash for weekday buttons
       const [flash,setFlash]=useState(null);
 
-      // timers
       const [blitzSec,setBlitzSec]=useState(60), [blitzRemain,setBlitzRemain]=useState(60), [blitzRunning,setBlitzRunning]=useState(false);
       const blitzStartRef=useRef(null), blitzPausedAtRef=useRef(null), blitzPausedAccRef=useRef(0);
       const [qSec,setQSec]=useState(7), [qRemain,setQRemain]=useState(7);
       const qDeadlineRef=useRef(null), qPausedAtRef=useRef(null), qPausedAccRef=useRef(0);
       const [active,setActive]=useState(false);
 
-      // flash mode timers
       const [flashMs,setFlashMs]=useState(1200);
       const [phase,setPhase]=useState('dash'); // 'dash' | 'show' | 'hide'
       const flashTimerRef=useRef(null);
       const [flashRemainMs,setFlashRemainMs]=useState(1200);
       const flashDeadlineRef=useRef(null);
 
-      // deduction
       const [dedType,setDedType]=useState("year");
       const [ded,setDed]=useState(null);
-      const [dedFlash,setDedFlash]=useState(null); // {kind:'year'|'month'|'day', value:number, ok:boolean}
+      const [dedFlash,setDedFlash]=useState(null);
 
-      // only-once wrong counter per date
       const [countedWrong,setCountedWrong]=useState(false);
-
       const inputRef=useRef(null), [input,setInput]=useState("");
 
-      /* ---------- helpers ---------- */
       useEffect(()=>{ if(!isTouch) inputRef.current?.focus(); else document.activeElement?.blur(); },[date,mode,active]);
 
       const updateStats = (mutator)=>{
@@ -162,10 +146,8 @@
           return {...prev,[mode]:cur};
         });
       };
-
       const resetStatsCurrent=()=>{ setStatsByMode(prev=>({...prev,[mode]:blankStats()})); };
 
-      // Re-enable avg time tracking -> reset average for that mode
       const prevTrackClassic=useRef(trackClassic);
       useEffect(()=>{
         if(prevTrackClassic.current===false && trackClassic===true){
@@ -181,35 +163,43 @@
         prevTrackDed.current=trackDed;
       },[trackDed]);
 
-      /* ---- era switching ---- */
       function sanitizeForEra(v,e){
         if(e==='AD') return Math.max(1, v);
         if(e==='BC') return Math.min(-1, v===0?-1:v);
-        return v===0 ? -1 : v; // BOTH
-      }
-      function applyEra(newEra){
-        try{
-          setEra(newEra);
-          let mn, mx;
-          if(newEra==='AD'){
-            mn = Math.max(1, adRange.min);
-            mx = Math.max(mn, adRange.max);
-          }else if(newEra==='BC'){
-            mn = Math.min(-1, bcRange.min===0?-1:bcRange.min);
-            mx = Math.min(-1, bcRange.max===0?-1:bcRange.max);
-            if(mn>mx){ mn=-10000; mx=-1; }
-          }else{ // BOTH
-            mn = bcRange.min===0?-1:bcRange.min;
-            mx = bcRange.max===0?1:bcRange.max;
-            if(mn>mx){ mn=-10000; mx=10000; }
-          }
-          setMinY(mn); setMaxY(mx);
-          setDate(randomDate(mn,mx));
-          if(mode==="deduction") spawnDed();
-        }catch(e){/* no-op */ }
+        return v===0 ? 1 : v; // BOTH -> avoid 0; bias to +1
       }
 
-      /* ---- visibility pause ---- */
+      /* Snap to clean 10-year increments, but still allow 10000 and avoid 0 */
+      const YEAR_STEP = 10;
+      const clampBoth = v => Math.max(-10000, Math.min(10000, v));
+      function snapYear(v, e){
+        let s = Math.round(v / YEAR_STEP) * YEAR_STEP;
+        if(e==='AD') s = Math.max(1, Math.min(10000, s));
+        else if(e==='BC') s = Math.max(-10000, Math.min(-1, s));
+        else { s = clampBoth(s===0?1:s); }
+        return s;
+      }
+
+      function applyEra(newEra){
+        setEra(newEra);
+        let mn, mx;
+        if(newEra==='AD'){
+          mn = Math.max(1, adRange.min);
+          mx = Math.max(mn, adRange.max);
+        }else if(newEra==='BC'){
+          mn = Math.min(-1, bcRange.min===0?-1:bcRange.min);
+          mx = Math.min(-1, bcRange.max===0?-1:bcRange.max);
+          if(mn>mx){ mn=-10000; mx=-1; }
+        }else{
+          mn = bcRange.min===0?-1:bcRange.min;
+          mx = bcRange.max===0?1:bcRange.max;
+          if(mn>mx){ mn=-10000; mx=10000; }
+        }
+        setMinY(mn); setMaxY(mx);
+        setDate(randomDate(mn,mx));
+        if(mode==="deduction") spawnDed();
+      }
+
       useEffect(()=>{
         const onVis=()=>{
           const now=performance.now();
@@ -225,7 +215,6 @@
         return ()=>document.removeEventListener("visibilitychange", onVis);
       },[blitzRunning]);
 
-      /* ---- timers loop ---- */
       useEffect(()=>{
         const needLoop = (blitzRunning || (mode==="sudden" && qDeadlineRef.current) || (mode==="flash" && active && phase==='show'));
         if(!needLoop) return;
@@ -257,12 +246,12 @@
         return ()=>cancelAnimationFrame(raf);
       },[mode,blitzSec,statsOff,blitzRunning,active,phase]);
 
-      const toggleStatsOff=(on)=>{ setStatsOff(on); }; // hide/unhide only
+      const toggleStatsOff=(on)=>{ setStatsOff(on); };
 
-      const arm=()=>{ 
+      const arm=()=>{
         __hideErr();
-        setActive(false); setMsg(""); setGuesses([]); setStatus(null); setFlash(null);
-        setCountedWrong(false);
+        setActive(false); setMsg(""); setGuesses([]); setFlash(null);
+        setCountedWrong(false); setStatus(null);
         setPhase('dash'); clearTimeout(flashTimerRef.current);
         setBlitzRemain(blitzSec); blitzStartRef.current=null; blitzPausedAtRef.current=null; blitzPausedAccRef.current=0; setBlitzRunning(false);
         qDeadlineRef.current=null; qPausedAtRef.current=null; qPausedAccRef.current=0; setQRemain(qSec);
@@ -270,7 +259,7 @@
         tStartRef.current=null;
       };
 
-      const begin=()=>{ 
+      const begin=()=>{
         __hideErr();
         setActive(true); setMsg("");
         if(mode==="blitz"){ blitzStartRef.current=performance.now(); blitzPausedAccRef.current=0; blitzPausedAtRef.current=null; setBlitzRunning(true); setBlitzRemain(blitzSec); }
@@ -291,8 +280,7 @@
         if(mode==="classic"||mode==="flash"||mode==="blitz"||mode==="sudden"){
           setStack(s=>[...s,{...date}]);
           setDate(randomDate(minY,maxY));
-          setGuesses([]); // keep status so pill remains visible
-          setCountedWrong(false);
+          setGuesses([]); setCountedWrong(false);
         }
         if(mode==="deduction"){ setDedStack(s=>[...s, ded]); spawnDed(); }
       }
@@ -301,32 +289,20 @@
 
       const trackOn = ()=> isTimer(mode) || (mode==="classic"&&trackClassic) || (mode==="deduction"&&trackDed);
 
-      const doNew=()=>{ 
-        if(isTimer(mode) && !active){ setMsg("Press Begin to start."); return; }
-        setMsg("New."); setStatus(null); setGuesses([]); pushAndNext();
-      };
+      const doNew=()=>{ if(isTimer(mode) && !active){ setMsg("Press Begin to start."); return; } setMsg("New."); setStatus(null); setGuesses([]); pushAndNext(); };
 
       function reveal(){
         if(mode==="deduction"){
           if(!ded) return;
           if(!statsOff){ updateStats(cur=>{ cur.played+=1; cur.streak=0; }); }
-          const ans = ded.type==="year" ? fmtYear(ded.y)
-                    : ded.type==="month" ? MONTH[ded.m-1]
-                    : String(ded.d);
-          setMsg(`Answer: ${ans}.`);
-          setStatus('incorrect');
-          return;
+          const ans = ded.type==="year" ? fmtYear(ded.y) : ded.type==="month" ? MONTH[ded.m-1] : String(ded.d);
+          setMsg(`Answer: ${ans}.`); setStatus('incorrect'); return;
         }
         if(!statsOff && !countedWrong){ updateStats(cur=>{ cur.played+=1; cur.streak=0; }); }
         setCountedWrong(true);
         setMsg(`Answer: ${DAY[correct]}.`); setStatus('incorrect');
-
         if(mode==="flash"){
-          clearTimeout(flashTimerRef.current);
-          setPhase('dash');
-          setActive(false);
-          flashDeadlineRef.current=null;
-          setFlashRemainMs(flashMs);
+          clearTimeout(flashTimerRef.current); setPhase('dash'); setActive(false); flashDeadlineRef.current=null; setFlashRemainMs(flashMs);
         }
       }
 
@@ -335,49 +311,38 @@
           const prev = dedStack[dedStack.length-1]; if(!prev){ setMsg("Nothing to go back to."); return; }
           setDedStack(s=>s.slice(0,-1)); setDed(prev);
           const ans = prev.type==="year" ? fmtYear(prev.y) : prev.type==="month" ? MONTH[prev.m-1] : String(prev.d);
-          setMsg(`Answer: ${ans}.`);
-          setStatus(null); return;
+          setMsg(`Answer: ${ans}.`); setStatus(null); return;
         }
         const prev = stack[stack.length-1]; if(!prev){ setMsg("Nothing to go back to."); return; }
-        setStack(s=>s.slice(0,-1)); setDate(prev);
-        setCountedWrong(false);
+        setStack(s=>s.slice(0,-1)); setDate(prev); setCountedWrong(false);
         setMsg(`Answer: ${DAY[wday(prev.y,prev.m,prev.d)]}.`); setStatus(null); setGuesses([]);
       }
 
-      /* ---- CORRECT/WRONG submission ---- */
+      function showCorrectPillBriefly(){
+        clearTimeout(pillTimerRef.current);
+        setStatus('correct');
+        pillTimerRef.current=setTimeout(()=>setStatus(null),800);
+      }
+
       function submitDoW(val){
         if(isTimer(mode) && !active){ setMsg("Press Begin to start."); return; }
         const idx = typeof val==="number"?val: Number(val);
         if(idx===wday(date.y,date.m,date.d)){
-          // show green; keep pill; no text message
           setFlash({type:'good', idx}); setTimeout(()=>setFlash(null),450);
-          setStatus('correct');
+          showCorrectPillBriefly();
           if(!statsOff && tStartRef.current && trackOn()){
             const dt=(performance.now()-tStartRef.current)/1000;
             updateStats(cur=>{ cur.timeSum+=dt; cur.timeCnt+=1; });
           }
-          if(!statsOff){
-            updateStats(cur=>{
-              cur.played+=1; cur.good+=1; cur.streak+=1; if(cur.streak>cur.best) cur.best=cur.streak;
-            });
-          }
-          // Sudden: reset per-question timer on correct
+          if(!statsOff){ updateStats(cur=>{ cur.played+=1; cur.good+=1; cur.streak+=1; if(cur.streak>cur.best) cur.best=cur.streak; }); }
           if(mode==="sudden"){
             const now=performance.now();
             qDeadlineRef.current = now + qSec*1000;
-            qPausedAccRef.current = 0;
-            qPausedAtRef.current = null;
-            setQRemain(qSec);
+            qPausedAccRef.current = 0; qPausedAtRef.current = null; setQRemain(qSec);
           }
-          // Flash: correct => reset back to dash/begin
           if(mode==="flash"){
-            clearTimeout(flashTimerRef.current);
-            setPhase('dash');
-            setActive(false);
-            flashDeadlineRef.current=null;
-            setFlashRemainMs(flashMs);
+            clearTimeout(flashTimerRef.current); setPhase('dash'); setActive(false); flashDeadlineRef.current=null; setFlashRemainMs(flashMs);
           }
-          // next date immediately
           pushAndNext();
         }else{
           if(!statsOff && !countedWrong){ updateStats(cur=>{ cur.played+=1; cur.streak=0; }); }
@@ -388,7 +353,6 @@
         }
       }
 
-      /* --------- Deduction generation ---------- */
       function spawnDed(){
         if(dedType==="year"){
           let m=rint(1,12), d=rint(1,31), y, w;
@@ -427,43 +391,36 @@
         setDedFlash({kind,value,ok});
         setTimeout(()=>setDedFlash(null),450);
       }
-
       function submitDedAnswer(val){
         if(!ded) return;
         const setCorrectThenNext = ()=>{
-          setStatus('correct');
-          // allow one paint for green, then advance
+          showCorrectPillBriefly();
           requestAnimationFrame(()=>setTimeout(spawnDed, 60));
         };
         const setWrong = ()=>{ setStatus('incorrect'); };
-
         if(ded.type==="year"){
           const ok = (+val)===ded.y; flashDed('year', +val, ok);
-          if(ok){
-            if(!statsOff && trackDed && tStartRef.current){ const dt=(performance.now()-tStartRef.current)/1000; updateStats(cur=>{cur.timeSum+=dt; cur.timeCnt+=1;}); }
+          if(ok){ if(!statsOff && trackDed && tStartRef.current){ const dt=(performance.now()-tStartRef.current)/1000; updateStats(cur=>{cur.timeSum+=dt; cur.timeCnt+=1;}); }
             if(!statsOff){ updateStats(cur=>{ cur.played+=1; cur.good+=1; cur.streak+=1; if(cur.streak>cur.best) cur.best=cur.streak; }); }
             setCorrectThenNext();
           }else{ if(!statsOff){ updateStats(cur=>{ cur.played+=1; cur.streak=0; }); } setWrong(); }
         }
         if(ded.type==="month"){
           const ok = (+val)===ded.m; flashDed('month', +val, ok);
-          if(ok){
-            if(!statsOff && trackDed && tStartRef.current){ const dt=(performance.now()-tStartRef.current)/1000; updateStats(cur=>{cur.timeSum+=dt; cur.timeCnt+=1;}); }
+          if(ok){ if(!statsOff && trackDed && tStartRef.current){ const dt=(performance.now()-tStartRef.current)/1000; updateStats(cur=>{cur.timeSum+=dt; cur.timeCnt+=1;}); }
             if(!statsOff){ updateStats(cur=>{ cur.played+=1; cur.good+=1; cur.streak+=1; if(cur.streak>cur.best) cur.best=cur.streak; }); }
             setCorrectThenNext();
           }else{ if(!statsOff){ updateStats(cur=>{ cur.played+=1; cur.streak=0; }); } setWrong(); }
         }
         if(ded.type==="day"){
           const ok = (+val)===ded.d; flashDed('day', +val, ok);
-          if(ok){
-            if(!statsOff && trackDed && tStartRef.current){ const dt=(performance.now()-tStartRef.current)/1000; updateStats(cur=>{cur.timeSum+=dt; cur.timeCnt+=1;}); }
+          if(ok){ if(!statsOff && trackDed && tStartRef.current){ const dt=(performance.now()-tStartRef.current)/1000; updateStats(cur=>{cur.timeSum+=dt; cur.timeCnt+=1;}); }
             if(!statsOff){ updateStats(cur=>{ cur.played+=1; cur.good+=1; cur.streak+=1; if(cur.streak>cur.best) cur.best=cur.streak; }); }
             setCorrectThenNext();
           }else{ if(!statsOff){ updateStats(cur=>{ cur.played+=1; cur.streak=0; }); } setWrong(); }
         }
       }
 
-      /* ---- mode/era changes ---- */
       useEffect(()=>{ 
         arm(); setGuesses([]); setStatus(null); setStack([]); setDedStack([]); setMsg("");
         if(mode==="deduction"){ setPhase('dash'); spawnDed(); }
@@ -471,17 +428,16 @@
       useEffect(()=>{ if(mode==="deduction") spawnDed(); },[dedType]);
 
       function setMinActive(v){
-        let val = sanitizeForEra(+v, era);
+        let val = snapYear(sanitizeForEra(+v, era), era);
         if(era==='AD'){ setAdRange(r=>({...r,min:Math.min(val,maxY)})); setMinY(Math.min(val,maxY)); }
         else { setBcRange(r=>({...r,min:val})); const clamped = era==='BC' ? Math.min(val, -1) : (val===0?-1:val); setMinY(Math.min(clamped,maxY)); }
       }
       function setMaxActive(v){
-        let val = sanitizeForEra(+v, era);
+        let val = snapYear(sanitizeForEra(+v, era), era);
         if(era==='AD'){ val=Math.max(val,minY,1); setAdRange(r=>({...r,max:val})); setMaxY(val); }
         else { setBcRange(r=>({...r,max:val})); const clamped = era==='BC' ? Math.min(val, -1) : (val===0?1:val); setMaxY(Math.max(clamped,minY)); }
       }
 
-      /* ---- computed headline ---- */
       const showDash = isTimer(mode) && !active;
       const showDots = (mode==="flash" && active && phase==='hide');
 
@@ -497,60 +453,46 @@
       const baseBtn="w-full rounded-2xl border px-4 py-3 text-base md:text-sm transition shadow-sm select-none";
       const idleBtn="border-purple-800/60 bg-purple-900/30 hover:bg-purple-900/60";
 
-      /* ---- LOOKUP ---- */
-      const [lookupIn,setLookupIn]=useState(""); const [lookupOut,setLookupOut]=useState("");
-      function runLookup(){
-        const s=lookupIn.replace(/\u2212/g,'-').trim();
-        const m = /^(\d{1,2})\/(\d{1,2})\/(-?\d{1,5})$/.exec(s);
-        if(!m){ setLookupOut("Enter a date like 7/4/1776. Allowed years −10000…10000 (use −1 for 1 BC; no year 0)."); return; }
-        let mm=+m[1], dd=+m[2], yy=+m[3];
-        if(yy===0){ setLookupOut("There is no year 0. Use −1 for 1 BC."); return; }
-        if(yy<-10000 || yy>10000){ setLookupOut("Year must be between −10000 and 10000."); return; }
-        if(mm<1||mm>12){ setLookupOut("Month must be 1–12."); return; }
-        const maxd=dim(yy,mm);
-        if(dd<1||dd>maxd){ setLookupOut(`Day must be 1–${maxd} for ${MONTH[mm-1]}.`); return; }
-        const d=DAY[wday(yy,mm,dd)];
-        setLookupOut(`${MONTH[mm-1]} ${dd}, ${fmtYear(yy)} is a ${d}.`);
-      }
-      function clearLookup(){ setLookupIn(""); if(document.activeElement) document.activeElement.blur(); }
-
-      /* ------------------ render ------------------ */
-      const scoreStr = `${S.good}/${S.played}`;
-      const accStr   = `${S.played?(S.good/S.played*100).toFixed(1):"0.0"}%`;
-      const avgDisabled = (statsOff || !(isTimer(mode)||(mode==="classic"&&trackClassic)||(mode==="deduction"&&trackDed)));
-      const avgStr = avgDisabled ? "—" : (S.timeCnt?`${(S.timeSum/S.timeCnt).toFixed(2)}s`:"—");
-
-      const EraSeg = () => (
-        <div className="flex rounded-xl overflow-hidden border border-purple-800/60">
-          {[
-            {k:'AD', label:'AD'},
-            {k:'BOTH', label:'AD+BC'},
-            {k:'BC', label:'BC'},
-          ].map(seg=>(
-            <button key={seg.k}
-              onClick={()=>applyEra(seg.k)}
-              className={`px-3 py-1.5 text-sm ${era===seg.k ? 'bg-purple-600' : 'bg-purple-900/40 hover:bg-purple-900/70'} ${seg.k!=='BC'?'border-r border-purple-800/60':''}`}>
-              {seg.label}
-            </button>
-          ))}
+      const [rangeOpen,setRangeOpen]=useState(false);
+      const RangePanel = (
+        <div className="mt-3 rounded-2xl card p-3">
+          <button onPointerDown={(e)=>{e.preventDefault(); setRangeOpen(o=>!o);}}
+                  className="w-full text-left text-sm text-purple-200/90 flex items-center justify-between">
+            <span>Year range <span className="tabular-nums ml-1">{minY} → {maxY}</span></span>
+            <span className={`transition-transform text-lg ${rangeOpen?'rotate-180':''}`}>▾</span>
+          </button>
+          <div className="expander" style={{maxHeight:rangeOpen?'38vh':'0px'}}>
+            <div className="mt-3 space-y-3 pr-1">
+              <div className="flex items-center gap-3">
+                <input type="range"
+                       min={era==='AD'?1:-10000}
+                       max={era==='BC'?-1:10000}
+                       step="1" value={minY}
+                       onChange={e=>setMinActive(+e.target.value)}
+                       className="w-full accent-purple-500"/>
+                <input type="range"
+                       min={era==='AD'?1:-10000}
+                       max={era==='BC'?-1:10000}
+                       step="1" value={maxY}
+                       onChange={e=>setMaxActive(+e.target.value)}
+                       className="w-full accent-purple-500"/>
+              </div>
+              <p className="text-xs text-purple-300/70">Proleptic Gregorian calendar. Year 0 isn’t shown (1 BC ↔ year 0 internally). AD and AD+BC remember their own ranges.</p>
+            </div>
+          </div>
         </div>
       );
-
-      // Classic-only year range expansion state
-      const [rangeOpen,setRangeOpen]=useState(false);
 
       return (
         <div className="mx-auto px-4 py-5 w-full max-w-[480px] md:max-w-3xl lg:max-w-4xl">
           {/* Header */}
           <div className="flex items-center justify-between gap-4">
             <h1 className="text-xl md:text-2xl font-semibold leading-none">Calendar Game</h1>
-
-            {/* Select with white stacked carets inside bubble */}
             <div className="relative">
               <select
                 value={mode}
                 onChange={e=>{ __hideErr(); setMode(e.target.value); e.target.blur(); }}
-                className="panel rounded-xl px-2.5 py-2 pr-8 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 appearance-none"
+                className="panel rounded-xl px-2.5 py-2 pr-9 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 appearance-none"
               >
                 <option value="classic">Classic</option>
                 <option value="blitz">Blitz</option>
@@ -558,26 +500,39 @@
                 <option value="flash">Flash</option>
                 <option value="deduction">Deduction</option>
                 <option value="lookup">Lookup</option>
+                <option value="method">Method</option>
               </select>
-              <div className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 flex flex-col items-center leading-none text-[10px] text-white/90">
+              <div className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 flex flex-col items-center leading-none text-[14px] text-white/90">
                 <span>▲</span><span>▼</span>
               </div>
             </div>
           </div>
 
-          {/* Stats (hidden on lookup) + toggles */}
-          {mode!=="lookup" && (
+          {/* Stats/toggles (not on lookup/method) */}
+          {mode!=="lookup" && mode!=="method" && (
             <>
               <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3">
-                <Stat label="Score" value={scoreStr} disabled={statsOff}/>
-                <Stat label="Accuracy" value={accStr} disabled={statsOff}/>
+                <Stat label="Score" value={`${S.good}/${S.played}`} disabled={statsOff}/>
+                <Stat label="Accuracy" value={`${S.played?(S.good/S.played*100).toFixed(1):"0.0"}%`} disabled={statsOff}/>
                 <StatTwo label="Streak / Longest" left={S.streak} right={S.best} disabled={statsOff}/>
-                <Stat label="Avg time (correct)" value={avgStr} disabled={avgDisabled}/>
+                <Stat label="Avg time (correct)" value={(statsOff || !(isTimer(mode)||(mode==="classic"&&trackClassic)||(mode==="deduction"&&trackDed))) ? "—" : (S.timeCnt?`${(S.timeSum/S.timeCnt).toFixed(2)}s`:"—")} disabled={false}/>
               </div>
               <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
-                {/* Left controls */}
                 <div className="flex flex-wrap items-center gap-3">
-                  <EraSeg/>
+                  {/* Era segmented */}
+                  <div className="flex rounded-xl overflow-hidden border border-purple-800/60">
+                    {[
+                      {k:'AD', label:'AD'},
+                      {k:'BOTH', label:'AD+BC'},
+                      {k:'BC', label:'BC'},
+                    ].map(seg=>(
+                      <button key={seg.k}
+                        onPointerDown={(e)=>{e.preventDefault(); applyEra(seg.k);}}
+                        className={`px-3 py-1.5 text-sm ${era===seg.k ? 'bg-purple-600' : 'bg-purple-900/40 hover:bg-purple-900/70'} ${seg.k!=='BC'?'border-r border-purple-800/60':''}`}>
+                        {seg.label}
+                      </button>
+                    ))}
+                  </div>
 
                   {mode==="blitz" && (
                     <div className="flex items-center gap-2">
@@ -606,9 +561,7 @@
 
                   {(mode==="classic"||mode==="deduction") && (
                     <label className="flex items-center gap-2 text-sm">
-                      <input
-                        type="checkbox"
-                        className="sr-only"
+                      <input type="checkbox" className="sr-only"
                         checked={!(mode==="classic"?trackClassic:trackDed)}
                         onChange={e=> mode==="classic"?setTrackClassic(!e.target.checked):setTrackDed(!e.target.checked)} />
                       <span className={`w-10 h-6 rounded-full relative ${(!(mode==="classic"?trackClassic:trackDed))?"bg-rose-500/70":"bg-zinc-600"}`}>
@@ -618,7 +571,6 @@
                     </label>
                   )}
                 </div>
-                {/* Right controls */}
                 <div className="flex items-center gap-3">
                   <label className="flex items-center gap-2 text-sm">
                     <input type="checkbox" className="sr-only" checked={statsOff} onChange={e=>toggleStatsOff(e.target.checked)} />
@@ -627,67 +579,14 @@
                     </span>
                     <span>Disable stats</span>
                   </label>
-                  <button className="text-xs px-3 py-1.5 rounded-lg bg-purple-700 hover:bg-purple-600" onClick={resetStatsCurrent}>Reset stats</button>
+                  <button className="text-xs px-3 py-1.5 rounded-lg bg-purple-700 hover:bg-purple-600" onPointerDown={(e)=>{e.preventDefault(); resetStatsCurrent();}}>Reset stats</button>
                 </div>
               </div>
             </>
           )}
 
-          {/* Year range */}
-          {mode!=="lookup" && (
-            mode==="classic" ? (
-              <div className="mt-3 rounded-2xl card p-3">
-                <button onClick={()=>setRangeOpen(o=>!o)} className="w-full text-left text-sm text-purple-200/90 flex items-center justify-between">
-                  <span>Year range <span className="tabular-nums ml-1">{minY} → {maxY}</span></span>
-                  <span className={`transition-transform ${rangeOpen?'rotate-180':''}`}>▾</span>
-                </button>
-                <div className={`transition-[max-height] duration-300 ease-out overflow-hidden ${rangeOpen?'max-h-[38vh]':'max-h-0'}`}>
-                  <div className="mt-3 space-y-3 pr-1">
-                    <div className="flex items-center gap-3">
-                      <input type="range"
-                             min={era==='AD'?1:-10000}
-                             max={era==='BC'?-1:10000}
-                             step="5" value={minY}
-                             onChange={e=>setMinActive(+e.target.value)}
-                             className="w-full accent-purple-500"/>
-                      <input type="range"
-                             min={era==='AD'?1:-10000}
-                             max={era==='BC'?-1:10000}
-                             step="5" value={maxY}
-                             onChange={e=>setMaxActive(+e.target.value)}
-                             className="w-full accent-purple-500"/>
-                    </div>
-                    <p className="text-xs text-purple-300/70">Proleptic Gregorian calendar. Year 0 isn’t shown (1 BC ↔ year 0 internally). AD and AD+BC remember their own ranges.</p>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <details className="mt-3 rounded-2xl card p-3">
-                <summary className="cursor-pointer text-sm text-purple-200/90">Year range <span className="tabular-nums ml-1">{minY} → {maxY}</span></summary>
-                <div className="mt-3 space-y-3 max-h-[38vh] overflow-auto pr-1">
-                  <div className="flex items-center gap-3">
-                    <input type="range"
-                           min={era==='AD'?1:-10000}
-                           max={era==='BC'?-1:10000}
-                           step="1" value={minY}
-                           onChange={e=>setMinActive(+e.target.value)}
-                           className="w-full accent-purple-500"/>
-                    <input type="range"
-                           min={era==='AD'?1:-10000}
-                           max={era==='BC'?-1:10000}
-                           step="1" value={maxY}
-                           onChange={e=>setMaxActive(+e.target.value)}
-                           className="w-full accent-purple-500"/>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3 max-w-xl">
-                    <input type="number" className="panel rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-400" value={minY} onChange={e=>setMinActive(+e.target.value)}/>
-                    <input type="number" className="panel rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-400" value={maxY} onChange={e=>setMaxActive(+e.target.value)}/>
-                  </div>
-                  <p className="text-xs text-purple-300/70">Proleptic Gregorian calendar. Year 0 isn’t shown (1 BC ↔ year 0 internally). AD and AD+BC remember their own ranges.</p>
-                </div>
-              </details>
-            )
-          )}
+          {/* Year range (not on lookup/method) */}
+          {mode!=="lookup" && mode!=="method" && RangePanel}
 
           {/* MAIN CARD */}
           <div className="mt-5 p-5 rounded-3xl card">
@@ -711,51 +610,49 @@
               </div>
             )}
 
-            {/* Title + Headline */}
-            <div className="text-center">
-              <div className="text-xs uppercase tracking-widest text-purple-100/80">
-                {mode==="lookup" ? "" : mode==="deduction" ? (dedType==="year"?"What year is this?":dedType==="month"?"What month is this?":"What day is this?") : "What day is this?"}
-              </div>
+            {/* Method page (blank for now) */}
+            {mode==="method" && (
+              <div className="min-h-[40vh]"></div>
+            )}
 
-              {(mode!=="lookup" && mode!=="deduction") && (
-                <div className="mt-1 text-3xl md:text-4xl font-bold">
-                  {headline}
+            {/* Title + Headline */}
+            {mode!=="lookup" && mode!=="deduction" && mode!=="method" && (
+              <div className="text-center">
+                <div className="text-xs uppercase tracking-widest text-purple-100/80">What day is this?</div>
+                <div className="mt-1 text-3xl md:text-4xl font-bold">{(isTimer(mode)&&!active)?"—": (mode==="flash"&&active&&phase==='hide')?"…": fmt(date.y,date.m,date.d)}</div>
+              </div>
+            )}
+            {mode==="deduction" && (
+              <div className="text-center">
+                <div className="text-xs uppercase tracking-widest text-purple-100/80">
+                  {dedType==="year"?"What year is this?":dedType==="month"?"What month is this?":"What day is this?"}
                 </div>
-              )}
-              {mode==="deduction" && (
-                <>
-                  <div className="mt-1 text-3xl md:text-4xl font-bold">
-                    {ded ? dedHeadline : "—"}
-                  </div>
-                  {ded && (
-                    <div className="mt-1 text-lg md:text-xl text-purple-100">
-                      Weekday:&nbsp;<span className="font-semibold text-xl">{DAY[ded.w]}</span>
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
+                <div className="mt-1 text-3xl md:text-4xl font-bold">{ded ? (ded.type==="year"?`${MONTH[ded.m-1]} ${ded.d}`: ded.type==="month"?`${ded.d}, ${fmtYear(ded.y)}` : `${MONTH[ded.m-1]}, ${fmtYear(ded.y)}`) : "—"}</div>
+                {ded && <div className="mt-1 text-lg md:text-xl text-purple-100">Weekday:&nbsp;<span className="font-semibold text-xl">{DAY[ded.w]}</span></div>}
+              </div>
+            )}
 
             {/* ======= CLASSIC / BLITZ / SUDDEN / FLASH ======= */}
             {["classic","blitz","sudden","flash"].includes(mode) && (
               <>
                 <div className={`mt-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3 ${(!active && isTimer(mode))?'opacity-60 pointer-events-none':''}`}>
                   {DAY.map((n,i)=>(
-                    <button key={n} onClick={(e)=>{ e.currentTarget.blur(); submitDoW(i); setInput(""); if(isTouch) document.activeElement?.blur(); }}
-                            className={`${baseBtn} ${flash && flash.idx===i ? (flash.type==='good'?'flash-good':'flash-bad')+' border-transparent' : idleBtn}`}>{n}</button>
+                    <button key={n}
+                      onPointerDown={(e)=>{ e.preventDefault(); submitDoW(i); setInput(""); if(isTouch) document.activeElement?.blur(); }}
+                      className={`${baseBtn} ${flash && flash.idx===i ? (flash.type==='good'?'flash-good':'flash-bad')+' border-transparent' : idleBtn}`}>{n}</button>
                   ))}
                 </div>
 
-                {/* Action bubble below options */}
+                {/* Action bubble */}
                 <div className="mt-4 rounded-2xl panel p-3">
                   <div className="flex flex-wrap items-center gap-2">
                     {isTimer(mode) && (!active
-                      ? <button className="px-4 py-2 rounded-xl bg-purple-600 text-white text-sm font-medium" onClick={begin}>Begin</button>
-                      : <button className="px-4 py-2 rounded-xl bg-rose-600/90 text-white text-sm font-medium" onClick={arm}>Reset</button>
+                      ? <button type="button" className="px-4 py-2 rounded-xl bg-purple-600 text-white text-sm font-medium" onPointerDown={(e)=>{e.preventDefault(); begin();}}>Begin</button>
+                      : <button type="button" className="px-4 py-2 rounded-xl bg-rose-600/90 text-white text-sm font-medium" onPointerDown={(e)=>{e.preventDefault(); arm();}}>Reset</button>
                     )}
-                    <button className="px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm" onClick={doNew}>New</button>
-                    <button className="px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm" onClick={reveal}>Reveal</button>
-                    <button className="px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm" onClick={goBack}>Back</button>
+                    <button type="button" className="px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm" onPointerDown={(e)=>{e.preventDefault(); doNew();}}>New</button>
+                    <button type="button" className="px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm" onPointerDown={(e)=>{e.preventDefault(); reveal();}}>Reveal</button>
+                    <button type="button" className="px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm" onPointerDown={(e)=>{e.preventDefault(); goBack();}}>Back</button>
                     <div className="ml-auto">{status && <Pill ok={status==='correct'} label={status==='correct'?'Correct':'Incorrect'} />}</div>
                   </div>
 
@@ -774,19 +671,18 @@
               <>
                 <div className="mt-3 flex flex-wrap gap-2 justify-center">
                   {["year","month","day"].map(t=>
-                    <button key={t} onClick={()=>setDedType(t)}
+                    <button key={t} onPointerDown={(e)=>{e.preventDefault(); setDedType(t);}}
                       className={`px-3 py-1.5 rounded-lg text-sm border ${dedType===t?'bg-purple-600 border-purple-500':'bg-purple-900/40 border-purple-800/60 hover:bg-purple-900/70'}`}>
                       {t[0].toUpperCase()+t.slice(1)}
                     </button>
                   )}
                 </div>
 
-                {/* choices */}
                 <div className="mt-4">
                   {ded && ded.type==="year" && (
                     <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
                       {Array.from({length: ded.b - ded.a + 1}, (_,i)=>ded.a+i).map(y=>(
-                        <button key={y} onClick={()=>submitDedAnswer(y)}
+                        <button key={y} onPointerDown={(e)=>{e.preventDefault(); submitDedAnswer(y);}}
                           className={`${baseBtn} ${idleBtn} py-2 text-sm ${dedFlash&&dedFlash.kind==='year'&&dedFlash.value===y ? (dedFlash.ok?'flash-good':'flash-bad')+' border-transparent':''}`}>{fmtYear(y)}</button>
                       ))}
                     </div>
@@ -794,7 +690,7 @@
                   {ded && ded.type==="month" && (
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
                       {MONTH.map((m,i)=>(
-                        <button key={m} onClick={()=>submitDedAnswer(i+1)}
+                        <button key={m} onPointerDown={(e)=>{e.preventDefault(); submitDedAnswer(i+1);}}
                           className={`${baseBtn} ${idleBtn} ${dedFlash&&dedFlash.kind==='month'&&dedFlash.value===i+1 ? (dedFlash.ok?'flash-good':'flash-bad')+' border-transparent':''}`}>{m}</button>
                       ))}
                     </div>
@@ -802,19 +698,18 @@
                   {ded && ded.type==="day" && (
                     <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-2">
                       {ded.options.map(dv=>(
-                        <button key={dv} onClick={()=>submitDedAnswer(dv)}
+                        <button key={dv} onPointerDown={(e)=>{e.preventDefault(); submitDedAnswer(dv);}}
                           className={`${baseBtn} ${idleBtn} ${dedFlash&&dedFlash.kind==='day'&&dedFlash.value===dv ? (dedFlash.ok?'flash-good':'flash-bad')+' border-transparent':''}`}>{dv}</button>
                       ))}
                     </div>
                   )}
                 </div>
 
-                {/* Action bubble */}
                 <div className="mt-4 rounded-2xl panel p-3">
                   <div className="flex flex-wrap gap-2">
-                    <button className="px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm" onClick={()=>{setDedStack(s=>[...s,ded]); spawnDed(); setStatus(null); setMsg("");}}>New</button>
-                    <button className="px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm" onClick={reveal}>Reveal</button>
-                    <button className="px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm" onClick={goBack}>Back</button>
+                    <button type="button" className="px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm" onPointerDown={(e)=>{e.preventDefault(); setDedStack(s=>[...s,ded]); spawnDed(); setStatus(null); setMsg("");}}>New</button>
+                    <button type="button" className="px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm" onPointerDown={(e)=>{e.preventDefault(); reveal();}}>Reveal</button>
+                    <button type="button" className="px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm" onPointerDown={(e)=>{e.preventDefault(); goBack();}}>Back</button>
                     <div className="ml-auto">{status && <Pill ok={status==='correct'} label={status==='correct'?'Correct':'Incorrect'} />}</div>
                   </div>
                   {msg && <div className="mt-3 text-sm">{msg}</div>}
@@ -828,8 +723,8 @@
                 <div className="flex items-stretch gap-2">
                   <input value={lookupIn} onChange={e=>setLookupIn(e.target.value)} placeholder="e.g., 7/4/1776"
                          className="panel rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-400 flex-1 min-w-0"/>
-                  <button onClick={runLookup} className="px-4 py-2 rounded-xl bg-purple-600 text-white text-sm font-medium">Lookup</button>
-                  <button onClick={clearLookup} className="px-4 py-2 rounded-xl bg-zinc-700 text-white text-sm font-medium">Clear</button>
+                  <button onPointerDown={(e)=>{e.preventDefault(); runLookup();}} className="px-4 py-2 rounded-xl bg-purple-600 text-white text-sm font-medium">Lookup</button>
+                  <button onPointerDown={(e)=>{e.preventDefault(); clearLookup();}} className="px-4 py-2 rounded-xl bg-zinc-700 text-white text-sm font-medium">Clear</button>
                 </div>
                 {lookupOut && <div className="mt-3 text-sm">{lookupOut}</div>}
                 <ul className="mt-4 text-xs text-purple-100/90 space-y-2 list-disc list-inside">
