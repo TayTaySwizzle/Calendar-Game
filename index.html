@@ -152,23 +152,6 @@
 
       const inputRef=useRef(null), [input,setInput]=useState("");
 
-      /* ---------- reporter ---------- */
-      function reportError(err, ctx={}){
-        try{
-          const x=document.getElementById('errors'); if(!x) return;
-          const msg = err?.message || String(err);
-          const stack = err?.stack || '';
-          const details = {
-            mode, dedType, phase, active, era,
-            date, range:{minY,maxY},
-            stats:(statsByMode[mode]||{}),
-            ctx
-          };
-          x.style.display='block';
-          x.textContent = `⚠️ ${msg}\n${stack}\n\nDetails:\n${JSON.stringify(details,null,2)}`;
-        }catch(_){}
-      }
-
       /* ---------- helpers ---------- */
       useEffect(()=>{ if(!isTouch) inputRef.current?.focus(); else document.activeElement?.blur(); },[date,mode,active]);
 
@@ -223,7 +206,7 @@
           setMinY(mn); setMaxY(mx);
           setDate(randomDate(mn,mx));
           if(mode==="deduction") spawnDed();
-        }catch(e){ reportError(e,{where:'applyEra', newEra}); }
+        }catch(e){/* no-op */ }
       }
 
       /* ---- visibility pause ---- */
@@ -248,28 +231,26 @@
         if(!needLoop) return;
         let raf;
         const loop=()=>{
-          try{
-            const now=performance.now();
-            if(blitzRunning && blitzStartRef.current){
-              const t=(now - blitzStartRef.current - blitzPausedAccRef.current)/1000;
-              const r=Math.max(0, blitzSec - t);
-              setBlitzRemain(r);
-              if(r<=.001){ setBlitzRunning(false); setActive(false); setMsg("Time!"); }
+          const now=performance.now();
+          if(blitzRunning && blitzStartRef.current){
+            const t=(now - blitzStartRef.current - blitzPausedAccRef.current)/1000;
+            const r=Math.max(0, blitzSec - t);
+            setBlitzRemain(r);
+            if(r<=.001){ setBlitzRunning(false); setActive(false); setMsg("Time!"); }
+          }
+          if(mode==="sudden" && qDeadlineRef.current){
+            const r=Math.max(0, (qDeadlineRef.current + qPausedAccRef.current - now)/1000);
+            setQRemain(r);
+            if(r<=.001){
+              qDeadlineRef.current=null;
+              updateStats(cur=>{ cur.played+=1; cur.streak=0; });
+              setStatus('incorrect'); setMsg(`Time! Answer: ${DAY[correct]}. Game over.`); setActive(false);
             }
-            if(mode==="sudden" && qDeadlineRef.current){
-              const r=Math.max(0, (qDeadlineRef.current + qPausedAccRef.current - now)/1000);
-              setQRemain(r);
-              if(r<=.001){
-                qDeadlineRef.current=null;
-                updateStats(cur=>{ cur.played+=1; cur.streak=0; });
-                setStatus('incorrect'); setMsg(`Time! Answer: ${DAY[correct]}. Game over.`); setActive(false);
-              }
-            }
-            if(mode==="flash" && active && phase==='show' && flashDeadlineRef.current){
-              const rem = Math.max(0, flashDeadlineRef.current - now);
-              setFlashRemainMs(rem);
-            }
-          }catch(e){ reportError(e,{where:'raf-loop'}); }
+          }
+          if(mode==="flash" && active && phase==='show' && flashDeadlineRef.current){
+            const rem = Math.max(0, flashDeadlineRef.current - now);
+            setFlashRemainMs(rem);
+          }
           raf=requestAnimationFrame(loop);
         };
         raf=requestAnimationFrame(loop);
@@ -278,7 +259,7 @@
 
       const toggleStatsOff=(on)=>{ setStatsOff(on); }; // hide/unhide only
 
-      const arm=()=>{ try{
+      const arm=()=>{ 
         __hideErr();
         setActive(false); setMsg(""); setGuesses([]); setStatus(null); setFlash(null);
         setCountedWrong(false);
@@ -287,9 +268,9 @@
         qDeadlineRef.current=null; qPausedAtRef.current=null; qPausedAccRef.current=0; setQRemain(qSec);
         flashDeadlineRef.current=null; setFlashRemainMs(flashMs);
         tStartRef.current=null;
-      }catch(e){ reportError(e,{where:'arm'}); }};
+      };
 
-      const begin=()=>{ try{
+      const begin=()=>{ 
         __hideErr();
         setActive(true); setMsg("");
         if(mode==="blitz"){ blitzStartRef.current=performance.now(); blitzPausedAccRef.current=0; blitzPausedAtRef.current=null; setBlitzRunning(true); setBlitzRemain(blitzSec); }
@@ -304,45 +285,91 @@
         }
         tStartRef.current=performance.now();
         pushAndNext();
-      }catch(e){ reportError(e,{where:'begin'}); }};
+      };
 
       function pushAndNext(){
-        try{
-          if(mode==="classic"||mode==="flash"||mode==="blitz"||mode==="sudden"){
-            setStack(s=>[...s,{...date}]);
-            setDate(randomDate(minY,maxY));
-            setGuesses([]); // NOTE: keep status/msg so the “Correct/Incorrect” pill/text remains visible
-            setCountedWrong(false);
-          }
-          if(mode==="deduction"){ setDedStack(s=>[...s, ded]); spawnDed(); }
-        }catch(e){ reportError(e,{where:'pushAndNext'}); }
+        if(mode==="classic"||mode==="flash"||mode==="blitz"||mode==="sudden"){
+          setStack(s=>[...s,{...date}]);
+          setDate(randomDate(minY,maxY));
+          setGuesses([]); // keep status so pill remains visible
+          setCountedWrong(false);
+        }
+        if(mode==="deduction"){ setDedStack(s=>[...s, ded]); spawnDed(); }
       }
 
       useEffect(()=>{ if(mode==="classic" && trackClassic) tStartRef.current=performance.now(); },[mode,trackClassic,date]);
 
       const trackOn = ()=> isTimer(mode) || (mode==="classic"&&trackClassic) || (mode==="deduction"&&trackDed);
 
-      const doNew=()=>{ try{
+      const doNew=()=>{ 
         if(isTimer(mode) && !active){ setMsg("Press Begin to start."); return; }
         setMsg("New."); setStatus(null); setGuesses([]); pushAndNext();
-      }catch(e){ reportError(e,{where:'doNew'}); }};
+      };
 
       function reveal(){
-        try{
-          if(mode==="deduction"){
-            if(!ded) return;
-            if(!statsOff){ updateStats(cur=>{ cur.played+=1; cur.streak=0; }); }
-            const ans = ded.type==="year" ? fmtYear(ded.y)
-                      : ded.type==="month" ? MONTH[ded.m-1]
-                      : String(ded.d);
-            setMsg(`Answer: ${ans}.`);
-            setStatus('incorrect');
-            return;
-          }
-          if(!statsOff && !countedWrong){ updateStats(cur=>{ cur.played+=1; cur.streak=0; }); }
-          setCountedWrong(true);
-          setMsg(`Answer: ${DAY[correct]}.`); setStatus('incorrect');
+        if(mode==="deduction"){
+          if(!ded) return;
+          if(!statsOff){ updateStats(cur=>{ cur.played+=1; cur.streak=0; }); }
+          const ans = ded.type==="year" ? fmtYear(ded.y)
+                    : ded.type==="month" ? MONTH[ded.m-1]
+                    : String(ded.d);
+          setMsg(`Answer: ${ans}.`);
+          setStatus('incorrect');
+          return;
+        }
+        if(!statsOff && !countedWrong){ updateStats(cur=>{ cur.played+=1; cur.streak=0; }); }
+        setCountedWrong(true);
+        setMsg(`Answer: ${DAY[correct]}.`); setStatus('incorrect');
 
+        if(mode==="flash"){
+          clearTimeout(flashTimerRef.current);
+          setPhase('dash');
+          setActive(false);
+          flashDeadlineRef.current=null;
+          setFlashRemainMs(flashMs);
+        }
+      }
+
+      function goBack(){
+        if(mode==="deduction"){
+          const prev = dedStack[dedStack.length-1]; if(!prev){ setMsg("Nothing to go back to."); return; }
+          setDedStack(s=>s.slice(0,-1)); setDed(prev);
+          const ans = prev.type==="year" ? fmtYear(prev.y) : prev.type==="month" ? MONTH[prev.m-1] : String(prev.d);
+          setMsg(`Answer: ${ans}.`);
+          setStatus(null); return;
+        }
+        const prev = stack[stack.length-1]; if(!prev){ setMsg("Nothing to go back to."); return; }
+        setStack(s=>s.slice(0,-1)); setDate(prev);
+        setCountedWrong(false);
+        setMsg(`Answer: ${DAY[wday(prev.y,prev.m,prev.d)]}.`); setStatus(null); setGuesses([]);
+      }
+
+      /* ---- CORRECT/WRONG submission ---- */
+      function submitDoW(val){
+        if(isTimer(mode) && !active){ setMsg("Press Begin to start."); return; }
+        const idx = typeof val==="number"?val: Number(val);
+        if(idx===wday(date.y,date.m,date.d)){
+          // show green; keep pill; no text message
+          setFlash({type:'good', idx}); setTimeout(()=>setFlash(null),450);
+          setStatus('correct');
+          if(!statsOff && tStartRef.current && trackOn()){
+            const dt=(performance.now()-tStartRef.current)/1000;
+            updateStats(cur=>{ cur.timeSum+=dt; cur.timeCnt+=1; });
+          }
+          if(!statsOff){
+            updateStats(cur=>{
+              cur.played+=1; cur.good+=1; cur.streak+=1; if(cur.streak>cur.best) cur.best=cur.streak;
+            });
+          }
+          // Sudden: reset per-question timer on correct
+          if(mode==="sudden"){
+            const now=performance.now();
+            qDeadlineRef.current = now + qSec*1000;
+            qPausedAccRef.current = 0;
+            qPausedAtRef.current = null;
+            setQRemain(qSec);
+          }
+          // Flash: correct => reset back to dash/begin
           if(mode==="flash"){
             clearTimeout(flashTimerRef.current);
             setPhase('dash');
@@ -350,106 +377,50 @@
             flashDeadlineRef.current=null;
             setFlashRemainMs(flashMs);
           }
-        }catch(e){ reportError(e,{where:'reveal'}); }
-      }
-
-      function goBack(){
-        try{
-          if(mode==="deduction"){
-            const prev = dedStack[dedStack.length-1]; if(!prev){ setMsg("Nothing to go back to."); return; }
-            setDedStack(s=>s.slice(0,-1)); setDed(prev);
-            const ans = prev.type==="year" ? fmtYear(prev.y) : prev.type==="month" ? MONTH[prev.m-1] : String(prev.d);
-            setMsg(`Answer: ${ans}.`);
-            setStatus(null); return;
-          }
-          const prev = stack[stack.length-1]; if(!prev){ setMsg("Nothing to go back to."); return; }
-          setStack(s=>s.slice(0,-1)); setDate(prev);
-          setCountedWrong(false);
-          setMsg(`Answer: ${DAY[wday(prev.y,prev.m,prev.d)]}.`); setStatus(null); setGuesses([]);
-        }catch(e){ reportError(e,{where:'goBack'}); }
-      }
-
-      /* ---- CORRECT/WRONG submission ---- */
-      function submitDoW(val){
-        try{
-          if(isTimer(mode) && !active){ setMsg("Press Begin to start."); return; }
-          const idx = typeof val==="number"?val: Number(val);
-          if(idx===wday(date.y,date.m,date.d)){
-            // show green + record stats
-            setFlash({type:'good', idx}); setTimeout(()=>setFlash(null),450);
-            setStatus('correct'); setMsg('Correct!');
-            if(!statsOff && tStartRef.current && trackOn()){
-              const dt=(performance.now()-tStartRef.current)/1000;
-              updateStats(cur=>{ cur.timeSum+=dt; cur.timeCnt+=1; });
-            }
-            if(!statsOff){
-              updateStats(cur=>{
-                cur.played+=1; cur.good+=1; cur.streak+=1; if(cur.streak>cur.best) cur.best=cur.streak;
-              });
-            }
-            // Per-question reset for Sudden Death
-            if(mode==="sudden"){
-              const now=performance.now();
-              qDeadlineRef.current = now + qSec*1000;
-              qPausedAccRef.current = 0;
-              qPausedAtRef.current = null;
-              setQRemain(qSec);
-            }
-            // Flash: correct => reset back to dash/begin
-            if(mode==="flash"){
-              clearTimeout(flashTimerRef.current);
-              setPhase('dash');
-              setActive(false);
-              flashDeadlineRef.current=null;
-              setFlashRemainMs(flashMs);
-            }
-            // Immediately show next date (keep message visible)
-            pushAndNext();
-          }else{
-            if(!statsOff && !countedWrong){ updateStats(cur=>{ cur.played+=1; cur.streak=0; }); }
-            setCountedWrong(true);
-            setStatus('incorrect'); setMsg('Incorrect.');
-            if(mode==="sudden"){ setMsg(`Answer: ${DAY[correct]}. Game over.`); setActive(false); }
-            setFlash({type:'bad', idx}); setTimeout(()=>setFlash(null),450);
-          }
-        }catch(e){ reportError(e,{where:'submitDoW', val}); }
+          // next date immediately
+          pushAndNext();
+        }else{
+          if(!statsOff && !countedWrong){ updateStats(cur=>{ cur.played+=1; cur.streak=0; }); }
+          setCountedWrong(true);
+          setStatus('incorrect');
+          if(mode==="sudden"){ setMsg(`Answer: ${DAY[correct]}. Game over.`); setActive(false); }
+          setFlash({type:'bad', idx}); setTimeout(()=>setFlash(null),450);
+        }
       }
 
       /* --------- Deduction generation ---------- */
       function spawnDed(){
-        try{
-          if(dedType==="year"){
-            let m=rint(1,12), d=rint(1,31), y, w;
-            for(;;){ y=rint(minY,maxY); if(y===0||d>dim(y,m)) continue; w=wday(y,m,d); break; }
-            function neighbor(dir){ const step=dir>0?1:-1;
-              for(let k=1;k<=800;k++){ let yy=y+k*step; if(yy===0) yy+=step; if(yy<minY||yy>maxY) break; if(d<=dim(yy,m) && wday(yy,m,d)===w) return yy; }
-              return null;
-            }
-            const L=neighbor(-1), U=neighbor(+1);
-            let a=L==null?minY:Math.max(minY, L+1), b=U==null?maxY:Math.min(maxY, U-1); if(a===0) a=1; if(b===0) b=-1; if(a>b){a=b=y;}
-            setDed({type:"year",m,d,w,y, a,b});
-            return;
+        if(dedType==="year"){
+          let m=rint(1,12), d=rint(1,31), y, w;
+          for(;;){ y=rint(minY,maxY); if(y===0||d>dim(y,m)) continue; w=wday(y,m,d); break; }
+          function neighbor(dir){ const step=dir>0?1:-1;
+            for(let k=1;k<=800;k++){ let yy=y+k*step; if(yy===0) yy+=step; if(yy<minY||yy>maxY) break; if(d<=dim(yy,m) && wday(yy,m,d)===w) return yy; }
+            return null;
           }
-          if(dedType==="month"){
-            for(;;){
-              let y=rint(minY,maxY); if(y===0) continue;
-              let d=rint(1,31); let w=rint(0,6);
-              const cands=[]; for(let m=1;m<=12;m++){ if(d<=dim(y,m) && wday(y,m,d)===w) cands.push(m); }
-              if(cands.length===1){ setDed({type:"month",y,d,w,m:cands[0]}); return; }
-            }
+          const L=neighbor(-1), U=neighbor(+1);
+          let a=L==null?minY:Math.max(minY, L+1), b=U==null?maxY:Math.min(maxY, U-1); if(a===0) a=1; if(b===0) b=-1; if(a>b){a=b=y;}
+          setDed({type:"year",m,d,w,y, a,b});
+          return;
+        }
+        if(dedType==="month"){
+          for(;;){
+            let y=rint(minY,maxY); if(y===0) continue;
+            let d=rint(1,31); let w=rint(0,6);
+            const cands=[]; for(let m=1;m<=12;m++){ if(d<=dim(y,m) && wday(y,m,d)===w) cands.push(m); }
+            if(cands.length===1){ setDed({type:"month",y,d,w,m:cands[0]}); return; }
           }
-          if(dedType==="day"){
-            let y=rint(minY,maxY); if(y===0) y+= (y<0?1:-1);
-            let m=rint(1,12); const D=dim(y,m);
-            let d=rint(1,D); const w=wday(y,m,d);
-            const bad=[]; for(let k=1;k<=D;k++){ if(k!==d && wday(y,m,k)!==w) bad.push(k); }
-            const pickCount=Math.min(10, 1+bad.length);
-            const picks=new Set([d]);
-            while(picks.size<pickCount){ picks.add(bad[rint(0,bad.length-1)]); }
-            const opts=[...picks]; for(let i=opts.length-1;i>0;i--){ const j=rint(0,i); [opts[i],opts[j]]=[opts[j],opts[i]]; }
-            setDed({type:"day",y,m,w,d, options:opts});
-          }
-        }catch(e){ reportError(e,{where:'spawnDed'}); }
+        }
+        if(dedType==="day"){
+          let y=rint(minY,maxY); if(y===0) y+= (y<0?1:-1);
+          let m=rint(1,12); const D=dim(y,m);
+          let d=rint(1,D); const w=wday(y,m,d);
+          const bad=[]; for(let k=1;k<=D;k++){ if(k!==d && wday(y,m,k)!==w) bad.push(k); }
+          const pickCount=Math.min(10, 1+bad.length);
+          const picks=new Set([d]);
+          while(picks.size<pickCount){ picks.add(bad[rint(0,bad.length-1)]); }
+          const opts=[...picks]; for(let i=opts.length-1;i>0;i--){ const j=rint(0,i); [opts[i],opts[j]]=[opts[j],opts[i]]; }
+          setDed({type:"day",y,m,w,d, options:opts});
+        }
       }
 
       function flashDed(kind,value,ok){
@@ -458,62 +429,56 @@
       }
 
       function submitDedAnswer(val){
-        try{
-          if(!ded) return;
-          const setCorrectThenNext = ()=>{
-            setStatus('correct'); setMsg('Correct!');
-            // push next almost immediately but allow one paint for the green flash
-            requestAnimationFrame(()=>setTimeout(spawnDed, 60));
-          };
-          const setWrong = ()=>{ setStatus('incorrect'); setMsg('Incorrect.'); };
+        if(!ded) return;
+        const setCorrectThenNext = ()=>{
+          setStatus('correct');
+          // allow one paint for green, then advance
+          requestAnimationFrame(()=>setTimeout(spawnDed, 60));
+        };
+        const setWrong = ()=>{ setStatus('incorrect'); };
 
-          if(ded.type==="year"){
-            const ok = (+val)===ded.y; flashDed('year', +val, ok);
-            if(ok){
-              if(!statsOff && trackDed && tStartRef.current){ const dt=(performance.now()-tStartRef.current)/1000; updateStats(cur=>{cur.timeSum+=dt; cur.timeCnt+=1;}); }
-              if(!statsOff){ updateStats(cur=>{ cur.played+=1; cur.good+=1; cur.streak+=1; if(cur.streak>cur.best) cur.best=cur.streak; }); }
-              setCorrectThenNext();
-            }else{ if(!statsOff){ updateStats(cur=>{ cur.played+=1; cur.streak=0; }); } setWrong(); }
-          }
-          if(ded.type==="month"){
-            const ok = (+val)===ded.m; flashDed('month', +val, ok);
-            if(ok){
-              if(!statsOff && trackDed && tStartRef.current){ const dt=(performance.now()-tStartRef.current)/1000; updateStats(cur=>{cur.timeSum+=dt; cur.timeCnt+=1;}); }
-              if(!statsOff){ updateStats(cur=>{ cur.played+=1; cur.good+=1; cur.streak+=1; if(cur.streak>cur.best) cur.best=cur.streak; }); }
-              setCorrectThenNext();
-            }else{ if(!statsOff){ updateStats(cur=>{ cur.played+=1; cur.streak=0; }); } setWrong(); }
-          }
-          if(ded.type==="day"){
-            const ok = (+val)===ded.d; flashDed('day', +val, ok);
-            if(ok){
-              if(!statsOff && trackDed && tStartRef.current){ const dt=(performance.now()-tStartRef.current)/1000; updateStats(cur=>{cur.timeSum+=dt; cur.timeCnt+=1;}); }
-              if(!statsOff){ updateStats(cur=>{ cur.played+=1; cur.good+=1; cur.streak+=1; if(cur.streak>cur.best) cur.best=cur.streak; }); }
-              setCorrectThenNext();
-            }else{ if(!statsOff){ updateStats(cur=>{ cur.played+=1; cur.streak=0; }); } setWrong(); }
-          }
-        }catch(e){ reportError(e,{where:'submitDedAnswer', val}); }
+        if(ded.type==="year"){
+          const ok = (+val)===ded.y; flashDed('year', +val, ok);
+          if(ok){
+            if(!statsOff && trackDed && tStartRef.current){ const dt=(performance.now()-tStartRef.current)/1000; updateStats(cur=>{cur.timeSum+=dt; cur.timeCnt+=1;}); }
+            if(!statsOff){ updateStats(cur=>{ cur.played+=1; cur.good+=1; cur.streak+=1; if(cur.streak>cur.best) cur.best=cur.streak; }); }
+            setCorrectThenNext();
+          }else{ if(!statsOff){ updateStats(cur=>{ cur.played+=1; cur.streak=0; }); } setWrong(); }
+        }
+        if(ded.type==="month"){
+          const ok = (+val)===ded.m; flashDed('month', +val, ok);
+          if(ok){
+            if(!statsOff && trackDed && tStartRef.current){ const dt=(performance.now()-tStartRef.current)/1000; updateStats(cur=>{cur.timeSum+=dt; cur.timeCnt+=1;}); }
+            if(!statsOff){ updateStats(cur=>{ cur.played+=1; cur.good+=1; cur.streak+=1; if(cur.streak>cur.best) cur.best=cur.streak; }); }
+            setCorrectThenNext();
+          }else{ if(!statsOff){ updateStats(cur=>{ cur.played+=1; cur.streak=0; }); } setWrong(); }
+        }
+        if(ded.type==="day"){
+          const ok = (+val)===ded.d; flashDed('day', +val, ok);
+          if(ok){
+            if(!statsOff && trackDed && tStartRef.current){ const dt=(performance.now()-tStartRef.current)/1000; updateStats(cur=>{cur.timeSum+=dt; cur.timeCnt+=1;}); }
+            if(!statsOff){ updateStats(cur=>{ cur.played+=1; cur.good+=1; cur.streak+=1; if(cur.streak>cur.best) cur.best=cur.streak; }); }
+            setCorrectThenNext();
+          }else{ if(!statsOff){ updateStats(cur=>{ cur.played+=1; cur.streak=0; }); } setWrong(); }
+        }
       }
 
       /* ---- mode/era changes ---- */
-      useEffect(()=>{ try{
+      useEffect(()=>{ 
         arm(); setGuesses([]); setStatus(null); setStack([]); setDedStack([]); setMsg("");
         if(mode==="deduction"){ setPhase('dash'); spawnDed(); }
-      }catch(e){ reportError(e,{where:'mode-switch'}); }},[mode]);
-      useEffect(()=>{ try{ if(mode==="deduction") spawnDed(); }catch(e){ reportError(e,{where:'dedType-switch'}); } },[dedType]);
+      },[mode]);
+      useEffect(()=>{ if(mode==="deduction") spawnDed(); },[dedType]);
 
       function setMinActive(v){
-        try{
-          let val = sanitizeForEra(+v, era);
-          if(era==='AD'){ setAdRange(r=>({...r,min:Math.min(val,maxY)})); setMinY(Math.min(val,maxY)); }
-          else { setBcRange(r=>({...r,min:val})); const clamped = era==='BC' ? Math.min(val, -1) : (val===0?-1:val); setMinY(Math.min(clamped,maxY)); }
-        }catch(e){ reportError(e,{where:'setMinActive', v}); }
+        let val = sanitizeForEra(+v, era);
+        if(era==='AD'){ setAdRange(r=>({...r,min:Math.min(val,maxY)})); setMinY(Math.min(val,maxY)); }
+        else { setBcRange(r=>({...r,min:val})); const clamped = era==='BC' ? Math.min(val, -1) : (val===0?-1:val); setMinY(Math.min(clamped,maxY)); }
       }
       function setMaxActive(v){
-        try{
-          let val = sanitizeForEra(+v, era);
-          if(era==='AD'){ val=Math.max(val,minY,1); setAdRange(r=>({...r,max:val})); setMaxY(val); }
-          else { setBcRange(r=>({...r,max:val})); const clamped = era==='BC' ? Math.min(val, -1) : (val===0?1:val); setMaxY(Math.max(clamped,minY)); }
-        }catch(e){ reportError(e,{where:'setMaxActive', v}); }
+        let val = sanitizeForEra(+v, era);
+        if(era==='AD'){ val=Math.max(val,minY,1); setAdRange(r=>({...r,max:val})); setMaxY(val); }
+        else { setBcRange(r=>({...r,max:val})); const clamped = era==='BC' ? Math.min(val, -1) : (val===0?1:val); setMaxY(Math.max(clamped,minY)); }
       }
 
       /* ---- computed headline ---- */
@@ -535,21 +500,19 @@
       /* ---- LOOKUP ---- */
       const [lookupIn,setLookupIn]=useState(""); const [lookupOut,setLookupOut]=useState("");
       function runLookup(){
-        try{
-          const s=lookupIn.replace(/\u2212/g,'-').trim();
-          const m = /^(\d{1,2})\/(\d{1,2})\/(-?\d{1,5})$/.exec(s);
-          if(!m){ setLookupOut("Enter a date like 7/4/1776. Allowed years −10000…10000 (use −1 for 1 BC; no year 0)."); return; }
-          let mm=+m[1], dd=+m[2], yy=+m[3];
-          if(yy===0){ setLookupOut("There is no year 0. Use −1 for 1 BC."); return; }
-          if(yy<-10000 || yy>10000){ setLookupOut("Year must be between −10000 and 10000."); return; }
-          if(mm<1||mm>12){ setLookupOut("Month must be 1–12."); return; }
-          const maxd=dim(yy,mm);
-          if(dd<1||dd>maxd){ setLookupOut(`Day must be 1–${maxd} for ${MONTH[mm-1]}.`); return; }
-          const d=DAY[wday(yy,mm,dd)];
-          setLookupOut(`${MONTH[mm-1]} ${dd}, ${fmtYear(yy)} is a ${d}.`);
-        }catch(e){ reportError(e,{where:'runLookup', input:lookupIn}); }
+        const s=lookupIn.replace(/\u2212/g,'-').trim();
+        const m = /^(\d{1,2})\/(\d{1,2})\/(-?\d{1,5})$/.exec(s);
+        if(!m){ setLookupOut("Enter a date like 7/4/1776. Allowed years −10000…10000 (use −1 for 1 BC; no year 0)."); return; }
+        let mm=+m[1], dd=+m[2], yy=+m[3];
+        if(yy===0){ setLookupOut("There is no year 0. Use −1 for 1 BC."); return; }
+        if(yy<-10000 || yy>10000){ setLookupOut("Year must be between −10000 and 10000."); return; }
+        if(mm<1||mm>12){ setLookupOut("Month must be 1–12."); return; }
+        const maxd=dim(yy,mm);
+        if(dd<1||dd>maxd){ setLookupOut(`Day must be 1–${maxd} for ${MONTH[mm-1]}.`); return; }
+        const d=DAY[wday(yy,mm,dd)];
+        setLookupOut(`${MONTH[mm-1]} ${dd}, ${fmtYear(yy)} is a ${d}.`);
       }
-      function clearLookup(){ try{ setLookupIn(""); if(document.activeElement) document.activeElement.blur(); }catch(e){ reportError(e,{where:'clearLookup'}); } }
+      function clearLookup(){ setLookupIn(""); if(document.activeElement) document.activeElement.blur(); }
 
       /* ------------------ render ------------------ */
       const scoreStr = `${S.good}/${S.played}`;
@@ -572,6 +535,9 @@
           ))}
         </div>
       );
+
+      // Classic-only year range expansion state
+      const [rangeOpen,setRangeOpen]=useState(false);
 
       return (
         <div className="mx-auto px-4 py-5 w-full max-w-[480px] md:max-w-3xl lg:max-w-4xl">
@@ -667,32 +633,60 @@
             </>
           )}
 
-          {/* Year range (not for lookup) */}
+          {/* Year range */}
           {mode!=="lookup" && (
-            <details className="mt-3 rounded-2xl card p-3">
-              <summary className="cursor-pointer text-sm text-purple-200/90">Year range <span className="tabular-nums ml-1">{minY} → {maxY}</span></summary>
-              <div className="mt-3 space-y-3 max-h-[38vh] overflow-auto pr-1">
-                <div className="flex items-center gap-3">
-                  <input type="range"
-                         min={era==='AD'?1:-10000}
-                         max={era==='BC'?-1:10000}
-                         step="1" value={minY}
-                         onChange={e=>setMinActive(+e.target.value)}
-                         className="w-full accent-purple-500"/>
-                  <input type="range"
-                         min={era==='AD'?1:-10000}
-                         max={era==='BC'?-1:10000}
-                         step="1" value={maxY}
-                         onChange={e=>setMaxActive(+e.target.value)}
-                         className="w-full accent-purple-500"/>
+            mode==="classic" ? (
+              <div className="mt-3 rounded-2xl card p-3">
+                <button onClick={()=>setRangeOpen(o=>!o)} className="w-full text-left text-sm text-purple-200/90 flex items-center justify-between">
+                  <span>Year range <span className="tabular-nums ml-1">{minY} → {maxY}</span></span>
+                  <span className={`transition-transform ${rangeOpen?'rotate-180':''}`}>▾</span>
+                </button>
+                <div className={`transition-[max-height] duration-300 ease-out overflow-hidden ${rangeOpen?'max-h-[38vh]':'max-h-0'}`}>
+                  <div className="mt-3 space-y-3 pr-1">
+                    <div className="flex items-center gap-3">
+                      <input type="range"
+                             min={era==='AD'?1:-10000}
+                             max={era==='BC'?-1:10000}
+                             step="5" value={minY}
+                             onChange={e=>setMinActive(+e.target.value)}
+                             className="w-full accent-purple-500"/>
+                      <input type="range"
+                             min={era==='AD'?1:-10000}
+                             max={era==='BC'?-1:10000}
+                             step="5" value={maxY}
+                             onChange={e=>setMaxActive(+e.target.value)}
+                             className="w-full accent-purple-500"/>
+                    </div>
+                    <p className="text-xs text-purple-300/70">Proleptic Gregorian calendar. Year 0 isn’t shown (1 BC ↔ year 0 internally). AD and AD+BC remember their own ranges.</p>
+                  </div>
                 </div>
-                <div className="grid grid-cols-2 gap-3 max-w-xl">
-                  <input type="number" className="panel rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-400" value={minY} onChange={e=>setMinActive(+e.target.value)}/>
-                  <input type="number" className="panel rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-400" value={maxY} onChange={e=>setMaxActive(+e.target.value)}/>
-                </div>
-                <p className="text-xs text-purple-300/70">Proleptic Gregorian calendar. Year 0 isn’t shown (1 BC ↔ year 0 internally). AD and AD+BC remember their own ranges.</p>
               </div>
-            </details>
+            ) : (
+              <details className="mt-3 rounded-2xl card p-3">
+                <summary className="cursor-pointer text-sm text-purple-200/90">Year range <span className="tabular-nums ml-1">{minY} → {maxY}</span></summary>
+                <div className="mt-3 space-y-3 max-h-[38vh] overflow-auto pr-1">
+                  <div className="flex items-center gap-3">
+                    <input type="range"
+                           min={era==='AD'?1:-10000}
+                           max={era==='BC'?-1:10000}
+                           step="1" value={minY}
+                           onChange={e=>setMinActive(+e.target.value)}
+                           className="w-full accent-purple-500"/>
+                    <input type="range"
+                           min={era==='AD'?1:-10000}
+                           max={era==='BC'?-1:10000}
+                           step="1" value={maxY}
+                           onChange={e=>setMaxActive(+e.target.value)}
+                           className="w-full accent-purple-500"/>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3 max-w-xl">
+                    <input type="number" className="panel rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-400" value={minY} onChange={e=>setMinActive(+e.target.value)}/>
+                    <input type="number" className="panel rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-400" value={maxY} onChange={e=>setMaxActive(+e.target.value)}/>
+                  </div>
+                  <p className="text-xs text-purple-300/70">Proleptic Gregorian calendar. Year 0 isn’t shown (1 BC ↔ year 0 internally). AD and AD+BC remember their own ranges.</p>
+                </div>
+              </details>
+            )
           )}
 
           {/* MAIN CARD */}
@@ -747,7 +741,7 @@
               <>
                 <div className={`mt-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3 ${(!active && isTimer(mode))?'opacity-60 pointer-events-none':''}`}>
                   {DAY.map((n,i)=>(
-                    <button key={n} onClick={(e)=>{ try{ e.currentTarget.blur(); submitDoW(i); setInput(""); if(isTouch) document.activeElement?.blur(); }catch(err){ reportError(err,{where:'weekday-click', i}); } }}
+                    <button key={n} onClick={(e)=>{ e.currentTarget.blur(); submitDoW(i); setInput(""); if(isTouch) document.activeElement?.blur(); }}
                             className={`${baseBtn} ${flash && flash.idx===i ? (flash.type==='good'?'flash-good':'flash-bad')+' border-transparent' : idleBtn}`}>{n}</button>
                   ))}
                 </div>
