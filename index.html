@@ -21,9 +21,7 @@
       100%{box-shadow:0 0 0 0 transparent;background:var(--bg0)}}
     .flash-good{--ring:rgba(16,185,129,.5);--bg0:rgba(16,185,129,.10);--bg1:rgba(16,185,129,.25);animation:flashPulse .45s ease-in-out}
     .flash-bad{--ring:rgba(239,68,68,.5);--bg0:rgba(239,68,68,.10);--bg1:rgba(239,68,68,.25);animation:flashPulse .45s ease-in-out}
-    /* flip animation (classic & deduction only), always clockwise */
-    .flipable{transition:transform 450ms ease-in-out;transform-origin:50% 50%}
-    .no-anim{transition:none!important}
+    /* /*flip_removed*/ animation removed */
     .chip{background:rgba(120,53,175,.25);border:1px solid rgba(120,53,175,.45);padding:.25rem .5rem;border-radius:.75rem;font-size:12px}
     .bar{height:6px;border-radius:6px;overflow:hidden;background:rgba(120,53,175,.25);border:1px solid rgba(120,53,175,.45)}
     .bar>span{display:block;height:100%;background:linear-gradient(90deg,#a855f7,#7c3aed)}
@@ -95,7 +93,7 @@
       const [glow,setGlow]=useState(null);
       function pulse(type,idx,after=()=>{}){ setGlow({type,idx}); setTimeout(()=>{ setGlow(null); after(); },450); }
 
-      // flip (classic/deduction only)
+      // /*flip_removed*/ (classic/deduction only)
       
 
       // timers
@@ -309,7 +307,7 @@
       },[mode]);
       useEffect(()=>{ spawnDed(); },[dedType]); // switch sub-mode -> new puzzle
 
-      /* ---- range/flip ---- */
+      /* ---- range//*flip_removed*/ ---- */
       function toggleBC(ch){
         setIncludeBC(ch);
         if(ch){ setMinY(bcRange.min); setMaxY(bcRange.max); setDate(randomDate(bcRange.min,bcRange.max)); }
@@ -334,8 +332,6 @@
                        : (showDash ? "—" : showDots ? "…" : fmt(date.y,date.m,date.d));
 
       const headlineIsDate = !(showDash||showDots) || (mode==="deduction" && ded);
-      const wantAnim = (headlineIsDate && (mode==="classic"||mode==="deduction"));
-      const wantStaticFlip = (headlineIsDate && !(mode==="classic"||mode==="deduction") && flip);
 
       const baseBtn="w-full rounded-2xl border px-4 py-3 text-base  transition shadow-sm select-none";
       const idleBtn="border-purple-800/60 bg-purple-900/30 hover:bg-purple-900/60";
@@ -416,7 +412,17 @@
                     </label>
                   )}
                 </div>
-                {/* Right controls */}
+                
+                  {mode!=="lookup" && (
+                    <label className="flex items-center gap-2 text-sm">
+                      <input type="checkbox" className="sr-only" checked={includeBC} onChange={e=>toggleBC(e.target.checked)} />
+                      <span className={`w-10 h-6 rounded-full relative ${includeBC?"bg-purple-500":"bg-zinc-600"}`}>
+                        <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${includeBC?"translate-x-4":""}`}></span>
+                      </span>
+                      <span>BC</span>
+                    </label>
+                  )}
+{/* Right controls */}
                 <div className="flex items-center gap-3">
                   <label className="flex items-center gap-2 text-sm">
                     <input type="checkbox" className="sr-only" checked={statsOff} onChange={e=>toggleStatsOff(e.target.checked)} />
@@ -471,14 +477,10 @@
                 {mode==="lookup" ? "Lookup" : mode==="deduction" ? (dedType==="year"?"What year is this?":dedType==="month"?"What month is this?":"What day is this?") : "What day is this?"}
               </div>
 
-              {(mode!=="lookup" && mode!=="deduction") && (
-                <div className={`mt-1 text-3xl  font-bold ${wantAnim?'flipable':''} ${(!wantAnim&&wantStaticFlip)?'rotate-180 no-anim':''}`} style={wantAnim?{transform:`rotate(${rot%360}deg)`}:undefined}>
-                  {headline}
-                </div>
-              )}
+              {(mode!=="lookup" && mode!=="deduction") && (<div className="mt-1 text-3xl  font-bold">{headline}</div>)}
               {mode==="deduction" && (
                 <>
-                  <div className={` mt-1 text-3xl  font-bold`} deg)`}:{transform:'rotate(0)'}}>
+                  <div className=" mt-1 text-3xl  font-bold">
                     {ded ? dedHeadline : "—"}
                   </div>
                   {/* Big weekday hint across all deduction submodes */}
@@ -513,14 +515,6 @@
                     <button className="px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm" onClick={goBack}>Back</button>
                     <div className="ml-auto">{status && <Pill ok={status==='correct'} label={status==='correct'?'Correct':'Incorrect'} />}</div>
                   </div>
-                  {/* Desktop input (hidden on mobile) */}
-                  <form onSubmit={(e)=>{e.preventDefault();submitDoW(Number(input));setInput(""); if(!isTouch) inputRef.current?.focus();}}
-                        className="mt-3 items-stretch gap-2 hidden ">
-                    <input ref={inputRef} value={input} onChange={e=>setInput(e.target.value)}
-                          placeholder="Type 0–6 or day name. Commands: new, stop."
-                          className="panel rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-400 flex-1 min-w-0"/>
-                    <button className="px-4 py-2 rounded-xl bg-purple-600 text-white text-sm font-medium">Submit</button>
-                  </form>
                   {(msg || guesses.length>0) && (
                     <div className="mt-3 text-purple-100/90 text-sm">
                       {msg && <div>{msg}</div>}
