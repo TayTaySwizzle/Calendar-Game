@@ -29,7 +29,6 @@
   <div id="root" class="min-h-screen w-full">Loading…</div>
   <pre id="errors" style="display:none;white-space:pre-wrap;background:#2b0f3a;border:1px solid #7e22ce;color:#fca5a5;padding:.75rem;border-radius:.75rem;margin:1rem;max-width:64rem"></pre>
 
-  <!-- Robust global error messages -->
   <script>
     const __errBox = () => document.getElementById('errors');
     const __hideErr = () => { const x=__errBox(); if(x){ x.style.display='none'; x.textContent=''; } };
@@ -93,11 +92,13 @@
     /* ======================= App ======================= */
     function App(){
       const [mode,setMode]=useState("classic");
-      const [includeBC,setIncludeBC]=useState(false);
+
+      // era: 'AD' | 'BOTH' | 'BC'
+      const [era,setEra]=useState('AD');
 
       // Remember separate ranges
       const [adRange,setAdRange]=useState({min:1,max:10000});
-      const [bcRange,setBcRange]=useState({min:-10000,max:10000});
+      const [bcRange,setBcRange]=useState({min:-10000,max:10000}); // used for BOTH and BC
       const [minY,setMinY]=useState(1), [maxY,setMaxY]=useState(10000);
 
       // Date + stacks
@@ -116,17 +117,16 @@
       });
       const S = statsByMode[mode] || blankStats();
 
-      // Tracking toggles
+      // Toggles
       const [statsOff,setStatsOff]=useState(false);         // hide/unhide only
-      const [trackClassic,setTrackClassic]=useState(false); // default: Disable avg time ON
+      const [trackClassic,setTrackClassic]=useState(false); // Disable avg time = ON by default
       const [trackDed,setTrackDed]=useState(false);
 
-      // timing ref for averages (this was missing and caused the crash)
+      // timing ref for averages
       const tStartRef=useRef(null);
 
-      // feedback flash
+      // feedback flash for weekday buttons
       const [flash,setFlash]=useState(null);
-      function pulse(type,idx,after=()=>{}){ setFlash({type,idx}); setTimeout(()=>{ setFlash(null); after(); },450); }
 
       // timers
       const [blitzSec,setBlitzSec]=useState(60), [blitzRemain,setBlitzRemain]=useState(60), [blitzRunning,setBlitzRunning]=useState(false);
@@ -145,21 +145,21 @@
       // deduction
       const [dedType,setDedType]=useState("year");
       const [ded,setDed]=useState(null);
-      const [dedFlash,setDedFlash]=useState(null);
+      const [dedFlash,setDedFlash]=useState(null); // {kind:'year'|'month'|'day', value:number, ok:boolean}
 
       // only-once wrong counter per date
       const [countedWrong,setCountedWrong]=useState(false);
 
       const inputRef=useRef(null), [input,setInput]=useState("");
 
-      /* ---------- robust reporter ---------- */
+      /* ---------- reporter ---------- */
       function reportError(err, ctx={}){
         try{
           const x=document.getElementById('errors'); if(!x) return;
           const msg = err?.message || String(err);
           const stack = err?.stack || '';
           const details = {
-            mode, dedType, phase, active, includeBC,
+            mode, dedType, phase, active, era,
             date, range:{minY,maxY},
             stats:(statsByMode[mode]||{}),
             ctx
@@ -197,6 +197,35 @@
         }
         prevTrackDed.current=trackDed;
       },[trackDed]);
+
+      /* ---- era switching ---- */
+      function sanitizeForEra(v,e){
+        if(e==='AD') return Math.max(1, v);
+        if(e==='BC') return Math.min(-1, v===0?-1:v);
+        // BOTH
+        return v===0 ? -1 : v;
+      }
+      function applyEra(newEra){
+        try{
+          setEra(newEra);
+          let mn, mx;
+          if(newEra==='AD'){
+            mn = Math.max(1, adRange.min);
+            mx = Math.max(mn, adRange.max);
+          }else if(newEra==='BC'){
+            mn = Math.min(-1, bcRange.min===0?-1:bcRange.min);
+            mx = Math.min(-1, bcRange.max===0?-1:bcRange.max);
+            if(mn>mx){ mn=-10000; mx=-1; }
+          }else{ // BOTH
+            mn = bcRange.min===0?-1:bcRange.min;
+            mx = bcRange.max===0?1:bcRange.max;
+            if(mn>mx){ mn=-10000; mx=10000; }
+          }
+          setMinY(mn); setMaxY(mx);
+          setDate(randomDate(mn,mx));
+          if(mode==="deduction") spawnDed();
+        }catch(e){ reportError(e,{where:'applyEra', newEra}); }
+      }
 
       /* ---- visibility pause ---- */
       useEffect(()=>{
@@ -251,7 +280,7 @@
       const toggleStatsOff=(on)=>{ setStatsOff(on); }; // hide/unhide only
 
       const arm=()=>{ try{
-        __hideErr(); // clear any prior error banner
+        __hideErr();
         setActive(false); setMsg(""); setGuesses([]); setStatus(null); setFlash(null);
         setCountedWrong(false);
         setPhase('dash'); clearTimeout(flashTimerRef.current);
@@ -280,14 +309,7 @@
 
       function pushAndNext(){
         try{
-          if(mode==="classic"){
-            setStack(s=>[...s,{...date}]);
-            setDate(randomDate(minY,maxY));
-            setGuesses([]); setStatus(null);
-            setCountedWrong(false);
-            if(trackClassic){ tStartRef.current=performance.now(); }
-          }
-          if(mode==="flash"||mode==="blitz"||mode==="sudden"){
+          if(mode==="classic"||mode==="flash"||mode==="blitz"||mode==="sudden"){
             setStack(s=>[...s,{...date}]);
             setDate(randomDate(minY,maxY));
             setGuesses([]); setStatus(null);
@@ -348,11 +370,14 @@
         }catch(e){ reportError(e,{where:'goBack'}); }
       }
 
+      /* ---- CORRECT/WRONG submission (immediate next) ---- */
       function submitDoW(val){
         try{
           if(isTimer(mode) && !active){ setMsg("Press Begin to start."); return; }
           const idx = typeof val==="number"?val: Number(val);
           if(idx===wday(date.y,date.m,date.d)){
+            // flash green but go to next immediately
+            setFlash({type:'good', idx}); setTimeout(()=>setFlash(null),450);
             if(!statsOff && tStartRef.current && trackOn()){
               const dt=(performance.now()-tStartRef.current)/1000;
               updateStats(cur=>{ cur.timeSum+=dt; cur.timeCnt+=1; });
@@ -362,13 +387,13 @@
                 cur.played+=1; cur.good+=1; cur.streak+=1; if(cur.streak>cur.best) cur.best=cur.streak;
               });
             }
-            setStatus('correct'); pulse('good',idx,()=>pushAndNext());
+            pushAndNext();
           }else{
             if(!statsOff && !countedWrong){ updateStats(cur=>{ cur.played+=1; cur.streak=0; }); }
             setCountedWrong(true);
             setStatus('incorrect'); setGuesses(g=>g.includes(DAY[idx])?g:[...g,DAY[idx]]);
             if(mode==="sudden"){ setMsg(`Answer: ${DAY[correct]}. Game over.`); setActive(false); }
-            pulse('bad',idx);
+            setFlash({type:'bad', idx}); setTimeout(()=>setFlash(null),450);
           }
         }catch(e){ reportError(e,{where:'submitDoW', val}); }
       }
@@ -423,54 +448,68 @@
             if(ok){
               if(!statsOff && trackDed && tStartRef.current){ const dt=(performance.now()-tStartRef.current)/1000; updateStats(cur=>{cur.timeSum+=dt; cur.timeCnt+=1;}); }
               if(!statsOff){ updateStats(cur=>{ cur.played+=1; cur.good+=1; cur.streak+=1; if(cur.streak>cur.best) cur.best=cur.streak; }); }
-              setStatus('correct'); spawnDed();
-            }else{ if(!statsOff){ updateStats(cur=>{ cur.played+=1; cur.streak=0; }); } setStatus('incorrect'); }
+              setStatus('correct');
+              // show green then next immediately (next frame) for speed
+              requestAnimationFrame(()=>requestAnimationFrame(spawnDed));
+            }else{
+              if(!statsOff){ updateStats(cur=>{ cur.played+=1; cur.streak=0; }); }
+              setStatus('incorrect');
+            }
           }
           if(ded.type==="month"){
             const ok = (+val)===ded.m; flashDed('month', +val, ok);
             if(ok){
               if(!statsOff && trackDed && tStartRef.current){ const dt=(performance.now()-tStartRef.current)/1000; updateStats(cur=>{cur.timeSum+=dt; cur.timeCnt+=1;}); }
               if(!statsOff){ updateStats(cur=>{ cur.played+=1; cur.good+=1; cur.streak+=1; if(cur.streak>cur.best) cur.best=cur.streak; }); }
-              setStatus('correct'); spawnDed();
-            }else{ if(!statsOff){ updateStats(cur=>{ cur.played+=1; cur.streak=0; }); } setStatus('incorrect'); }
+              setStatus('correct');
+              requestAnimationFrame(()=>requestAnimationFrame(spawnDed));
+            }else{
+              if(!statsOff){ updateStats(cur=>{ cur.played+=1; cur.streak=0; }); }
+              setStatus('incorrect');
+            }
           }
           if(ded.type==="day"){
             const ok = (+val)===ded.d; flashDed('day', +val, ok);
             if(ok){
               if(!statsOff && trackDed && tStartRef.current){ const dt=(performance.now()-tStartRef.current)/1000; updateStats(cur=>{cur.timeSum+=dt; cur.timeCnt+=1;}); }
               if(!statsOff){ updateStats(cur=>{ cur.played+=1; cur.good+=1; cur.streak+=1; if(cur.streak>cur.best) cur.best=cur.streak; }); }
-              setStatus('correct'); spawnDed();
-            }else{ if(!statsOff){ updateStats(cur=>{ cur.played+=1; cur.streak=0; }); } setStatus('incorrect'); }
+              setStatus('correct');
+              requestAnimationFrame(()=>requestAnimationFrame(spawnDed));
+            }else{
+              if(!statsOff){ updateStats(cur=>{ cur.played+=1; cur.streak=0; }); }
+              setStatus('incorrect');
+            }
           }
         }catch(e){ reportError(e,{where:'submitDedAnswer', val}); }
       }
 
-      /* ---- mode changes ---- */
+      /* ---- mode/era changes ---- */
       useEffect(()=>{ try{
         arm(); setGuesses([]); setStatus(null); setStack([]); setDedStack([]); setMsg("");
         if(mode==="deduction"){ setPhase('dash'); spawnDed(); }
       }catch(e){ reportError(e,{where:'mode-switch'}); }},[mode]);
       useEffect(()=>{ try{ if(mode==="deduction") spawnDed(); }catch(e){ reportError(e,{where:'dedType-switch'}); } },[dedType]);
 
-      /* ---- range/BC ---- */
-      function toggleBC(ch){
-        try{
-          setIncludeBC(ch);
-          if(ch){ setMinY(bcRange.min); setMaxY(bcRange.max); setDate(randomDate(bcRange.min,bcRange.max)); }
-          else{ const mn=Math.max(1,adRange.min); setMinY(mn); setMaxY(adRange.max); setDate(randomDate(mn,adRange.max)); }
-          if(mode==="deduction") spawnDed();
-        }catch(e){ reportError(e,{where:'toggleBC', ch}); }
-      }
       function setMinActive(v){
         try{
-          if(includeBC){ if(v===0) v=-1; setBcRange(r=>({...r,min:Math.min(v,maxY)})); setMinY(Math.min(v,maxY)); }
-          else { v=Math.max(1,Math.min(v,maxY)); setAdRange(r=>({...r,min:v})); setMinY(v); }
+          let val = sanitizeForEra(+v, era);
+          if(era==='AD'){ setAdRange(r=>({...r,min:Math.min(val,maxY)})); setMinY(Math.min(val,maxY)); }
+          else if(era==='BC' || era==='BOTH'){ 
+            setBcRange(r=>({...r,min:val})); 
+            const clamped = era==='BC' ? Math.min(val, -1) : (val===0?-1:val);
+            setMinY(Math.min(clamped,maxY));
+          }
         }catch(e){ reportError(e,{where:'setMinActive', v}); }
       }
       function setMaxActive(v){
         try{
-          if(includeBC){ if(v===0) v=1; setBcRange(r=>({...r,max:Math.max(v,minY)})); setMaxY(Math.max(v,minY)); }
-          else { v=Math.max(v,minY,1); setAdRange(r=>({...r,max:v})); setMaxY(v); }
+          let val = sanitizeForEra(+v, era);
+          if(era==='AD'){ val=Math.max(val,minY,1); setAdRange(r=>({...r,max:val})); setMaxY(val); }
+          else if(era==='BC' || era==='BOTH'){
+            setBcRange(r=>({...r,max:val}));
+            const clamped = era==='BC' ? Math.min(val, -1) : (val===0?1:val);
+            setMaxY(Math.max(clamped,minY));
+          }
         }catch(e){ reportError(e,{where:'setMaxActive', v}); }
       }
 
@@ -515,6 +554,23 @@
       const avgDisabled = (statsOff || !(isTimer(mode)||(mode==="classic"&&trackClassic)||(mode==="deduction"&&trackDed)));
       const avgStr = avgDisabled ? "—" : (S.timeCnt?`${(S.timeSum/S.timeCnt).toFixed(2)}s`:"—");
 
+      // era segmented options
+      const EraSeg = () => (
+        <div className="flex rounded-xl overflow-hidden border border-purple-800/60">
+          {[
+            {k:'AD', label:'AD'},
+            {k:'BOTH', label:'AD+BC'},
+            {k:'BC', label:'BC'},
+          ].map(seg=>(
+            <button key={seg.k}
+              onClick={()=>applyEra(seg.k)}
+              className={`px-3 py-1.5 text-sm ${era===seg.k ? 'bg-purple-600' : 'bg-purple-900/40 hover:bg-purple-900/70'} ${seg.k!=='BC'?'border-r border-purple-800/60':''}`}>
+              {seg.label}
+            </button>
+          ))}
+        </div>
+      );
+
       return (
         <div className="mx-auto px-4 py-5 w-full max-w-[480px] md:max-w-3xl lg:max-w-4xl">
           {/* Header */}
@@ -525,7 +581,7 @@
             <div className="relative">
               <select
                 value={mode}
-                onChange={e=>{ __hideErr(); setMode(e.target.value); }}
+                onChange={e=>{ __hideErr(); setMode(e.target.value); e.target.blur(); }}
                 className="panel rounded-xl px-2.5 py-2 pr-8 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 appearance-none"
               >
                 <option value="classic">Classic</option>
@@ -553,13 +609,7 @@
               <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
                 {/* Left controls */}
                 <div className="flex flex-wrap items-center gap-3">
-                  <label className="flex items-center gap-2 text-sm">
-                    <input type="checkbox" className="sr-only" checked={includeBC} onChange={e=>toggleBC(e.target.checked)} />
-                    <span className={`w-10 h-6 rounded-full relative ${includeBC?"bg-purple-500":"bg-zinc-600"}`}>
-                      <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${includeBC?"translate-x-4":""}`}></span>
-                    </span>
-                    <span>BC</span>
-                  </label>
+                  <EraSeg/>
 
                   {mode==="blitz" && (
                     <div className="flex items-center gap-2">
@@ -621,14 +671,24 @@
               <summary className="cursor-pointer text-sm text-purple-200/90">Year range <span className="tabular-nums ml-1">{minY} → {maxY}</span></summary>
               <div className="mt-3 space-y-3 max-h-[38vh] overflow-auto pr-1">
                 <div className="flex items-center gap-3">
-                  <input type="range" min={includeBC?-10000:1} max="10000" step="1" value={minY} onChange={e=>setMinActive(+e.target.value)} className="w-full accent-purple-500"/>
-                  <input type="range" min={includeBC?-10000:1} max="10000" step="1" value={maxY} onChange={e=>setMaxActive(+e.target.value)} className="w-full accent-purple-500"/>
+                  <input type="range"
+                         min={era==='AD'?1:-10000}
+                         max={era==='BC'?-1:10000}
+                         step="1" value={minY}
+                         onChange={e=>setMinActive(+e.target.value)}
+                         className="w-full accent-purple-500"/>
+                  <input type="range"
+                         min={era==='AD'?1:-10000}
+                         max={era==='BC'?-1:10000}
+                         step="1" value={maxY}
+                         onChange={e=>setMaxActive(+e.target.value)}
+                         className="w-full accent-purple-500"/>
                 </div>
                 <div className="grid grid-cols-2 gap-3 max-w-xl">
                   <input type="number" className="panel rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-400" value={minY} onChange={e=>setMinActive(+e.target.value)}/>
                   <input type="number" className="panel rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-400" value={maxY} onChange={e=>setMaxActive(+e.target.value)}/>
                 </div>
-                <p className="text-xs text-purple-300/70">Proleptic Gregorian calendar. Year 0 isn’t shown (1 BC ↔ year 0 internally). AD and BC remember their own ranges.</p>
+                <p className="text-xs text-purple-300/70">Proleptic Gregorian calendar. Year 0 isn’t shown (1 BC ↔ year 0 internally). AD and AD+BC remember their own ranges.</p>
               </div>
             </details>
           )}
@@ -658,7 +718,7 @@
             {/* Title + Headline */}
             <div className="text-center">
               <div className="text-xs uppercase tracking-widest text-purple-100/80">
-                {mode==="lookup" ? "Lookup" : mode==="deduction" ? (dedType==="year"?"What year is this?":dedType==="month"?"What month is this?":"What day is this?") : "What day is this?"}
+                {mode==="lookup" ? "" : mode==="deduction" ? (dedType==="year"?"What year is this?":dedType==="month"?"What month is this?":"What day is this?") : "What day is this?"}
               </div>
 
               {(mode!=="lookup" && mode!=="deduction") && (
@@ -769,17 +829,18 @@
             {/* ======= LOOKUP ======= */}
             {mode==="lookup" && (
               <div className="mt-1 rounded-2xl panel p-4">
-                <div className="text-sm text-purple-100/90 mb-2">
-                  Enter a date in <b>month/day/year</b> form, e.g. <b>7/4/1776</b>.<br/>
-                  Use a leading minus for BC years (<b>-1</b> = <b>1 BC</b>). Year range: <b>−10000…10000</b>. No year 0.
-                </div>
                 <div className="flex items-stretch gap-2">
-                  <input value={lookupIn} onChange={e=>setLookupIn(e.target.value)} placeholder="7/4/1776"
+                  <input value={lookupIn} onChange={e=>setLookupIn(e.target.value)} placeholder="e.g., 7/4/1776"
                          className="panel rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-400 flex-1 min-w-0"/>
                   <button onClick={runLookup} className="px-4 py-2 rounded-xl bg-purple-600 text-white text-sm font-medium">Lookup</button>
                   <button onClick={clearLookup} className="px-4 py-2 rounded-xl bg-zinc-700 text-white text-sm font-medium">Clear</button>
                 </div>
                 {lookupOut && <div className="mt-3 text-sm">{lookupOut}</div>}
+                <ul className="mt-4 text-xs text-purple-100/90 space-y-2 list-disc list-inside">
+                  <li>Format: <b>month/day/year</b> (e.g., <b>7/4/1776</b>).</li>
+                  <li>BC years: use a leading minus (e.g., <b>-1</b> = <b>1 BC</b>). No year 0.</li>
+                  <li>Valid range: <b>−10000…10000</b>. Days must be valid for the month.</li>
+                </ul>
               </div>
             )}
           </div>
