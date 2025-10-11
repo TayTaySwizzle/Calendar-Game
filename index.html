@@ -21,11 +21,17 @@
       100%{box-shadow:0 0 0 0 transparent;background:var(--bg0)}}
     .flash-good{--ring:rgba(16,185,129,.5);--bg0:rgba(16,185,129,.10);--bg1:rgba(16,185,129,.25);animation:flashPulse .45s ease-in-out}
     .flash-bad{--ring:rgba(239,68,68,.5);--bg0:rgba(239,68,68,.10);--bg1:rgba(239,68,68,.25);animation:flashPulse .45s ease-in-out}
-    /* flip animation removed */
+    /* flip animation (classic & deduction only), always clockwise */
+    .flipable{transition:transform 450ms ease-in-out;transform-origin:50% 50%}
+    .no-anim{transition:none!important}
     .chip{background:rgba(120,53,175,.25);border:1px solid rgba(120,53,175,.45);padding:.25rem .5rem;border-radius:.75rem;font-size:12px}
     .bar{height:6px;border-radius:6px;overflow:hidden;background:rgba(120,53,175,.25);border:1px solid rgba(120,53,175,.45)}
     .bar>span{display:block;height:100%;background:linear-gradient(90deg,#a855f7,#7c3aed)}
-    /* lookup background removed */
+    /* lookup background */
+    .lookup-bg{
+      background-image:url('./mandelbrot-purple.png');
+      background-size:cover;background-position:center;
+    }
   </style>
 </head>
 <body class="text-purple-50">
@@ -90,9 +96,11 @@
       const [trackDed,setTrackDed]=useState(false);
 
       // feedback flash
-      const [glow,setGlow]=useState(null);
-      function pulse(type,idx,after=()=>{}){ setGlow({type,idx}); setTimeout(()=>{ setGlow(null); after(); },450); }
+      const [flash,setFlash]=useState(null);
+      function pulse(type,idx,after=()=>{}){ setFlash({type,idx}); setTimeout(()=>{ setFlash(null); after(); },450); }
 
+      // flip (classic/deduction only)
+      const [flip,setFlip]=useState(false); const [rot,setRot]=useState(0);
 
       // timers
       const [blitzSec,setBlitzSec]=useState(60), [blitzRemain,setBlitzRemain]=useState(60), [blitzRunning,setBlitzRunning]=useState(false);
@@ -132,9 +140,6 @@
 
       /* ---- timers loop ---- */
       useEffect(()=>{
-        // Only run while a timer is active (saves battery / avoids idle RAF)
-        const needLoop = (blitzRunning || (mode==="sudden" && qDeadlineRef.current));
-        if(!needLoop) return;
         let raf;
         const loop=()=>{
           const now=performance.now();
@@ -153,7 +158,7 @@
         };
         raf=requestAnimationFrame(loop);
         return ()=>cancelAnimationFrame(raf);
-      },[mode,blitzSec,statsOff,blitzRunning]);
+      },[mode,blitzSec,statsOff]);
 
       /* ---- helpers ---- */
       const resetStats=()=>{ setPlayed(0); setGood(0); setStreak(0); setBest(0); setMsg(""); setGuesses([]); setStatus(null); setTimeSum(0); setTimeCnt(0); };
@@ -163,7 +168,7 @@
       };
 
       const arm=()=>{ // prepare timers; hide date
-        setActive(false); setMsg(""); setGuesses([]); setStatus(null); setGlow(null);
+        setActive(false); setMsg(""); setGuesses([]); setStatus(null); setFlash(null);
         setPhase('dash'); clearTimeout(flashTimerRef.current);
         setBlitzRemain(blitzSec); blitzStartRef.current=null; blitzPausedAtRef.current=null; blitzPausedAccRef.current=0; setBlitzRunning(false);
         qDeadlineRef.current=null; qPausedAtRef.current=null; qPausedAccRef.current=0; setQRemain(qSec);
@@ -306,6 +311,10 @@
       useEffect(()=>{ spawnDed(); },[dedType]); // switch sub-mode -> new puzzle
 
       /* ---- range/flip ---- */
+      function toggleFlip(ch){
+        if(mode==="classic"||mode==="deduction"){ setRot(r=>r+180); }
+        setFlip(ch);
+      }
       function toggleBC(ch){
         setIncludeBC(ch);
         if(ch){ setMinY(bcRange.min); setMaxY(bcRange.max); setDate(randomDate(bcRange.min,bcRange.max)); }
@@ -330,19 +339,21 @@
                        : (showDash ? "—" : showDots ? "…" : fmt(date.y,date.m,date.d));
 
       const headlineIsDate = !(showDash||showDots) || (mode==="deduction" && ded);
-            
-      const baseBtn="w-full rounded-2xl border px-4 py-3 text-base  transition shadow-sm select-none";
+      const wantAnim = (headlineIsDate && (mode==="classic"||mode==="deduction"));
+      const wantStaticFlip = (headlineIsDate && !(mode==="classic"||mode==="deduction") && flip);
+
+      const baseBtn="w-full rounded-2xl border px-4 py-3 text-base md:text-sm transition shadow-sm select-none";
       const idleBtn="border-purple-800/60 bg-purple-900/30 hover:bg-purple-900/60";
 
       /* ---- LOOKUP ---- */
       const [lookupIn,setLookupIn]=useState(""); const [lookupOut,setLookupOut]=useState("");
       function runLookup(){
-        const s=lookupIn.replace(/\u2212/g,'-').trim();
+        const s=lookupIn.trim();
         const m = /^(\d{1,2})\/(\d{1,2})\/(-?\d{1,5})$/.exec(s);
-        if(!m){ setLookupOut("Enter date in month/day/year format, e.g., 7/4/1776. Years allowed −10000…10000 (no year 0)."); return; }
+        if(!m){ setLookupOut("Enter date in month/day/year format, e.g., 7/4/1776. Years allowed -10000…10000 (no year 0)."); return; }
         let mm=+m[1], dd=+m[2], yy=+m[3];
-        if(yy===0){ setLookupOut("There is no year 0. Use -1 for 1 BC."); return; }
-        if(yy<-10000 || yy>10000){ setLookupOut("Year must be between -10000 and 10000."); return; }
+        if(yy===0){ setLookupOut("There is no year 0. Use −1 for 1 BC."); return; }
+        if(yy<-10000 || yy>10000){ setLookupOut("Year must be between −10000 and 10000."); return; }
         if(mm<1||mm>12){ setLookupOut("Month must be 1–12."); return; }
         const maxd=dim(yy,mm);
         if(dd<1||dd>maxd){ setLookupOut(`Day must be 1–${maxd} for ${MONTH[mm-1]}.`); return; }
@@ -356,13 +367,12 @@
       const accStr   = `${played?(good/played*100).toFixed(1):"0.0"}%`;
       const streakBest = {left:streak,right:best};
       const avgStr = (statsOff || !(isTimer(mode)||(mode==="classic"&&trackClassic)||(mode==="deduction"&&trackDed))) ? "—" : (timeCnt?`${(timeSum/timeCnt).toFixed(2)}s`:"—");
-      const avgDisabled = (statsOff || !(isTimer(mode)||(mode==="classic"&&trackClassic)||(mode==="deduction"&&trackDed)));
 
       return (
-        <div className="mx-auto px-4 py-5 w-full max-w-[480px]  ">
+        <div className="mx-auto px-4 py-5 w-full max-w-[480px] md:max-w-3xl lg:max-w-4xl">
           {/* Header */}
           <div className="flex items-center justify-between gap-4">
-            <h1 className="text-xl  font-semibold leading-none">Calendar Game</h1>
+            <h1 className="text-xl md:text-2xl font-semibold leading-none">Calendar Game</h1>
             <div className="flex items-center gap-3">
               <select value={mode} onChange={e=>setMode(e.target.value)}
                       className="panel rounded-xl px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400">
@@ -373,7 +383,39 @@
                 <option value="deduction">Deduction</option>
                 <option value="lookup">Lookup</option>
               </select>
-              
+              {mode!=="lookup" && (
+                <label className="flex items-center gap-2 text-sm">
+                  <input type="checkbox" className="sr-only" checked={includeBC} onChange={e=>toggleBC(e.target.checked)} />
+                  <span className={`w-10 h-6 rounded-full relative ${includeBC?"bg-purple-500":"bg-zinc-600"}`}>
+                    <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${includeBC?"translate-x-4":""}`}></span>
+                  </span>
+                  <span>BC</span>
+                </label>
+              )}
+            </div>
+          </div>
+
+          {/* Stats (hidden on lookup) + Disable toggle */}
+          {mode!=="lookup" && (
+            <>
+              <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3">
+                <Stat label="Score" value={scoreStr} disabled={statsOff}/>
+                <Stat label="Accuracy" value={accStr} disabled={statsOff}/>
+                <StatTwo label="Streak / Longest" left={streakBest.left} right={streakBest.right} disabled={statsOff}/>
+                <Stat label="Avg time (correct)" value={avgStr} disabled={statsOff}/>
+              </div>
+              <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
+                {/* Left controls */}
+                <div className="flex flex-wrap items-center gap-3">
+                  {mode!=="lookup" && (
+                    <label className="flex items-center gap-2 text-sm">
+                      <input type="checkbox" className="sr-only" checked={flip} onChange={e=>toggleFlip(e.target.checked)} />
+                      <span className={`w-10 h-6 rounded-full relative ${flip?"bg-purple-500":"bg-zinc-600"}`}>
+                        <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${flip?"translate-x-4":""}`}></span>
+                      </span>
+                      <span>Flip date</span>
+                    </label>
+                  )}
                   {mode==="blitz" && (
                     <div className="flex items-center gap-2">
                       <span className="text-xs text-purple-300/80">Duration:</span>
@@ -398,7 +440,7 @@
                       <span className="tabular-nums text-xs w-12 text-right">{flashMs}ms</span>
                     </div>
                   )}
-                  {mode!=="lookup" && (<label className="flex items-center gap-2 text-sm"><input type="checkbox" className="sr-only" checked={includeBC} onChange={e=>toggleBC(e.target.checked)} /><span className={`w-10 h-6 rounded-full relative ${includeBC?"bg-purple-500":"bg-zinc-600"}`}><span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${includeBC?"translate-x-4":""}`}></span></span><span>BC</span></label>)}{(mode==="classic"||mode==="deduction") && (
+                  {(mode==="classic"||mode==="deduction") && (
                     <label className="flex items-center gap-2 text-sm">
                       <input type="checkbox" className="sr-only"
                             checked={mode==="classic"?trackClassic:trackDed}
@@ -429,7 +471,7 @@
           {mode!=="lookup" && (
             <details className="mt-3 rounded-2xl card p-3">
               <summary className="cursor-pointer text-sm text-purple-200/90">Year range <span className="tabular-nums ml-1">{minY} → {maxY}</span></summary>
-              <div className="mt-3 space-y-3 max-h-[38vh] overflow-auto pr-1">
+              <div className="mt-3 space-y-3">
                 <div className="flex items-center gap-3">
                   <input type="range" min={includeBC?-10000:1} max="10000" step="1" value={minY} onChange={e=>setMinActive(+e.target.value)} className="w-full accent-purple-500"/>
                   <input type="range" min={includeBC?-10000:1} max="10000" step="1" value={maxY} onChange={e=>setMaxActive(+e.target.value)} className="w-full accent-purple-500"/>
@@ -444,7 +486,7 @@
           )}
 
           {/* MAIN CARD */}
-          <div className={`mt-5 p-5 rounded-3xl ${mode==="lookup"?"thin":""} ${mode==="lookup"?"":'card'}`}>
+          <div className={`mt-5 p-5 rounded-3xl ${mode==="lookup"?"lookup-bg":""} ${mode==="lookup"?"thin":""} ${mode==="lookup"?"":'card'}`}>
             {/* Blitz/Sudden bars */}
             {mode==="blitz" && (
               <div className="mb-3">
@@ -465,11 +507,19 @@
                 {mode==="lookup" ? "Lookup" : mode==="deduction" ? (dedType==="year"?"What year is this?":dedType==="month"?"What month is this?":"What day is this?") : "What day is this?"}
               </div>
 
-              {(mode!=="lookup" && mode!=="deduction") && (<div className="mt-1 text-3xl font-bold">{headline}</div>)}}
-              {mode==="deduction" && (<><div className="mt-1 text-3xl font-bold">{ded ? dedHeadline : "—"}</div>
+              {(mode!=="lookup" && mode!=="deduction") && (
+                <div className={`mt-1 text-3xl md:text-4xl font-bold ${wantAnim?'flipable':''} ${(!wantAnim&&wantStaticFlip)?'rotate-180 no-anim':''}`} style={wantAnim?{transform:`rotate(${rot%360}deg)`}:undefined}>
+                  {headline}
+                </div>
+              )
+              {mode==="deduction" && (
+                <>
+                  <div className={`${flip?'flipable':''} mt-1 text-3xl md:text-4xl font-bold`} style={flip?{transform:`rotate(${rot%360}deg)`}:{transform:'rotate(0)'}}>
+                    {ded ? dedHeadline : "—"}
+                  </div>
                   {/* Big weekday hint across all deduction submodes */}
                   {ded && (
-                    <div className="mt-1 text-lg  text-purple-100">
+                    <div className="mt-1 text-lg md:text-xl text-purple-100">
                       Weekday:&nbsp;<span className="font-semibold text-xl">{DAY[ded.w]}</span>
                     </div>
                   )}
@@ -480,10 +530,10 @@
             {/* ======= CLASSIC / BLITZ / SUDDEN / FLASH ======= */}
             {["classic","blitz","sudden","flash"].includes(mode) && (
               <>
-                <div className={`mt-4 grid grid-cols-2    gap-3 ${(!active && isTimer(mode))?'opacity-60 pointer-events-none':''}`}>
+                <div className={`mt-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3 ${(!active && isTimer(mode))?'opacity-60 pointer-events-none':''}`}>
                   {DAY.map((n,i)=>(
                     <button key={n} onClick={(e)=>{ e.currentTarget.blur(); submitDoW(i); setInput(""); if(isTouch) document.activeElement?.blur(); }}
-                            className={`${baseBtn} ${glow && glow.idx===i ? (glow.type==='good'?'flash-good':'flash-bad')+' border-transparent' : idleBtn}`}>{n}</button>
+                            className={`${baseBtn} ${flash && flash.idx===i ? (flash.type==='good'?'flash-good':'flash-bad')+' border-transparent' : idleBtn}`}>{n}</button>
                   ))}
                 </div>
 
@@ -501,7 +551,7 @@
                   </div>
                   {/* Desktop input (hidden on mobile) */}
                   <form onSubmit={(e)=>{e.preventDefault();submitDoW(Number(input));setInput(""); if(!isTouch) inputRef.current?.focus();}}
-                        className="mt-3 items-stretch gap-2 hidden ">
+                        className="mt-3 items-stretch gap-2 hidden sm:flex">
                     <input ref={inputRef} value={input} onChange={e=>setInput(e.target.value)}
                           placeholder="Type 0–6 or day name. Commands: new, stop."
                           className="panel rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-400 flex-1 min-w-0"/>
@@ -532,7 +582,7 @@
                 {/* choices */}
                 <div className="mt-4">
                   {ded && ded.type==="year" && (
-                    <div className="grid grid-cols-3   gap-2">
+                    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
                       {Array.from({length: ded.b - ded.a + 1}, (_,i)=>ded.a+i).map(y=>(
                         <button key={y} onClick={()=>submitDedAnswer(y)}
                           className={`${baseBtn} ${idleBtn} py-2 text-sm`}>{fmtYear(y)}</button>
@@ -540,7 +590,7 @@
                     </div>
                   )}
                   {ded && ded.type==="month" && (
-                    <div className="grid grid-cols-2   gap-2">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
                       {MONTH.map((m,i)=>(
                         <button key={m} onClick={()=>submitDedAnswer(i+1)}
                           className={`${baseBtn} ${idleBtn}`}>{m}</button>
@@ -548,7 +598,7 @@
                     </div>
                   )}
                   {ded && ded.type==="day" && (
-                    <div className="grid grid-cols-4   gap-2">
+                    <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-2">
                       {ded.options.map(dv=>(
                         <button key={dv} onClick={()=>submitDedAnswer(dv)}
                           className={`${baseBtn} ${idleBtn}`}>{dv}</button>
@@ -574,7 +624,7 @@
             {mode==="lookup" && (
               <div className="mt-1 bg-black/35 p-4 rounded-2xl">
                 <div className="text-sm text-purple-100/90 mb-2">
-                  Provide a date in <b>month/day/year</b> format (e.g., <b>7/4/1776</b>). Years allowed <b>-10000…10000</b> (no year 0).
+                  Provide a date in <b>month/day/year</b> format (e.g., <b>7/4/1776</b>). Years allowed <b>−10000…10000</b> (no year 0).
                 </div>
                 <div className="flex items-stretch gap-2">
                   <input value={lookupIn} onChange={e=>setLookupIn(e.target.value)} placeholder="7/4/1776"
