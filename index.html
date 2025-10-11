@@ -93,8 +93,6 @@
       const [flash,setFlash]=useState(null);
       function pulse(type,idx,after=()=>{}){ setFlash({type,idx}); setTimeout(()=>{ setFlash(null); after(); },450); }
 
-      // (flip removed)
-
       // timers
       const [blitzSec,setBlitzSec]=useState(60), [blitzRemain,setBlitzRemain]=useState(60), [blitzRunning,setBlitzRunning]=useState(false);
       const blitzStartRef=useRef(null), blitzPausedAtRef=useRef(null), blitzPausedAccRef=useRef(0);
@@ -136,7 +134,6 @@
 
       /* ---- timers loop (gated) ---- */
       useEffect(()=>{
-        // Only run while an actual timer is active
         const needLoop = (blitzRunning || (mode==="sudden" && qDeadlineRef.current));
         if(!needLoop) return;
         let raf;
@@ -190,7 +187,7 @@
           setDate(randomDate(minY,maxY));
           setGuesses([]); setStatus(null);
           setCountedWrong(false);
-          if(trackClassic){ tStartRef.current=performance.now(); } // start timing classic
+          if(trackClassic){ tStartRef.current=performance.now(); }
         }
         if(mode==="flash"||mode==="blitz"||mode==="sudden"){
           setStack(s=>[...s,{...date}]);
@@ -201,16 +198,13 @@
         if(mode==="deduction"){ setDedStack(s=>[...s, ded]); spawnDed(); }
       }
 
-      // Ensure classic timing starts when enabling tracking or when date changes
       useEffect(()=>{ if(mode==="classic" && trackClassic) tStartRef.current=performance.now(); },[mode,trackClassic,date]);
 
       const trackOn = ()=> isTimer(mode) || (mode==="classic"&&trackClassic) || (mode==="deduction"&&trackDed);
       const avg = timeCnt ? (timeSum/timeCnt) : 0;
 
-      /* ---- NEW (skip): never counted wrong ---- */
       const doNew=()=>{ if(isTimer(mode) && !active){ setMsg("Press Begin to start."); return; } setMsg("New."); setStatus(null); setGuesses([]); pushAndNext(); };
 
-      /* ---- REVEAL: counts as wrong once (unless stats disabled) ---- */
       function reveal(){
         if(mode==="deduction"){
           if(!ded) return;
@@ -227,7 +221,6 @@
         setMsg(`Answer: ${DAY[correct]}.`); setStatus('incorrect');
       }
 
-      /* ---- BACK: classic & deduction ---- */
       function goBack(){
         if(mode==="deduction"){
           const prev = dedStack[dedStack.length-1]; if(!prev){ setMsg("Nothing to go back to."); return; }
@@ -242,7 +235,6 @@
         setMsg(`Answer: ${DAY[wday(prev.y,prev.m,prev.d)]}.`); setStatus(null); setGuesses([]);
       }
 
-      /* ---- classic submission (immediate wrong counting) ---- */
       function submitDoW(val){
         if(isTimer(mode) && !active){ setMsg("Press Begin to start."); return; }
         const idx = typeof val==="number"?val: Number(val);
@@ -259,10 +251,8 @@
         }
       }
 
-      /* --------- Deduction generation ---------- */
       function spawnDed(){
         if(dedType==="year"){
-          // given m,d,w -> choose unique window for year
           let m=rint(1,12), d=rint(1,31), y, w;
           for(;;){ y=rint(minY,maxY); if(y===0||d>dim(y,m)) continue; w=wday(y,m,d); break; }
           function neighbor(dir){ const step=dir>0?1:-1;
@@ -275,7 +265,6 @@
           return;
         }
         if(dedType==="month"){
-          // given d,y,w with exactly one month valid
           for(;;){
             let y=rint(minY,maxY); if(y===0) continue;
             let d=rint(1,31); let w=rint(0,6);
@@ -284,14 +273,11 @@
           }
         }
         if(dedType==="day"){
-          // given m,y,w, present a set of day buttons where only one matches w
           let y=rint(minY,maxY); if(y===0) y+= (y<0?1:-1);
           let m=rint(1,12); const D=dim(y,m);
           let d=rint(1,D); const w=wday(y,m,d);
-          // build options: include d + distractors with different weekday
           const bad=[]; for(let k=1;k<=D;k++){ if(k!==d && wday(y,m,k)!==w) bad.push(k); }
-          // ensure enough distractors
-          const pickCount=Math.min(10, 1+bad.length); // total buttons <= 10
+          const pickCount=Math.min(10, 1+bad.length);
           const picks=new Set([d]);
           while(picks.size<pickCount){ picks.add(bad[rint(0,bad.length-1)]); }
           const opts=[...picks]; for(let i=opts.length-1;i>0;i--){ const j=rint(0,i); [opts[i],opts[j]]=[opts[j],opts[i]]; }
@@ -321,13 +307,11 @@
         }
       }
 
-      /* ---- mode changes ---- */
       useEffect(()=>{ arm(); setGuesses([]); setStatus(null); setStack([]); setDedStack([]); setMsg("");
         if(mode==="deduction"){ setPhase('dash'); spawnDed(); }
       },[mode]);
-      useEffect(()=>{ spawnDed(); },[dedType]); // switch sub-mode -> new puzzle
+      useEffect(()=>{ spawnDed(); },[dedType]);
 
-      /* ---- range/BC ---- */
       function toggleBC(ch){
         setIncludeBC(ch);
         if(ch){ setMinY(bcRange.min); setMaxY(bcRange.max); setDate(randomDate(bcRange.min,bcRange.max)); }
@@ -337,11 +321,9 @@
       function setMinActive(v){ if(includeBC){ if(v===0) v=-1; setBcRange(r=>({...r,min:Math.min(v,maxY)})); setMinY(Math.min(v,maxY)); } else { v=Math.max(1,Math.min(v,maxY)); setAdRange(r=>({...r,min:v})); setMinY(v); } }
       function setMaxActive(v){ if(includeBC){ if(v===0) v=1; setBcRange(r=>({...r,max:Math.max(v,minY)})); setMaxY(Math.max(v,minY)); } else { v=Math.max(v,minY,1); setAdRange(r=>({...r,max:v})); setMaxY(v); } }
 
-      /* ---- computed headline ---- */
       const showDash = isTimer(mode) && !active;
       const showDots = (mode==="flash" && active && phase==='hide');
 
-      // Deduction headline shows only the given pieces
       const dedHeadline = ded ? (
         ded.type==="year" ? `${MONTH[ded.m-1]} ${ded.d}` :
         ded.type==="month" ? `${ded.d}, ${fmtYear(ded.y)}` :
@@ -369,9 +351,8 @@
         const d=DAY[wday(yy,mm,dd)];
         setLookupOut(`${MONTH[mm-1]} ${dd}, ${fmtYear(yy)} is a ${d}.`);
       }
-      function clearLookup(){ setLookupIn(""); /* don't focus input (prevents mobile keyboard) */ if(document.activeElement) document.activeElement.blur(); }
+      function clearLookup(){ setLookupIn(""); if(document.activeElement) document.activeElement.blur(); }
 
-      /* ------------------ render ------------------ */
       const scoreStr = `${good}/${played}`;
       const accStr   = `${played?(good/played*100).toFixed(1):"0.0"}%`;
       const streakBest = {left:streak,right:best};
@@ -393,7 +374,6 @@
                 <option value="deduction">Deduction</option>
                 <option value="lookup">Lookup</option>
               </select>
-              {/* visual hint that this opens a menu */}
               <div className="flex flex-col items-center leading-none text-[10px] text-purple-200/80 select-none">
                 <span>▲</span><span>▼</span>
               </div>
@@ -447,7 +427,6 @@
                   )}
                   {(mode==="classic"||mode==="deduction") && (
                     <label className="flex items-center gap-2 text-sm">
-                      {/* Disable avg time (default OFF = tracking enabled). Red when ON. */}
                       <input
                         type="checkbox"
                         className="sr-only"
@@ -525,7 +504,6 @@
                   <div className="mt-1 text-3xl md:text-4xl font-bold">
                     {ded ? dedHeadline : "—"}
                   </div>
-                  {/* Big weekday hint across all deduction submodes */}
                   {ded && (
                     <div className="mt-1 text-lg md:text-xl text-purple-100">
                       Weekday:&nbsp;<span className="font-semibold text-xl">{DAY[ded.w]}</span>
@@ -590,7 +568,7 @@
                       ))}
                     </div>
                   )}
-                  {ded && ded.type==="month" and (
+                  {ded && ded.type==="month" && (
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
                       {MONTH.map((m,i)=>(
                         <button key={m} onClick={()=>submitDedAnswer(i+1)}
