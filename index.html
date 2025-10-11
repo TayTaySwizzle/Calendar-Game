@@ -15,7 +15,6 @@
     .panel{background:rgba(88,28,135,.25);border:1px solid rgba(120,53,175,.45)}
     .thin{border:1px solid rgba(120,53,175,.35)}
     button,input,select{-webkit-tap-highlight-color:transparent}
-    /* flash feedback */
     @keyframes flashPulse{0%{box-shadow:0 0 0 0 var(--ring);background:var(--bg0)}
       35%{box-shadow:0 0 0 10px var(--ring);background:var(--bg1)}
       100%{box-shadow:0 0 0 0 transparent;background:var(--bg0)}}
@@ -30,9 +29,10 @@
   <div id="root" class="min-h-screen w-full">Loading…</div>
   <pre id="errors" style="display:none;white-space:pre-wrap;background:#2b0f3a;border:1px solid #7e22ce;color:#fca5a5;padding:.75rem;border-radius:.75rem;margin:1rem;max-width:64rem"></pre>
 
-  <!-- Robust global error messages with stack + location -->
+  <!-- Robust global error messages -->
   <script>
     const __errBox = () => document.getElementById('errors');
+    const __hideErr = () => { const x=__errBox(); if(x){ x.style.display='none'; x.textContent=''; } };
     window.addEventListener('error', e=>{
       const x=__errBox(); if(!x) return;
       x.style.display='block';
@@ -61,7 +61,7 @@
     const isLeap = y => { y=toAstro(y); return y%400===0 || (y%4===0 && y%100!==0); };
     const dim = (y,m)=> m===2 ? (isLeap(y)?29:28) : [4,6,9,11].includes(m)?30:31;
     function jdnGregorian(y,m,d){ const a=Math.floor((14-m)/12),y2=y+4800-a,m2=m-3+12*a; return d+Math.floor((153*m2+2)/5)+365*y2+Math.floor(y2/4)-Math.floor(y2/100)+Math.floor(y2/400)-32045; }
-    const wday=(y,m,d)=> (jdnGregorian(toAstro(y),m,d)+1)%7;        // 0=Sun..6=Sat
+    const wday=(y,m,d)=> (jdnGregorian(toAstro(y),m,d)+1)%7;
     const fmtYear = y => y>0?String(y):`${Math.abs(y)} BC`;
     const fmt=(y,m,d)=> `${MONTH[m-1]} ${d}, ${fmtYear(y)}`;
     const rint=(a,b)=>Math.floor(Math.random()*(b-a+1))+a;
@@ -77,7 +77,6 @@
         <div className="text-lg font-semibold tabular-nums">{disabled?'—':value}</div>
       </div>
     );
-    /* Tight 2/5 style (no spaces) and same sizing as Score */
     const StatTwo=({label,left,right,disabled})=>(
       <div className={`px-3 py-2 rounded-xl panel text-center ${disabled?'opacity-60':''}`}>
         <div className="text-[12px] text-purple-200/80">{label}</div>
@@ -122,6 +121,9 @@
       const [trackClassic,setTrackClassic]=useState(false); // default: Disable avg time ON
       const [trackDed,setTrackDed]=useState(false);
 
+      // timing ref for averages (this was missing and caused the crash)
+      const tStartRef=useRef(null);
+
       // feedback flash
       const [flash,setFlash]=useState(null);
       function pulse(type,idx,after=()=>{}){ setFlash({type,idx}); setTimeout(()=>{ setFlash(null); after(); },450); }
@@ -141,16 +143,16 @@
       const flashDeadlineRef=useRef(null);
 
       // deduction
-      const [dedType,setDedType]=useState("year"); // 'year'|'month'|'day'
+      const [dedType,setDedType]=useState("year");
       const [ded,setDed]=useState(null);
-      const [dedFlash,setDedFlash]=useState(null); // {kind:'year'|'month'|'day', value:number, ok:boolean}
+      const [dedFlash,setDedFlash]=useState(null);
 
       // only-once wrong counter per date
       const [countedWrong,setCountedWrong]=useState(false);
 
       const inputRef=useRef(null), [input,setInput]=useState("");
 
-      /* ---------- robust reporter (component context) ---------- */
+      /* ---------- robust reporter ---------- */
       function reportError(err, ctx={}){
         try{
           const x=document.getElementById('errors'); if(!x) return;
@@ -178,9 +180,7 @@
         });
       };
 
-      const resetStatsCurrent=()=>{
-        setStatsByMode(prev=>({...prev,[mode]:blankStats()}));
-      };
+      const resetStatsCurrent=()=>{ setStatsByMode(prev=>({...prev,[mode]:blankStats()})); };
 
       // Re-enable avg time tracking -> reset average for that mode
       const prevTrackClassic=useRef(trackClassic);
@@ -214,7 +214,7 @@
         return ()=>document.removeEventListener("visibilitychange", onVis);
       },[blitzRunning]);
 
-      /* ---- timers loop (gated) ---- */
+      /* ---- timers loop ---- */
       useEffect(()=>{
         const needLoop = (blitzRunning || (mode==="sudden" && qDeadlineRef.current) || (mode==="flash" && active && phase==='show'));
         if(!needLoop) return;
@@ -251,6 +251,7 @@
       const toggleStatsOff=(on)=>{ setStatsOff(on); }; // hide/unhide only
 
       const arm=()=>{ try{
+        __hideErr(); // clear any prior error banner
         setActive(false); setMsg(""); setGuesses([]); setStatus(null); setFlash(null);
         setCountedWrong(false);
         setPhase('dash'); clearTimeout(flashTimerRef.current);
@@ -261,6 +262,7 @@
       }catch(e){ reportError(e,{where:'arm'}); }};
 
       const begin=()=>{ try{
+        __hideErr();
         setActive(true); setMsg("");
         if(mode==="blitz"){ blitzStartRef.current=performance.now(); blitzPausedAccRef.current=0; blitzPausedAtRef.current=null; setBlitzRunning(true); setBlitzRemain(blitzSec); }
         if(mode==="sudden"){ const now=performance.now(); qDeadlineRef.current=now + qSec*1000; qPausedAccRef.current=0; qPausedAtRef.current=null; setQRemain(qSec); }
@@ -523,7 +525,7 @@
             <div className="relative">
               <select
                 value={mode}
-                onChange={e=>setMode(e.target.value)}
+                onChange={e=>{ __hideErr(); setMode(e.target.value); }}
                 className="panel rounded-xl px-2.5 py-2 pr-8 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 appearance-none"
               >
                 <option value="classic">Classic</option>
