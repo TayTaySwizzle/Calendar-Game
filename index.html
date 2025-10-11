@@ -23,7 +23,6 @@
     .chip{background:rgba(120,53,175,.25);border:1px solid rgba(120,53,175,.45);padding:.25rem .5rem;border-radius:.75rem;font-size:12px}
     .bar{height:6px;border-radius:6px;overflow:hidden;background:rgba(120,53,175,.25);border:1px solid rgba(120,53,175,.45)}
     .bar>span{display:block;height:100%;background:linear-gradient(90deg,#a855f7,#7c3aed)}
-    /* smooth expand/collapse for year-range */
     .expander{transition:max-height .45s ease;overflow:hidden}
   </style>
 </head>
@@ -31,7 +30,7 @@
   <div id="root" class="min-h-screen w-full">Loading…</div>
   <pre id="errors" style="display:none;white-space:pre-wrap;background:#2b0f3a;border:1px solid #7e22ce;color:#fca5a5;padding:.75rem;border-radius:.75rem;margin:1rem;max-width:64rem"></pre>
 
-  <!-- FIXED: removed optional chaining from this script -->
+  <!-- Safe error handler (no optional chaining) -->
   <script>
     function __errBox(){ return document.getElementById('errors'); }
     function __hideErr(){ var x=__errBox(); if(x){ x.style.display='none'; x.textContent=''; } }
@@ -145,8 +144,12 @@
 
       const inputRef=useRef(null), [input,setInput]=useState("");
 
+      // helpers to avoid optional chaining
+      const focusInput = ()=>{ var el=inputRef.current; if(el && el.focus) el.focus(); };
+      const blurActive = ()=>{ try{ var a=document.activeElement; if(a && a.blur) a.blur(); }catch(e){} };
+
       /* ---------- helpers ---------- */
-      useEffect(()=>{ if(!isTouch) inputRef.current?.focus(); else document.activeElement?.blur(); },[date,mode,active]);
+      useEffect(()=>{ if(!isTouch) focusInput(); else blurActive(); },[date,mode,active]);
 
       const updateStats = (mutator)=>{
         setStatsByMode(prev=>{
@@ -434,19 +437,13 @@
         let val = snapYear(sanitizeForEra(+v, era), era);
         if(era==='AD'){ setAdRange(r=>({...r,min:Math.min(val,maxY)})); setMinY(Math.min(val,maxY)); }
         else if(era==='BC'){ setBcRange(r=>({...r,min:val})); setMinY(Math.min(val,maxY)); }
-        else { // BOTH
-          const clamped = val===0?100:val;
-          setMinY(Math.min(clamped,maxY));
-        }
+        else { const clamped = val===0?100:val; setMinY(Math.min(clamped,maxY)); }
       }
       function setMaxActive(v){
         let val = snapYear(sanitizeForEra(+v, era), era);
         if(era==='AD'){ val=Math.max(val,minY,100); setAdRange(r=>({...r,max:val})); setMaxY(val); }
         else if(era==='BC'){ setBcRange(r=>({...r,max:val})); setMaxY(Math.max(val,minY)); }
-        else { // BOTH
-          const clamped = val===0?100:val;
-          setMaxY(Math.max(clamped,minY));
-        }
+        else { const clamped = val===0?100:val; setMaxY(Math.max(clamped,minY)); }
       }
 
       const showDash = isTimer(mode) && !active;
@@ -518,7 +515,7 @@
         const d=DAY[wday(yy,mm,dd)];
         setLookupOut(`${MONTH[mm-1]} ${dd}, ${fmtYear(yy)} is a ${d}.`);
       }
-      function clearLookup(){ setLookupIn(""); if(document.activeElement) document.activeElement.blur(); }
+      function clearLookup(){ setLookupIn(""); blurActive(); }
 
       /* ------------------ render ------------------ */
       const scoreStr = `${S.good}/${S.played}`;
@@ -683,7 +680,7 @@
                 <div className={`mt-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3 ${(!active && isTimer(mode))?'opacity-60 pointer-events-none':''}`}>
                   {DAY.map((n,i)=>(
                     <button key={n}
-                      onPointerDown={(e)=>{ e.preventDefault(); submitDoW(i); setInput(""); if(isTouch) document.activeElement?.blur(); }}
+                      onPointerDown={(e)=>{ e.preventDefault(); submitDoW(i); setInput(""); if(isTouch) blurActive(); }}
                       className={`${baseBtn} ${flash && flash.idx===i ? (flash.type==='good'?'flash-good':'flash-bad')+' border-transparent' : idleBtn}`}>{n}</button>
                   ))}
                 </div>
