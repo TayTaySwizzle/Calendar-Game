@@ -30,7 +30,23 @@
   <div id="root" class="min-h-screen w-full">Loading…</div>
   <pre id="errors" style="display:none;white-space:pre-wrap;background:#2b0f3a;border:1px solid #7e22ce;color:#fca5a5;padding:.75rem;border-radius:.75rem;margin:1rem;max-width:64rem"></pre>
 
-  <script>addEventListener('error',e=>{const x=document.getElementById('errors');x.style.display='block';x.textContent='⚠️ '+(e.error?.message||e.message)});addEventListener('unhandledrejection',e=>{const x=document.getElementById('errors');x.style.display='block';x.textContent='⚠️ '+(e.reason?.message||String(e.reason))});</script>
+  <!-- Robust global error messages with stack + location -->
+  <script>
+    const __errBox = () => document.getElementById('errors');
+    window.addEventListener('error', e=>{
+      const x=__errBox(); if(!x) return;
+      x.style.display='block';
+      const loc = e.filename? `\n at ${e.filename}:${e.lineno}:${e.colno}` : '';
+      x.textContent = `⚠️ ${e.message||String(e)}${loc}\n${e.error?.stack||''}`;
+    });
+    window.addEventListener('unhandledrejection', e=>{
+      const x=__errBox(); if(!x) return;
+      x.style.display='block';
+      const msg = e.reason?.message || String(e.reason);
+      x.textContent = `⚠️ Promise rejection: ${msg}\n${e.reason?.stack||''}`;
+    });
+  </script>
+
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -55,10 +71,25 @@
     const isTimer = m => m==="blitz"||m==="sudden"||m==="flash" ;
 
     /* ---------- atoms ---------- */
-    const Stat=({label,value,disabled})=>(<div className={`px-3 py-2 rounded-xl panel text-center ${disabled?'opacity-60':''}`}><div className="text-[12px] text-purple-200/80">{label}</div><div className="text-lg font-semibold tabular-nums">{disabled?'—':value}</div></div>);
-    /* (4) match font size with Score */
-    const StatTwo=({label,left,right,disabled})=>(<div className={`px-3 py-2 rounded-xl panel text-center ${disabled?'opacity-60':''}`}><div className="text-[12px] text-purple-200/80">{label}</div><div className="text-lg font-semibold mt-0.5 tabular-nums">{disabled?'—':(<><span>{left}</span><span className="mx-1 opacity-70">/</span><span>{right}</span></>)}</div></div>);
-    const Pill=({ok,label})=>{const cls=ok?"bg-emerald-500/20 text-emerald-200 border border-emerald-500/40":"bg-rose-500/20 text-rose-200 border border-rose-500/40";return <span className={`px-2.5 py-1 rounded-lg text-xs font-medium ${cls}`}>{label}</span>;};
+    const Stat=({label,value,disabled})=>(
+      <div className={`px-3 py-2 rounded-xl panel text-center ${disabled?'opacity-60':''}`}>
+        <div className="text-[12px] text-purple-200/80">{label}</div>
+        <div className="text-lg font-semibold tabular-nums">{disabled?'—':value}</div>
+      </div>
+    );
+    /* Tight 2/5 style (no spaces) and same sizing as Score */
+    const StatTwo=({label,left,right,disabled})=>(
+      <div className={`px-3 py-2 rounded-xl panel text-center ${disabled?'opacity-60':''}`}>
+        <div className="text-[12px] text-purple-200/80">{label}</div>
+        <div className="text-lg font-semibold tabular-nums">
+          {disabled?'—':`${left}/${right}`}
+        </div>
+      </div>
+    );
+    const Pill=({ok,label})=>{
+      const cls=ok?"bg-emerald-500/20 text-emerald-200 border border-emerald-500/40":"bg-rose-500/20 text-rose-200 border border-rose-500/40";
+      return <span className={`px-2.5 py-1 rounded-lg text-xs font-medium ${cls}`}>{label}</span>;
+    };
 
     /* ======================= App ======================= */
     function App(){
@@ -72,21 +103,23 @@
 
       // Date + stacks
       const [date,setDate]=useState(()=>randomDate(1,10000));
-      const [stack,setStack]=useState([]);            // classic/timers history
-      const [dedStack,setDedStack]=useState([]);      // deduction history
+      const [stack,setStack]=useState([]);        // classic/timers history
+      const [dedStack,setDedStack]=useState([]);  // deduction history
 
       const correct=useMemo(()=>wday(date.y,date.m,date.d),[date]);
       const [guesses,setGuesses]=useState([]); const [status,setStatus]=useState(null);
       const [msg,setMsg]=useState("");
 
-      // stats
-      const [statsOff,setStatsOff]=useState(false);
-      const [played,setPlayed]=useState(0), [good,setGood]=useState(0);
-      const [streak,setStreak]=useState(0), [best,setBest]=useState(0);
-      const [timeSum,setTimeSum]=useState(0), [timeCnt,setTimeCnt]=useState(0);
-      const tStartRef=useRef(null);
-      /* (1) Disable avg time enabled by default -> tracking OFF initially */
-      const [trackClassic,setTrackClassic]=useState(false);
+      // Stats-by-mode (per-page stats)
+      const blankStats=()=>({played:0,good:0,streak:0,best:0,timeSum:0,timeCnt:0});
+      const [statsByMode,setStatsByMode]=useState({
+        classic:blankStats(), blitz:blankStats(), sudden:blankStats(), flash:blankStats(), deduction:blankStats()
+      });
+      const S = statsByMode[mode] || blankStats();
+
+      // Tracking toggles
+      const [statsOff,setStatsOff]=useState(false);         // hide/unhide only
+      const [trackClassic,setTrackClassic]=useState(false); // default: Disable avg time ON
       const [trackDed,setTrackDed]=useState(false);
 
       // feedback flash
@@ -100,24 +133,70 @@
       const qDeadlineRef=useRef(null), qPausedAtRef=useRef(null), qPausedAccRef=useRef(0);
       const [active,setActive]=useState(false);
 
-      // flash mode
+      // flash mode timers
       const [flashMs,setFlashMs]=useState(1200);
       const [phase,setPhase]=useState('dash'); // 'dash' | 'show' | 'hide'
       const flashTimerRef=useRef(null);
-      /* (5) flash countdown for bar */
       const [flashRemainMs,setFlashRemainMs]=useState(1200);
       const flashDeadlineRef=useRef(null);
 
       // deduction
       const [dedType,setDedType]=useState("year"); // 'year'|'month'|'day'
       const [ded,setDed]=useState(null);
+      const [dedFlash,setDedFlash]=useState(null); // {kind:'year'|'month'|'day', value:number, ok:boolean}
 
-      // Count wrong only once per date
+      // only-once wrong counter per date
       const [countedWrong,setCountedWrong]=useState(false);
 
       const inputRef=useRef(null), [input,setInput]=useState("");
 
+      /* ---------- robust reporter (component context) ---------- */
+      function reportError(err, ctx={}){
+        try{
+          const x=document.getElementById('errors'); if(!x) return;
+          const msg = err?.message || String(err);
+          const stack = err?.stack || '';
+          const details = {
+            mode, dedType, phase, active, includeBC,
+            date, range:{minY,maxY},
+            stats:(statsByMode[mode]||{}),
+            ctx
+          };
+          x.style.display='block';
+          x.textContent = `⚠️ ${msg}\n${stack}\n\nDetails:\n${JSON.stringify(details,null,2)}`;
+        }catch(_){}
+      }
+
+      /* ---------- helpers ---------- */
       useEffect(()=>{ if(!isTouch) inputRef.current?.focus(); else document.activeElement?.blur(); },[date,mode,active]);
+
+      const updateStats = (mutator)=>{
+        setStatsByMode(prev=>{
+          const cur={...(prev[mode]||blankStats())};
+          mutator(cur);
+          return {...prev,[mode]:cur};
+        });
+      };
+
+      const resetStatsCurrent=()=>{
+        setStatsByMode(prev=>({...prev,[mode]:blankStats()}));
+      };
+
+      // Re-enable avg time tracking -> reset average for that mode
+      const prevTrackClassic=useRef(trackClassic);
+      useEffect(()=>{
+        if(prevTrackClassic.current===false && trackClassic===true){
+          setStatsByMode(prev=>({...prev, classic:{...(prev.classic||blankStats()), timeSum:0, timeCnt:0}}));
+        }
+        prevTrackClassic.current=trackClassic;
+      },[trackClassic]);
+      const prevTrackDed=useRef(trackDed);
+      useEffect(()=>{
+        if(prevTrackDed.current===false && trackDed===true){
+          setStatsByMode(prev=>({...prev, deduction:{...(prev.deduction||blankStats()), timeSum:0, timeCnt:0}}));
+        }
+        prevTrackDed.current=trackDed;
+      },[trackDed]);
 
       /* ---- visibility pause ---- */
       useEffect(()=>{
@@ -141,37 +220,37 @@
         if(!needLoop) return;
         let raf;
         const loop=()=>{
-          const now=performance.now();
-          if(blitzRunning && blitzStartRef.current){
-            const t=(now - blitzStartRef.current - blitzPausedAccRef.current)/1000;
-            const r=Math.max(0, blitzSec - t);
-            setBlitzRemain(r);
-            if(r<=.001){ setBlitzRunning(false); setActive(false); setMsg("Time!"); }
-          }
-          if(mode==="sudden" && qDeadlineRef.current){
-            const r=Math.max(0, (qDeadlineRef.current + qPausedAccRef.current - now)/1000);
-            setQRemain(r);
-            if(r<=.001){ qDeadlineRef.current=null; if(!statsOff){ setPlayed(p=>p+1); setStreak(0);} setStatus('incorrect'); setMsg(`Time! Answer: ${DAY[correct]}. Game over.`); setActive(false); }
-          }
-          /* (5) flash bar countdown */
-          if(mode==="flash" && active && phase==='show' && flashDeadlineRef.current){
-            const rem = Math.max(0, flashDeadlineRef.current - now);
-            setFlashRemainMs(rem);
-          }
+          try{
+            const now=performance.now();
+            if(blitzRunning && blitzStartRef.current){
+              const t=(now - blitzStartRef.current - blitzPausedAccRef.current)/1000;
+              const r=Math.max(0, blitzSec - t);
+              setBlitzRemain(r);
+              if(r<=.001){ setBlitzRunning(false); setActive(false); setMsg("Time!"); }
+            }
+            if(mode==="sudden" && qDeadlineRef.current){
+              const r=Math.max(0, (qDeadlineRef.current + qPausedAccRef.current - now)/1000);
+              setQRemain(r);
+              if(r<=.001){
+                qDeadlineRef.current=null;
+                updateStats(cur=>{ cur.played+=1; cur.streak=0; });
+                setStatus('incorrect'); setMsg(`Time! Answer: ${DAY[correct]}. Game over.`); setActive(false);
+              }
+            }
+            if(mode==="flash" && active && phase==='show' && flashDeadlineRef.current){
+              const rem = Math.max(0, flashDeadlineRef.current - now);
+              setFlashRemainMs(rem);
+            }
+          }catch(e){ reportError(e,{where:'raf-loop'}); }
           raf=requestAnimationFrame(loop);
         };
         raf=requestAnimationFrame(loop);
         return ()=>cancelAnimationFrame(raf);
       },[mode,blitzSec,statsOff,blitzRunning,active,phase]);
 
-      /* ---- helpers ---- */
-      const resetStats=()=>{ setPlayed(0); setGood(0); setStreak(0); setBest(0); setMsg(""); setGuesses([]); setStatus(null); setTimeSum(0); setTimeCnt(0); };
-      const toggleStatsOff=(on)=>{
-        setStatsOff(on);
-        resetStats();
-      };
+      const toggleStatsOff=(on)=>{ setStatsOff(on); }; // hide/unhide only
 
-      const arm=()=>{ // prepare timers; hide date
+      const arm=()=>{ try{
         setActive(false); setMsg(""); setGuesses([]); setStatus(null); setFlash(null);
         setCountedWrong(false);
         setPhase('dash'); clearTimeout(flashTimerRef.current);
@@ -179,9 +258,9 @@
         qDeadlineRef.current=null; qPausedAtRef.current=null; qPausedAccRef.current=0; setQRemain(qSec);
         flashDeadlineRef.current=null; setFlashRemainMs(flashMs);
         tStartRef.current=null;
-      };
+      }catch(e){ reportError(e,{where:'arm'}); }};
 
-      const begin=()=>{
+      const begin=()=>{ try{
         setActive(true); setMsg("");
         if(mode==="blitz"){ blitzStartRef.current=performance.now(); blitzPausedAccRef.current=0; blitzPausedAtRef.current=null; setBlitzRunning(true); setBlitzRemain(blitzSec); }
         if(mode==="sudden"){ const now=performance.now(); qDeadlineRef.current=now + qSec*1000; qPausedAccRef.current=0; qPausedAtRef.current=null; setQRemain(qSec); }
@@ -195,158 +274,203 @@
         }
         tStartRef.current=performance.now();
         pushAndNext();
-      };
+      }catch(e){ reportError(e,{where:'begin'}); }};
 
       function pushAndNext(){
-        if(mode==="classic"){
-          setStack(s=>[...s,{...date}]);
-          setDate(randomDate(minY,maxY));
-          setGuesses([]); setStatus(null);
-          setCountedWrong(false);
-          if(trackClassic){ tStartRef.current=performance.now(); }
-        }
-        if(mode==="flash"||mode==="blitz"||mode==="sudden"){
-          setStack(s=>[...s,{...date}]);
-          setDate(randomDate(minY,maxY));
-          setGuesses([]); setStatus(null);
-          setCountedWrong(false);
-        }
-        if(mode==="deduction"){ setDedStack(s=>[...s, ded]); spawnDed(); }
+        try{
+          if(mode==="classic"){
+            setStack(s=>[...s,{...date}]);
+            setDate(randomDate(minY,maxY));
+            setGuesses([]); setStatus(null);
+            setCountedWrong(false);
+            if(trackClassic){ tStartRef.current=performance.now(); }
+          }
+          if(mode==="flash"||mode==="blitz"||mode==="sudden"){
+            setStack(s=>[...s,{...date}]);
+            setDate(randomDate(minY,maxY));
+            setGuesses([]); setStatus(null);
+            setCountedWrong(false);
+          }
+          if(mode==="deduction"){ setDedStack(s=>[...s, ded]); spawnDed(); }
+        }catch(e){ reportError(e,{where:'pushAndNext'}); }
       }
 
       useEffect(()=>{ if(mode==="classic" && trackClassic) tStartRef.current=performance.now(); },[mode,trackClassic,date]);
 
       const trackOn = ()=> isTimer(mode) || (mode==="classic"&&trackClassic) || (mode==="deduction"&&trackDed);
 
-      const doNew=()=>{ if(isTimer(mode) && !active){ setMsg("Press Begin to start."); return; } setMsg("New."); setStatus(null); setGuesses([]); pushAndNext(); };
+      const doNew=()=>{ try{
+        if(isTimer(mode) && !active){ setMsg("Press Begin to start."); return; }
+        setMsg("New."); setStatus(null); setGuesses([]); pushAndNext();
+      }catch(e){ reportError(e,{where:'doNew'}); }};
 
       function reveal(){
-        if(mode==="deduction"){
-          if(!ded) return;
-          if(!statsOff){ setPlayed(p=>p+1); setStreak(0); }
-          const ans = ded.type==="year" ? fmtYear(ded.y)
-                    : ded.type==="month" ? MONTH[ded.m-1]
-                    : String(ded.d);
-          setMsg(`Answer: ${ans}.`);
-          setStatus('incorrect');
-          return;
-        }
-        if(!statsOff && !countedWrong){ setPlayed(p=>p+1); setStreak(0); }
-        setCountedWrong(true);
-        setMsg(`Answer: ${DAY[correct]}.`); setStatus('incorrect');
+        try{
+          if(mode==="deduction"){
+            if(!ded) return;
+            if(!statsOff){ updateStats(cur=>{ cur.played+=1; cur.streak=0; }); }
+            const ans = ded.type==="year" ? fmtYear(ded.y)
+                      : ded.type==="month" ? MONTH[ded.m-1]
+                      : String(ded.d);
+            setMsg(`Answer: ${ans}.`);
+            setStatus('incorrect');
+            return;
+          }
+          if(!statsOff && !countedWrong){ updateStats(cur=>{ cur.played+=1; cur.streak=0; }); }
+          setCountedWrong(true);
+          setMsg(`Answer: ${DAY[correct]}.`); setStatus('incorrect');
 
-        /* (5) In flash, Reveal also resets to dash/begin */
-        if(mode==="flash"){
-          clearTimeout(flashTimerRef.current);
-          setPhase('dash');
-          setActive(false);
-          flashDeadlineRef.current=null;
-          setFlashRemainMs(flashMs);
-        }
+          if(mode==="flash"){
+            clearTimeout(flashTimerRef.current);
+            setPhase('dash');
+            setActive(false);
+            flashDeadlineRef.current=null;
+            setFlashRemainMs(flashMs);
+          }
+        }catch(e){ reportError(e,{where:'reveal'}); }
       }
 
       function goBack(){
-        if(mode==="deduction"){
-          const prev = dedStack[dedStack.length-1]; if(!prev){ setMsg("Nothing to go back to."); return; }
-          setDedStack(s=>s.slice(0,-1)); setDed(prev);
-          const ans = prev.type==="year" ? fmtYear(prev.y) : prev.type==="month" ? MONTH[prev.m-1] : String(prev.d);
-          setMsg(`Answer: ${ans}.`);
-          setStatus(null); return;
-        }
-        const prev = stack[stack.length-1]; if(!prev){ setMsg("Nothing to go back to."); return; }
-        setStack(s=>s.slice(0,-1)); setDate(prev);
-        setCountedWrong(false);
-        setMsg(`Answer: ${DAY[wday(prev.y,prev.m,prev.d)]}.`); setStatus(null); setGuesses([]);
+        try{
+          if(mode==="deduction"){
+            const prev = dedStack[dedStack.length-1]; if(!prev){ setMsg("Nothing to go back to."); return; }
+            setDedStack(s=>s.slice(0,-1)); setDed(prev);
+            const ans = prev.type==="year" ? fmtYear(prev.y) : prev.type==="month" ? MONTH[prev.m-1] : String(prev.d);
+            setMsg(`Answer: ${ans}.`);
+            setStatus(null); return;
+          }
+          const prev = stack[stack.length-1]; if(!prev){ setMsg("Nothing to go back to."); return; }
+          setStack(s=>s.slice(0,-1)); setDate(prev);
+          setCountedWrong(false);
+          setMsg(`Answer: ${DAY[wday(prev.y,prev.m,prev.d)]}.`); setStatus(null); setGuesses([]);
+        }catch(e){ reportError(e,{where:'goBack'}); }
       }
 
       function submitDoW(val){
-        if(isTimer(mode) && !active){ setMsg("Press Begin to start."); return; }
-        const idx = typeof val==="number"?val: Number(val);
-        if(idx===wday(date.y,date.m,date.d)){
-          if(!statsOff && tStartRef.current && trackOn()){ const dt=(performance.now()-tStartRef.current)/1000; setTimeSum(s=>s+dt); setTimeCnt(c=>c+1); }
-          if(!statsOff){ setPlayed(p=>p+1); setGood(c=>c+1); setStreak(s=>{const ns=s+1; if(ns>best) setBest(ns); return ns;}); }
-          setStatus('correct'); pulse('good',idx,()=>pushAndNext());
-        }else{
-          if(!statsOff && !countedWrong){ setPlayed(p=>p+1); setStreak(0); }
-          setCountedWrong(true);
-          setStatus('incorrect'); setGuesses(g=>g.includes(DAY[idx])?g:[...g,DAY[idx]]);
-          if(mode==="sudden"){ setMsg(`Answer: ${DAY[correct]}. Game over.`); setActive(false); }
-          pulse('bad',idx);
-        }
+        try{
+          if(isTimer(mode) && !active){ setMsg("Press Begin to start."); return; }
+          const idx = typeof val==="number"?val: Number(val);
+          if(idx===wday(date.y,date.m,date.d)){
+            if(!statsOff && tStartRef.current && trackOn()){
+              const dt=(performance.now()-tStartRef.current)/1000;
+              updateStats(cur=>{ cur.timeSum+=dt; cur.timeCnt+=1; });
+            }
+            if(!statsOff){
+              updateStats(cur=>{
+                cur.played+=1; cur.good+=1; cur.streak+=1; if(cur.streak>cur.best) cur.best=cur.streak;
+              });
+            }
+            setStatus('correct'); pulse('good',idx,()=>pushAndNext());
+          }else{
+            if(!statsOff && !countedWrong){ updateStats(cur=>{ cur.played+=1; cur.streak=0; }); }
+            setCountedWrong(true);
+            setStatus('incorrect'); setGuesses(g=>g.includes(DAY[idx])?g:[...g,DAY[idx]]);
+            if(mode==="sudden"){ setMsg(`Answer: ${DAY[correct]}. Game over.`); setActive(false); }
+            pulse('bad',idx);
+          }
+        }catch(e){ reportError(e,{where:'submitDoW', val}); }
       }
 
       /* --------- Deduction generation ---------- */
       function spawnDed(){
-        if(dedType==="year"){
-          let m=rint(1,12), d=rint(1,31), y, w;
-          for(;;){ y=rint(minY,maxY); if(y===0||d>dim(y,m)) continue; w=wday(y,m,d); break; }
-          function neighbor(dir){ const step=dir>0?1:-1;
-            for(let k=1;k<=800;k++){ let yy=y+k*step; if(yy===0) yy+=step; if(yy<minY||yy>maxY) break; if(d<=dim(yy,m) && wday(yy,m,d)===w) return yy; }
-            return null;
+        try{
+          if(dedType==="year"){
+            let m=rint(1,12), d=rint(1,31), y, w;
+            for(;;){ y=rint(minY,maxY); if(y===0||d>dim(y,m)) continue; w=wday(y,m,d); break; }
+            function neighbor(dir){ const step=dir>0?1:-1;
+              for(let k=1;k<=800;k++){ let yy=y+k*step; if(yy===0) yy+=step; if(yy<minY||yy>maxY) break; if(d<=dim(yy,m) && wday(yy,m,d)===w) return yy; }
+              return null;
+            }
+            const L=neighbor(-1), U=neighbor(+1);
+            let a=L==null?minY:Math.max(minY, L+1), b=U==null?maxY:Math.min(maxY, U-1); if(a===0) a=1; if(b===0) b=-1; if(a>b){a=b=y;}
+            setDed({type:"year",m,d,w,y, a,b});
+            return;
           }
-          const L=neighbor(-1), U=neighbor(+1);
-          let a=L==null?minY:Math.max(minY, L+1), b=U==null?maxY:Math.min(maxY, U-1); if(a===0) a=1; if(b===0) b=-1; if(a>b){a=b=y;}
-          setDed({type:"year",m,d,w,y, a,b});
-          return;
-        }
-        if(dedType==="month"){
-          for(;;){
-            let y=rint(minY,maxY); if(y===0) continue;
-            let d=rint(1,31); let w=rint(0,6);
-            const cands=[]; for(let m=1;m<=12;m++){ if(d<=dim(y,m) && wday(y,m,d)===w) cands.push(m); }
-            if(cands.length===1){ setDed({type:"month",y,d,w,m:cands[0]}); return; }
+          if(dedType==="month"){
+            for(;;){
+              let y=rint(minY,maxY); if(y===0) continue;
+              let d=rint(1,31); let w=rint(0,6);
+              const cands=[]; for(let m=1;m<=12;m++){ if(d<=dim(y,m) && wday(y,m,d)===w) cands.push(m); }
+              if(cands.length===1){ setDed({type:"month",y,d,w,m:cands[0]}); return; }
+            }
           }
-        }
-        if(dedType==="day"){
-          let y=rint(minY,maxY); if(y===0) y+= (y<0?1:-1);
-          let m=rint(1,12); const D=dim(y,m);
-          let d=rint(1,D); const w=wday(y,m,d);
-          const bad=[]; for(let k=1;k<=D;k++){ if(k!==d && wday(y,m,k)!==w) bad.push(k); }
-          const pickCount=Math.min(10, 1+bad.length);
-          const picks=new Set([d]);
-          while(picks.size<pickCount){ picks.add(bad[rint(0,bad.length-1)]); }
-          const opts=[...picks]; for(let i=opts.length-1;i>0;i--){ const j=rint(0,i); [opts[i],opts[j]]=[opts[j],opts[i]]; }
-          setDed({type:"day",y,m,w,d, options:opts});
-        }
+          if(dedType==="day"){
+            let y=rint(minY,maxY); if(y===0) y+= (y<0?1:-1);
+            let m=rint(1,12); const D=dim(y,m);
+            let d=rint(1,D); const w=wday(y,m,d);
+            const bad=[]; for(let k=1;k<=D;k++){ if(k!==d && wday(y,m,k)!==w) bad.push(k); }
+            const pickCount=Math.min(10, 1+bad.length);
+            const picks=new Set([d]);
+            while(picks.size<pickCount){ picks.add(bad[rint(0,bad.length-1)]); }
+            const opts=[...picks]; for(let i=opts.length-1;i>0;i--){ const j=rint(0,i); [opts[i],opts[j]]=[opts[j],opts[i]]; }
+            setDed({type:"day",y,m,w,d, options:opts});
+          }
+        }catch(e){ reportError(e,{where:'spawnDed'}); }
+      }
+
+      function flashDed(kind,value,ok){
+        setDedFlash({kind,value,ok});
+        setTimeout(()=>setDedFlash(null),450);
       }
 
       function submitDedAnswer(val){
-        if(!ded) return;
-        if(ded.type==="year"){
-          const ok = (+val)===ded.y;
-          if(ok){ if(!statsOff && trackDed && tStartRef.current){ const dt=(performance.now()-tStartRef.current)/1000; setTimeSum(s=>s+dt); setTimeCnt(c=>c+1); }
-            if(!statsOff){ setPlayed(p=>p+1); setGood(c=>c+1); setStreak(s=>{const ns=s+1; if(ns>best) setBest(ns); return ns;}); } setStatus('correct'); spawnDed();
-          }else{ if(!statsOff){ setPlayed(p=>p+1); setStreak(0); } setStatus('incorrect'); }
-        }
-        if(ded.type==="month"){
-          const ok = (+val)===ded.m;
-          if(ok){ if(!statsOff && trackDed && tStartRef.current){ const dt=(performance.now()-tStartRef.current)/1000; setTimeSum(s=>s+dt); setTimeCnt(c=>c+1); }
-            if(!statsOff){ setPlayed(p=>p+1); setGood(c=>c+1); setStreak(s=>{const ns=s+1; if(ns>best) setBest(ns); return ns;}); } setStatus('correct'); spawnDed();
-          }else{ if(!statsOff){ setPlayed(p=>p+1); setStreak(0); } setStatus('incorrect'); }
-        }
-        if(ded.type==="day"){
-          const ok = (+val)===ded.d;
-          if(ok){ if(!statsOff && trackDed && tStartRef.current){ const dt=(performance.now()-tStartRef.current)/1000; setTimeSum(s=>s+dt); setTimeCnt(c=>c+1); }
-            if(!statsOff){ setPlayed(p=>p+1); setGood(c=>c+1); setStreak(s=>{const ns=s+1; if(ns>best) setBest(ns); return ns;}); } setStatus('correct'); spawnDed();
-          }else{ if(!statsOff){ setPlayed(p=>p+1); setStreak(0); } setStatus('incorrect'); }
-        }
+        try{
+          if(!ded) return;
+          if(ded.type==="year"){
+            const ok = (+val)===ded.y; flashDed('year', +val, ok);
+            if(ok){
+              if(!statsOff && trackDed && tStartRef.current){ const dt=(performance.now()-tStartRef.current)/1000; updateStats(cur=>{cur.timeSum+=dt; cur.timeCnt+=1;}); }
+              if(!statsOff){ updateStats(cur=>{ cur.played+=1; cur.good+=1; cur.streak+=1; if(cur.streak>cur.best) cur.best=cur.streak; }); }
+              setStatus('correct'); spawnDed();
+            }else{ if(!statsOff){ updateStats(cur=>{ cur.played+=1; cur.streak=0; }); } setStatus('incorrect'); }
+          }
+          if(ded.type==="month"){
+            const ok = (+val)===ded.m; flashDed('month', +val, ok);
+            if(ok){
+              if(!statsOff && trackDed && tStartRef.current){ const dt=(performance.now()-tStartRef.current)/1000; updateStats(cur=>{cur.timeSum+=dt; cur.timeCnt+=1;}); }
+              if(!statsOff){ updateStats(cur=>{ cur.played+=1; cur.good+=1; cur.streak+=1; if(cur.streak>cur.best) cur.best=cur.streak; }); }
+              setStatus('correct'); spawnDed();
+            }else{ if(!statsOff){ updateStats(cur=>{ cur.played+=1; cur.streak=0; }); } setStatus('incorrect'); }
+          }
+          if(ded.type==="day"){
+            const ok = (+val)===ded.d; flashDed('day', +val, ok);
+            if(ok){
+              if(!statsOff && trackDed && tStartRef.current){ const dt=(performance.now()-tStartRef.current)/1000; updateStats(cur=>{cur.timeSum+=dt; cur.timeCnt+=1;}); }
+              if(!statsOff){ updateStats(cur=>{ cur.played+=1; cur.good+=1; cur.streak+=1; if(cur.streak>cur.best) cur.best=cur.streak; }); }
+              setStatus('correct'); spawnDed();
+            }else{ if(!statsOff){ updateStats(cur=>{ cur.played+=1; cur.streak=0; }); } setStatus('incorrect'); }
+          }
+        }catch(e){ reportError(e,{where:'submitDedAnswer', val}); }
       }
 
       /* ---- mode changes ---- */
-      useEffect(()=>{ arm(); setGuesses([]); setStatus(null); setStack([]); setDedStack([]); setMsg("");
+      useEffect(()=>{ try{
+        arm(); setGuesses([]); setStatus(null); setStack([]); setDedStack([]); setMsg("");
         if(mode==="deduction"){ setPhase('dash'); spawnDed(); }
-      },[mode]);
-      useEffect(()=>{ spawnDed(); },[dedType]);
+      }catch(e){ reportError(e,{where:'mode-switch'}); }},[mode]);
+      useEffect(()=>{ try{ if(mode==="deduction") spawnDed(); }catch(e){ reportError(e,{where:'dedType-switch'}); } },[dedType]);
 
       /* ---- range/BC ---- */
       function toggleBC(ch){
-        setIncludeBC(ch);
-        if(ch){ setMinY(bcRange.min); setMaxY(bcRange.max); setDate(randomDate(bcRange.min,bcRange.max)); }
-        else{ const mn=Math.max(1,adRange.min); setMinY(mn); setMaxY(adRange.max); setDate(randomDate(mn,adRange.max)); }
-        if(mode==="deduction") spawnDed();
+        try{
+          setIncludeBC(ch);
+          if(ch){ setMinY(bcRange.min); setMaxY(bcRange.max); setDate(randomDate(bcRange.min,bcRange.max)); }
+          else{ const mn=Math.max(1,adRange.min); setMinY(mn); setMaxY(adRange.max); setDate(randomDate(mn,adRange.max)); }
+          if(mode==="deduction") spawnDed();
+        }catch(e){ reportError(e,{where:'toggleBC', ch}); }
       }
-      function setMinActive(v){ if(includeBC){ if(v===0) v=-1; setBcRange(r=>({...r,min:Math.min(v,maxY)})); setMinY(Math.min(v,maxY)); } else { v=Math.max(1,Math.min(v,maxY)); setAdRange(r=>({...r,min:v})); setMinY(v); } }
-      function setMaxActive(v){ if(includeBC){ if(v===0) v=1; setBcRange(r=>({...r,max:Math.max(v,minY)})); setMaxY(Math.max(v,minY)); } else { v=Math.max(v,minY,1); setAdRange(r=>({...r,max:v})); setMaxY(v); } }
+      function setMinActive(v){
+        try{
+          if(includeBC){ if(v===0) v=-1; setBcRange(r=>({...r,min:Math.min(v,maxY)})); setMinY(Math.min(v,maxY)); }
+          else { v=Math.max(1,Math.min(v,maxY)); setAdRange(r=>({...r,min:v})); setMinY(v); }
+        }catch(e){ reportError(e,{where:'setMinActive', v}); }
+      }
+      function setMaxActive(v){
+        try{
+          if(includeBC){ if(v===0) v=1; setBcRange(r=>({...r,max:Math.max(v,minY)})); setMaxY(Math.max(v,minY)); }
+          else { v=Math.max(v,minY,1); setAdRange(r=>({...r,max:v})); setMaxY(v); }
+        }catch(e){ reportError(e,{where:'setMaxActive', v}); }
+      }
 
       /* ---- computed headline ---- */
       const showDash = isTimer(mode) && !active;
@@ -367,26 +491,27 @@
       /* ---- LOOKUP ---- */
       const [lookupIn,setLookupIn]=useState(""); const [lookupOut,setLookupOut]=useState("");
       function runLookup(){
-        const s=lookupIn.replace(/\u2212/g,'-').trim();
-        const m = /^(\d{1,2})\/(\d{1,2})\/(-?\d{1,5})$/.exec(s);
-        if(!m){ setLookupOut("Enter a date like 7/4/1776. Allowed years −10000…10000 (use −1 for 1 BC; no year 0)."); return; }
-        let mm=+m[1], dd=+m[2], yy=+m[3];
-        if(yy===0){ setLookupOut("There is no year 0. Use −1 for 1 BC."); return; }
-        if(yy<-10000 || yy>10000){ setLookupOut("Year must be between −10000 and 10000."); return; }
-        if(mm<1||mm>12){ setLookupOut("Month must be 1–12."); return; }
-        const maxd=dim(yy,mm);
-        if(dd<1||dd>maxd){ setLookupOut(`Day must be 1–${maxd} for ${MONTH[mm-1]}.`); return; }
-        const d=DAY[wday(yy,mm,dd)];
-        setLookupOut(`${MONTH[mm-1]} ${dd}, ${fmtYear(yy)} is a ${d}.`);
+        try{
+          const s=lookupIn.replace(/\u2212/g,'-').trim();
+          const m = /^(\d{1,2})\/(\d{1,2})\/(-?\d{1,5})$/.exec(s);
+          if(!m){ setLookupOut("Enter a date like 7/4/1776. Allowed years −10000…10000 (use −1 for 1 BC; no year 0)."); return; }
+          let mm=+m[1], dd=+m[2], yy=+m[3];
+          if(yy===0){ setLookupOut("There is no year 0. Use −1 for 1 BC."); return; }
+          if(yy<-10000 || yy>10000){ setLookupOut("Year must be between −10000 and 10000."); return; }
+          if(mm<1||mm>12){ setLookupOut("Month must be 1–12."); return; }
+          const maxd=dim(yy,mm);
+          if(dd<1||dd>maxd){ setLookupOut(`Day must be 1–${maxd} for ${MONTH[mm-1]}.`); return; }
+          const d=DAY[wday(yy,mm,dd)];
+          setLookupOut(`${MONTH[mm-1]} ${dd}, ${fmtYear(yy)} is a ${d}.`);
+        }catch(e){ reportError(e,{where:'runLookup', input:lookupIn}); }
       }
-      function clearLookup(){ setLookupIn(""); if(document.activeElement) document.activeElement.blur(); }
+      function clearLookup(){ try{ setLookupIn(""); if(document.activeElement) document.activeElement.blur(); }catch(e){ reportError(e,{where:'clearLookup'}); } }
 
       /* ------------------ render ------------------ */
-      const scoreStr = `${good}/${played}`;
-      const accStr   = `${played?(good/played*100).toFixed(1):"0.0"}%`;
-      const streakBest = {left:streak,right:best};
+      const scoreStr = `${S.good}/${S.played}`;
+      const accStr   = `${S.played?(S.good/S.played*100).toFixed(1):"0.0"}%`;
       const avgDisabled = (statsOff || !(isTimer(mode)||(mode==="classic"&&trackClassic)||(mode==="deduction"&&trackDed)));
-      const avgStr = avgDisabled ? "—" : (timeCnt?`${(timeSum/timeCnt).toFixed(2)}s`:"—");
+      const avgStr = avgDisabled ? "—" : (S.timeCnt?`${(S.timeSum/S.timeCnt).toFixed(2)}s`:"—");
 
       return (
         <div className="mx-auto px-4 py-5 w-full max-w-[480px] md:max-w-3xl lg:max-w-4xl">
@@ -394,7 +519,7 @@
           <div className="flex items-center justify-between gap-4">
             <h1 className="text-xl md:text-2xl font-semibold leading-none">Calendar Game</h1>
 
-            {/* (2) Replace outside carets with in-bubble white carets */}
+            {/* Select with white stacked carets inside bubble */}
             <div className="relative">
               <select
                 value={mode}
@@ -414,32 +539,31 @@
             </div>
           </div>
 
-          {/* Stats (hidden on lookup) + Disable toggle */}
+          {/* Stats (hidden on lookup) + toggles */}
           {mode!=="lookup" && (
             <>
               <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3">
                 <Stat label="Score" value={scoreStr} disabled={statsOff}/>
                 <Stat label="Accuracy" value={accStr} disabled={statsOff}/>
-                <StatTwo label="Streak / Longest" left={streakBest.left} right={streakBest.right} disabled={statsOff}/>
+                <StatTwo label="Streak / Longest" left={S.streak} right={S.best} disabled={statsOff}/>
                 <Stat label="Avg time (correct)" value={avgStr} disabled={avgDisabled}/>
               </div>
               <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
                 {/* Left controls */}
                 <div className="flex flex-wrap items-center gap-3">
-                  {mode!=="lookup" && (
-                    <label className="flex items-center gap-2 text-sm">
-                      <input type="checkbox" className="sr-only" checked={includeBC} onChange={e=>toggleBC(e.target.checked)} />
-                      <span className={`w-10 h-6 rounded-full relative ${includeBC?"bg-purple-500":"bg-zinc-600"}`}>
-                        <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${includeBC?"translate-x-4":""}`}></span>
-                      </span>
-                      <span>BC</span>
-                    </label>
-                  )}
+                  <label className="flex items-center gap-2 text-sm">
+                    <input type="checkbox" className="sr-only" checked={includeBC} onChange={e=>toggleBC(e.target.checked)} />
+                    <span className={`w-10 h-6 rounded-full relative ${includeBC?"bg-purple-500":"bg-zinc-600"}`}>
+                      <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${includeBC?"translate-x-4":""}`}></span>
+                    </span>
+                    <span>BC</span>
+                  </label>
+
                   {mode==="blitz" && (
                     <div className="flex items-center gap-2">
                       <span className="text-xs text-purple-300/80">Duration:</span>
                       <input type="range" min="15" max="180" step="5" value={blitzSec}
-                            onChange={e=>{setBlitzSec(+e.target.value); if(!active) setBlitzRemain(+e.target.value);}} className="accent-purple-500"/>
+                            onChange={e=>{const v=+e.target.value; setBlitzSec(v); if(!active) setBlitzRemain(v);}} className="accent-purple-500"/>
                       <span className="tabular-nums text-xs w-10 text-right">{blitzSec}s</span>
                     </div>
                   )}
@@ -447,7 +571,7 @@
                     <div className="flex items-center gap-2">
                       <span className="text-xs text-purple-300/80">Per Q:</span>
                       <input type="range" min="3" max="20" step="1" value={qSec}
-                            onChange={e=>{setQSec(+e.target.value); if(!active) setQRemain(+e.target.value);}} className="accent-purple-500"/>
+                            onChange={e=>{const v=+e.target.value; setQSec(v); if(!active) setQRemain(v);}} className="accent-purple-500"/>
                       <span className="tabular-nums text-xs w-10 text-right">{qSec}s</span>
                     </div>
                   )}
@@ -459,6 +583,7 @@
                       <span className="tabular-nums text-xs w-12 text-right">{flashMs}ms</span>
                     </div>
                   )}
+
                   {(mode==="classic"||mode==="deduction") && (
                     <label className="flex items-center gap-2 text-sm">
                       <input
@@ -482,7 +607,7 @@
                     </span>
                     <span>Disable stats</span>
                   </label>
-                  <button className="text-xs px-3 py-1.5 rounded-lg bg-purple-700 hover:bg-purple-600" onClick={resetStats}>Reset stats</button>
+                  <button className="text-xs px-3 py-1.5 rounded-lg bg-purple-700 hover:bg-purple-600" onClick={resetStatsCurrent}>Reset stats</button>
                 </div>
               </div>
             </>
@@ -521,7 +646,6 @@
                 <div className="bar"><span style={{width:`${Math.max(0,Math.min(100,(qRemain/qSec)*100))}%`}}></span></div>
               </div>
             )}
-            {/* (5) Flash bar */}
             {mode==="flash" && active && phase==='show' && (
               <div className="mb-3">
                 <div className="flex items-center justify-between text-xs text-purple-200/80 mb-1"><div>Flash</div><div className="tabular-nums">{(flashRemainMs/1000).toFixed(2)}s</div></div>
@@ -559,7 +683,7 @@
               <>
                 <div className={`mt-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3 ${(!active && isTimer(mode))?'opacity-60 pointer-events-none':''}`}>
                   {DAY.map((n,i)=>(
-                    <button key={n} onClick={(e)=>{ e.currentTarget.blur(); submitDoW(i); setInput(""); if(isTouch) document.activeElement?.blur(); }}
+                    <button key={n} onClick={(e)=>{ try{ e.currentTarget.blur(); submitDoW(i); setInput(""); if(isTouch) document.activeElement?.blur(); }catch(err){ reportError(err,{where:'weekday-click', i}); } }}
                             className={`${baseBtn} ${flash && flash.idx===i ? (flash.type==='good'?'flash-good':'flash-bad')+' border-transparent' : idleBtn}`}>{n}</button>
                   ))}
                 </div>
@@ -605,7 +729,7 @@
                     <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
                       {Array.from({length: ded.b - ded.a + 1}, (_,i)=>ded.a+i).map(y=>(
                         <button key={y} onClick={()=>submitDedAnswer(y)}
-                          className={`${baseBtn} ${idleBtn} py-2 text-sm`}>{fmtYear(y)}</button>
+                          className={`${baseBtn} ${idleBtn} py-2 text-sm ${dedFlash&&dedFlash.kind==='year'&&dedFlash.value===y ? (dedFlash.ok?'flash-good':'flash-bad')+' border-transparent':''}`}>{fmtYear(y)}</button>
                       ))}
                     </div>
                   )}
@@ -613,7 +737,7 @@
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
                       {MONTH.map((m,i)=>(
                         <button key={m} onClick={()=>submitDedAnswer(i+1)}
-                          className={`${baseBtn} ${idleBtn}`}>{m}</button>
+                          className={`${baseBtn} ${idleBtn} ${dedFlash&&dedFlash.kind==='month'&&dedFlash.value===i+1 ? (dedFlash.ok?'flash-good':'flash-bad')+' border-transparent':''}`}>{m}</button>
                       ))}
                     </div>
                   )}
@@ -621,7 +745,7 @@
                     <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-2">
                       {ded.options.map(dv=>(
                         <button key={dv} onClick={()=>submitDedAnswer(dv)}
-                          className={`${baseBtn} ${idleBtn}`}>{dv}</button>
+                          className={`${baseBtn} ${idleBtn} ${dedFlash&&dedFlash.kind==='day'&&dedFlash.value===dv ? (dedFlash.ok?'flash-good':'flash-bad')+' border-transparent':''}`}>{dv}</button>
                       ))}
                     </div>
                   )}
@@ -640,7 +764,7 @@
               </>
             )}
 
-            {/* ======= LOOKUP (3: match aesthetic + clearer copy) ======= */}
+            {/* ======= LOOKUP ======= */}
             {mode==="lookup" && (
               <div className="mt-1 rounded-2xl panel p-4">
                 <div className="text-sm text-purple-100/90 mb-2">
