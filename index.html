@@ -21,7 +21,9 @@
       100%{box-shadow:0 0 0 0 transparent;background:var(--bg0)}}
     .flash-good{--ring:rgba(16,185,129,.5);--bg0:rgba(16,185,129,.10);--bg1:rgba(16,185,129,.25);animation:flashPulse .45s ease-in-out}
     .flash-bad{--ring:rgba(239,68,68,.5);--bg0:rgba(239,68,68,.10);--bg1:rgba(239,68,68,.25);animation:flashPulse .45s ease-in-out}
-    /* flip animation removed */
+    /* flip animation (classic & deduction only), always clockwise */
+    .flipable{transition:transform 450ms ease-in-out;transform-origin:50% 50%}
+    .no-anim{transition:none!important}
     .chip{background:rgba(120,53,175,.25);border:1px solid rgba(120,53,175,.45);padding:.25rem .5rem;border-radius:.75rem;font-size:12px}
     .bar{height:6px;border-radius:6px;overflow:hidden;background:rgba(120,53,175,.25);border:1px solid rgba(120,53,175,.45)}
     .bar>span{display:block;height:100%;background:linear-gradient(90deg,#a855f7,#7c3aed)}
@@ -332,6 +334,8 @@
                        : (showDash ? "—" : showDots ? "…" : fmt(date.y,date.m,date.d));
 
       const headlineIsDate = !(showDash||showDots) || (mode==="deduction" && ded);
+      const wantAnim = (headlineIsDate && (mode==="classic"||mode==="deduction"));
+      const wantStaticFlip = (headlineIsDate && !(mode==="classic"||mode==="deduction") && flip);
 
       const baseBtn="w-full rounded-2xl border px-4 py-3 text-base  transition shadow-sm select-none";
       const idleBtn="border-purple-800/60 bg-purple-900/30 hover:bg-purple-900/60";
@@ -365,7 +369,7 @@
           {/* Header */}
           <div className="flex items-center justify-between gap-4">
             <h1 className="text-xl  font-semibold leading-none">Calendar Game</h1>
-            <div className="flex items-center gap-3">{mode!=="lookup" && (<label className="flex items-center gap-2 text-sm"><input type="checkbox" className="sr-only" checked={includeBC} onChange={e=>toggleBC(e.target.checked)} /><span className={`w-10 h-6 rounded-full relative ${includeBC?"bg-purple-500":"bg-zinc-600"}`}><span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${includeBC?"translate-x-4":""}`}></span></span><span>BC</span></label>)}
+            <div className="flex items-center gap-3">
               <select value={mode} onChange={e=>setMode(e.target.value)}
                       className="panel rounded-xl px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400">
                 <option value="classic">Classic</option>
@@ -467,7 +471,11 @@
                 {mode==="lookup" ? "Lookup" : mode==="deduction" ? (dedType==="year"?"What year is this?":dedType==="month"?"What month is this?":"What day is this?") : "What day is this?"}
               </div>
 
-              {(mode!=="lookup" && mode!=="deduction") && (<div className="mt-1 text-3xl font-bold">{headline}</div>)}
+              {(mode!=="lookup" && mode!=="deduction") && (
+                <div className={`mt-1 text-3xl  font-bold ${wantAnim?'flipable':''} ${(!wantAnim&&wantStaticFlip)?'rotate-180 no-anim':''}`} style={wantAnim?{transform:`rotate(${rot%360}deg)`}:undefined}>
+                  {headline}
+                </div>
+              )}
               {mode==="deduction" && (
                 <>
                   <div className={` mt-1 text-3xl  font-bold`} deg)`}:{transform:'rotate(0)'}}>
