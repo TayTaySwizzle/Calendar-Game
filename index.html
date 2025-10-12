@@ -50,7 +50,7 @@
 
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script crossorigin src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
   <script type="text/babel" data-presets="env,react">
     const {useEffect,useMemo,useRef,useState} = React;
@@ -138,7 +138,7 @@
       const inputRef=useRef(null), [input,setInput]=useState("");
       useEffect(()=>{ if(!isTouch) inputRef.current?.focus(); else document.activeElement?.blur(); },[date,mode,active]);
 
-      /* LOOKUP state & fns (kept stable so no script errors) */
+      /* LOOKUP state & fns */
       const [lookupIn,setLookupIn]=useState(""); const [lookupOut,setLookupOut]=useState("");
       function runLookup(){
         const s=lookupIn.trim();
@@ -170,7 +170,7 @@
       const prevTrackDed=useRef(trackDed);
       useEffect(()=>{ if(prevTrackDed.current===false && trackDed===true){ setStatsByMode(prev=>({...prev, deduction:{...(prev.deduction||blankStats()), timeSum:0, timeCnt:0}})); } prevTrackDed.current=trackDed; },[trackDed]);
 
-      /* Year snapping (multiples of 100 as requested) */
+      /* Year snapping (multiples of 100) */
       const YEAR_STEP = 100;
       const clampBoth = v => Math.max(-10000, Math.min(10000, v));
       function sanitizeForEra(v,e){
@@ -187,7 +187,7 @@
       }
 
       function applyEra(newEra){
-        if(newEra===era) return;            // (3) don't regenerate if selecting same era
+        if(newEra===era) return;  // don't regenerate if same era tapped
         setEra(newEra);
         let mn, mx;
         if(newEra==='AD'){
@@ -207,7 +207,7 @@
         if(mode==="deduction") spawnDed();
       }
 
-      /* visibility pause for timers */
+      /* visibility pause */
       useEffect(()=>{
         const onVis=()=>{
           const now=performance.now();
@@ -357,7 +357,7 @@
           if(!statsOff && !countedWrong){ updateStats(cur=>{ cur.played+=1; cur.streak=0; }); }
           setCountedWrong(true);
           setStatus('incorrect');
-          setGuesses(g=>g.includes(DAY[idx])?g:[...g,DAY[idx]]);  /* (2) restore incorrect guess chips */
+          setGuesses(g=>g.includes(DAY[idx])?g:[...g,DAY[idx]]);  // record incorrect guesses
           if(mode==="sudden"){ setMsg(`Answer: ${DAY[correct]}. Game over.`); setActive(false); }
           setFlash({type:'bad', idx}); setTimeout(()=>setFlash(null),450);
         }
@@ -469,7 +469,7 @@
           <button onPointerDown={(e)=>{e.preventDefault(); setRangeOpen(o=>!o);}}
                   className="w-full text-left text-sm text-purple-200/90 flex items-center justify-between">
             <span>Year range <span className="tabular-nums ml-1">{minY} → {maxY}</span></span>
-            <span className={`transition-transform text-xl ${rangeOpen?'rotate-180':''}`}>▾</span>  <!-- (4) bigger caret here -->
+            <span className={`transition-transform text-xl ${rangeOpen?'rotate-180':''}`}>▾</span>
           </button>
           <div className="expander" style={{maxHeight:rangeOpen?'38vh':'0px'}}>
             <div className="mt-3 space-y-3 pr-1">
@@ -493,7 +493,7 @@
         </div>
       );
 
-      /* (1) compute disabled state for Avg time cell so it darkens */
+      /* Avg time disabled state so the cell darkens */
       const avgDisabled = statsOff || !(isTimer(mode) || (mode==="classic"&&trackClassic) || (mode==="deduction"&&trackDed));
       const avgValue = (!avgDisabled && S.timeCnt) ? `${(S.timeSum/S.timeCnt).toFixed(2)}s` : "—";
 
@@ -621,9 +621,7 @@
             )}
 
             {/* Method page (blank for now) */}
-            {mode==="method" && (
-              <div className="min-h-[40vh]"></div>
-            )}
+            {mode==="method" && <div className="min-h-[40vh]"></div>}
 
             {/* Title + Headline */}
             {mode!=="lookup" && mode!=="deduction" && mode!=="method" && (
