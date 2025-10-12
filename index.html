@@ -68,7 +68,7 @@
     function randomDate(minY,maxY){ for(;;){ let y=rint(minY,maxY); if(y===0) continue; let m=rint(1,12), d=rint(1,dim(y,m)); if(d<=dim(y,m)) return {y,m,d}; } }
 
     const isTouch=typeof window!=="undefined" && ("ontouchstart" in window || navigator.maxTouchPoints>0 || matchMedia("(pointer:coarse)").matches);
-    const isTimer = m => m==="blitz"||m==="sudden"||m==="flash" ;
+    const isTimer = m => m==="blitz"||m==="sudden"||m==="flash";
 
     /* ---------- atoms ---------- */
     const Stat=({label,value,disabled})=>(
@@ -88,25 +88,26 @@
     function App(){
       const [mode,setMode]=useState("classic");
 
-      /* era + ranges (AD / BC / BOTH each stores its own range) */
+      /* era + independent ranges (AD / BC / BOTH) */
       const [era,setEra]=useState('AD');                   // 'AD' | 'BOTH' | 'BC'
       const [adRange,setAdRange]=useState({min:1,max:10000});
       const [bcRange,setBcRange]=useState({min:-10000,max:-1});
-      const [bothRange,setBothRange]=useState({min:-10000,max:10000}); /* NEW */
+      const [bothRange,setBothRange]=useState({min:-10000,max:10000});
       const [minY,setMinY]=useState(1), [maxY,setMaxY]=useState(10000);
 
       const [date,setDate]=useState(()=>randomDate(1,10000));
       const [stack,setStack]=useState([]), [dedStack,setDedStack]=useState([]);
 
       const correct=useMemo(()=>wday(date.y,date.m,date.d),[date]);
-      const [guesses,setGuesses]=useState([]);                 // wrong guesses (not used in sudden)
+      const [guesses,setGuesses]=useState([]);                 // wrong guesses (chips)
       const [msg,setMsg]=useState("");                         // Answer: ...
       const [locked,setLocked]=useState(false);                // lock options after reveal
       const [revealed,setRevealed]=useState(false);            // did reveal on this date?
       const [countedWrong,setCountedWrong]=useState(false);    // has wrong been counted?
 
-      /* store classic snapshots per era when avg-time disabled */
-      const [savedClassicByEra,setSavedClassicByEra]=useState({AD:null,BC:null,BOTH:null}); /* NEW */
+      /* snapshots when avg-time disabled (per era) */
+      const [savedClassicByEra,setSavedClassicByEra]=useState({AD:null,BC:null,BOTH:null});
+      const [savedDedByEra,setSavedDedByEra]=useState({AD:null,BC:null,BOTH:null}); /* NEW */
 
       /* per-mode stats */
       const blankStats=()=>({played:0,good:0,streak:0,best:0,timeSum:0,timeCnt:0});
@@ -152,67 +153,74 @@
       const prevTrackDed=useRef(trackDed);
       useEffect(()=>{ if(prevTrackDed.current===false && trackDed===true){ setStatsByMode(p=>({...p, deduction:{...(p.deduction||blankStats()), timeSum:0, timeCnt:0}})); tStartRef.current=performance.now(); } prevTrackDed.current=trackDed; },[trackDed]);
 
-      /* ===== Year snap (multiples of 100; avoid 0 by biasing to sign) ===== */
-      const YEAR_STEP = 100;
-      const clampBoth = v => Math.max(-10000, Math.min(10000, v));
-      function snapYear(v, e, prevVal){
-        // Round to nearest 100; when near 0, push to +/-100 based on context
-        let k = Math.round(v / YEAR_STEP);
-        if(k===0){
-          if(e==='AD') k = 1;
-          else if(e==='BC') k = -1;
-          else k = (prevVal!=null && prevVal<0) ? -1 : 1; // BOTH: bias to previous sign
-        }
-        let s = k * YEAR_STEP;
+      /* ===== Year snap (clean 100s; stable near 0; allow BC top −1) ===== */
+      function snapYear(v, e){
+        if(e==='BC' && v>-50){ return -1; } // allow −1 as max in BC
+        let s = Math.round(v/100)*100;
+        if(s===0) s = (v<0?-100:100);
         if(e==='AD') s = Math.max(100, Math.min(10000, s));
-        else if(e==='BC') s = Math.max(-10000, Math.min(-100, s));
-        else s = clampBoth(s);
+        else if(e==='BC') s = Math.max(-10000, Math.min(-1, s));
+        else s = Math.max(-10000, Math.min(10000, s));
         return s;
       }
 
-      /* Era apply */
+      /* Era apply — with snapshots when avg-time disabled (Classic & Deduction) */
       function applyEra(newEra){
-        // If Classic and avg-time is disabled, save a snapshot of current era before switching
+        // Save snapshot of current era before leaving, if avg-time disabled
         if(mode==="classic" && !trackClassic){
           setSavedClassicByEra(prev=>({
             ...prev,
             [era]: { date:{...date}, guesses:[...guesses], countedWrong, msg, locked, revealed }
           }));
         }
+        if(mode==="deduction" && !trackDed){
+          setSavedDedByEra(prev=>({
+            ...prev,
+            [era]: { ded, guesses:[...guesses], countedWrong, msg, locked, revealed }
+          }));
+        }
 
         setEra(newEra);
+        // Load that era's stored range (independent per era)
         let mn, mx;
-        if(newEra==='AD'){ mn=Math.max(1, adRange.min); mx=Math.max(mn, adRange.max); }
-        else if(newEra==='BC'){ mn=Math.min(-10000, bcRange.min); mx=Math.min(-1, bcRange.max); if(mn>mx){mn=-10000;mx=-1;} }
-        else { mn=bothRange.min; mx=bothRange.max; if(mn>mx){mn=-10000; mx=10000;} } /* use BOTH range */
-
+        if(newEra==='AD'){ mn = adRange.min; mx = adRange.max; }
+        else if(newEra==='BC'){ mn = bcRange.min; mx = bcRange.max; }
+        else { mn = bothRange.min; mx = bothRange.max; }
         setMinY(mn); setMaxY(mx);
 
-        // Classic: preserve or generate new date depending on avg-time toggle
+        // Classic/Deduction: preserve or generate new depending on avg-time toggle
         if(mode==="classic"){
-          if(!trackClassic){ // disabled -> try to restore snapshot
+          if(!trackClassic){
             const snap = (savedClassicByEra[newEra] || null);
             if(snap && snap.date && snap.date.y>=mn && snap.date.y<=mx){
-              setDate(snap.date);
-              setGuesses(snap.guesses||[]);
-              setCountedWrong(!!snap.countedWrong);
-              setMsg(snap.msg||"");
-              setLocked(!!snap.locked);
-              setRevealed(!!snap.revealed);
+              setDate(snap.date); setGuesses(snap.guesses||[]); setCountedWrong(!!snap.countedWrong);
+              setMsg(snap.msg||""); setLocked(!!snap.locked); setRevealed(!!snap.revealed);
               return;
             }
-            // no snapshot -> generate once
             setMsg(""); setGuesses([]); setLocked(false); setRevealed(false); setCountedWrong(false);
             setDate(randomDate(mn,mx));
-          }else{ // enabled -> always new date
+          }else{
             setMsg(""); setGuesses([]); setLocked(false); setRevealed(false); setCountedWrong(false);
             setDate(randomDate(mn,mx));
           }
+        }else if(mode==="deduction"){
+          if(!trackDed){
+            const snap = (savedDedByEra[newEra] || null);
+            if(snap && snap.ded){
+              setDed(snap.ded); setGuesses(snap.guesses||[]); setCountedWrong(!!snap.countedWrong);
+              setMsg(snap.msg||""); setLocked(!!snap.locked); setRevealed(!!snap.revealed);
+              return;
+            }
+            setMsg(""); setGuesses([]); setLocked(false); setRevealed(false); setCountedWrong(false);
+            spawnDedWithRange(mn,mx);
+          }else{
+            setMsg(""); setGuesses([]); setLocked(false); setRevealed(false); setCountedWrong(false);
+            spawnDedWithRange(mn,mx);
+          }
         }else{
-          // other modes keep existing behavior (new date on era change)
+          // Other modes: always new
           setMsg(""); setGuesses([]); setLocked(false); setRevealed(false); setCountedWrong(false);
           setDate(randomDate(mn,mx));
-          if(mode==="deduction") spawnDed();
         }
       }
 
@@ -232,7 +240,7 @@
         return ()=>document.removeEventListener("visibilitychange", onVis);
       },[blitzRunning]);
 
-      /* timers loop (plus flash countdown) */
+      /* timers + flash loop */
       useEffect(()=>{
         const needLoop = (blitzRunning || (mode==="sudden" && qDeadlineRef.current) || (mode==="flash" && active && phase==='show'));
         if(!needLoop) return;
@@ -264,11 +272,9 @@
         return ()=>cancelAnimationFrame(raf);
       },[mode,blitzSec,statsOff,blitzRunning,active,phase]);
 
-      /* convenience */
       const trackingOn = ()=> (isTimer(mode) || (mode==="classic"&&trackClassic) || (mode==="deduction"&&trackDed));
       const avgDisabled = (statsOff || !( (mode==="classic"&&trackClassic) || (mode==="deduction"&&trackDed) || isTimer(mode) ));
 
-      /* core transitions */
       const arm=()=>{
         __hideErr();
         setActive(false); setMsg(""); setGuesses([]); setFlash(null);
@@ -303,7 +309,7 @@
           setDate(nd);
           setGuesses([]); setRevealed(false); setLocked(false); setCountedWrong(false); setMsg("");
         }
-        if(mode==="deduction"){ setDedStack(s=>[...s, ded]); spawnDed(); setMsg(""); setRevealed(false); setLocked(false); }
+        if(mode==="deduction"){ setDedStack(s=>[...s, ded]); spawnDed(); setMsg(""); setRevealed(false); setLocked(false); setGuesses([]); setCountedWrong(false); }
       }
 
       useEffect(()=>{ if(mode==="classic" && trackClassic) tStartRef.current=performance.now(); },[mode,trackClassic,date]);
@@ -334,7 +340,7 @@
           setDedStack(s=>s.slice(0,-1)); setDed(prev);
           const ans = prev.type==="year" ? fmtYear(prev.y) : prev.type==="month" ? MONTH[prev.m-1] : String(prev.d);
           setMsg(`Answer: ${ans}.`);
-          setLocked(true); setRevealed(true); return;
+          setLocked(true); setRevealed(true); setGuesses([]); return;
         }
         const prev = stack[stack.length-1]; if(!prev){ setMsg("Nothing to go back to."); return; }
         setStack(s=>s.slice(0,-1)); setDate(prev);
@@ -363,30 +369,31 @@
         }
       }
 
-      /* Deduction generation & submission */
-      function spawnDed(){
+      /* Deduction generation + helpers using current min/max (or provided) */
+      function spawnDed(){ spawnDedWithRange(minY,maxY); }
+      function spawnDedWithRange(lo,hi){
         if(dedType==="year"){
           let m=rint(1,12), d=rint(1,31), y, w;
-          for(;;){ y=rint(minY,maxY); if(y===0||d>dim(y,m)) continue; w=wday(y,m,d); break; }
+          for(;;){ y=rint(lo,hi); if(y===0||d>dim(y,m)) continue; w=wday(y,m,d); break; }
           function neighbor(dir){ const step=dir>0?1:-1;
-            for(let k=1;k<=800;k++){ let yy=y+k*step; if(yy===0) yy+=step; if(yy<minY||yy>maxY) break; if(d<=dim(yy,m) && wday(yy,m,d)===w) return yy; }
+            for(let k=1;k<=800;k++){ let yy=y+k*step; if(yy===0) yy+=step; if(yy<lo||yy>hi) break; if(d<=dim(yy,m) && wday(yy,m,d)===w) return yy; }
             return null;
           }
           const L=neighbor(-1), U=neighbor(+1);
-          let a=L==null?minY:Math.max(minY, L+1), b=U==null?maxY:Math.min(maxY, U-1); if(a===0) a=1; if(b===0) b=-1; if(a>b){a=b=y;}
+          let a=L==null?lo:Math.max(lo, L+1), b=U==null?hi:Math.min(hi, U-1); if(a===0) a=1; if(b===0) b=-1; if(a>b){a=b=y;}
           setDed({type:"year",m,d,w,y, a,b});
           return;
         }
         if(dedType==="month"){
           for(;;){
-            let y=rint(minY,maxY); if(y===0) continue;
+            let y=rint(lo,hi); if(y===0) continue;
             let d=rint(1,31); let w=rint(0,6);
             const cands=[]; for(let m=1;m<=12;m++){ if(d<=dim(y,m) && wday(y,m,d)===w) cands.push(m); }
             if(cands.length===1){ setDed({type:"month",y,d,w,m:cands[0]}); return; }
           }
         }
         if(dedType==="day"){
-          let y=rint(minY,maxY); if(y===0) y+= (y<0?1:-1);
+          let y=rint(lo,hi); if(y===0) y+= (y<0?1:-1);
           let m=rint(1,12); const D=dim(y,m);
           let d=rint(1,D); const w=wday(y,m,d);
           const bad=[]; for(let k=1;k<=D;k++){ if(k!==d && wday(y,m,k)!==w) bad.push(k); }
@@ -401,28 +408,40 @@
       function flashDed(kind,value,ok){ setDedFlash({kind,value,ok}); setTimeout(()=>setDedFlash(null),450); }
       function submitDedAnswer(val){
         if(!ded || locked) return;
-        const setCorrectThenNext = ()=>{ requestAnimationFrame(()=>setTimeout(spawnDed, 60)); setMsg(""); };
-        const setWrong = ()=>{};
+        const setCorrectThenNext = ()=>{ requestAnimationFrame(()=>setTimeout(spawnDed, 60)); setMsg(""); setGuesses([]); setCountedWrong(false); };
+        const showWrong = (label)=>{ setGuesses(g=> g.includes(label)?g:[...g,label]); setCountedWrong(true); };
         if(ded.type==="year"){
           const ok = (+val)===ded.y; flashDed('year', +val, ok);
-          if(ok){ if(!statsOff && trackDed && tStartRef.current){ const dt=(performance.now()-tStartRef.current)/1000; updateStats(cur=>{cur.timeSum+=dt; cur.timeCnt+=1;}); }
+          if(ok){
+            if(!statsOff && trackDed && tStartRef.current){ const dt=(performance.now()-tStartRef.current)/1000; updateStats(cur=>{cur.timeSum+=dt; cur.timeCnt+=1;}); }
             if(!statsOff){ updateStats(cur=>{ cur.played+=1; cur.good+=1; cur.streak+=1; if(cur.streak>cur.best) cur.best=cur.streak; }); }
             setCorrectThenNext();
-          }else{ if(!statsOff){ updateStats(cur=>{ cur.played+=1; cur.streak=0; }); } setWrong(); }
+          }else{
+            if(!statsOff){ updateStats(cur=>{ cur.played+=1; cur.streak=0; }); }
+            showWrong(fmtYear(+val));
+          }
         }
         if(ded.type==="month"){
           const ok = (+val)===ded.m; flashDed('month', +val, ok);
-          if(ok){ if(!statsOff && trackDed && tStartRef.current){ const dt=(performance.now()-tStartRef.current)/1000; updateStats(cur=>{cur.timeSum+=dt; cur.timeCnt+=1;}); }
+          if(ok){
+            if(!statsOff && trackDed && tStartRef.current){ const dt=(performance.now()-tStartRef.current)/1000; updateStats(cur=>{cur.timeSum+=dt; cur.timeCnt+=1;}); }
             if(!statsOff){ updateStats(cur=>{ cur.played+=1; cur.good+=1; cur.streak+=1; if(cur.streak>cur.best) cur.best=cur.streak; }); }
             setCorrectThenNext();
-          }else{ if(!statsOff){ updateStats(cur=>{ cur.played+=1; cur.streak=0; }); } setWrong(); }
+          }else{
+            if(!statsOff){ updateStats(cur=>{ cur.played+=1; cur.streak=0; }); }
+            showWrong(MONTH[+val-1]);
+          }
         }
         if(ded.type==="day"){
           const ok = (+val)===ded.d; flashDed('day', +val, ok);
-          if(ok){ if(!statsOff && trackDed && tStartRef.current){ const dt=(performance.now()-tStartRef.current)/1000; updateStats(cur=>{cur.timeSum+=dt; cur.timeCnt+=1;}); }
+          if(ok){
+            if(!statsOff && trackDed && tStartRef.current){ const dt=(performance.now()-tStartRef.current)/1000; updateStats(cur=>{cur.timeSum+=dt; cur.timeCnt+=1;}); }
             if(!statsOff){ updateStats(cur=>{ cur.played+=1; cur.good+=1; cur.streak+=1; if(cur.streak>cur.best) cur.best=cur.streak; }); }
             setCorrectThenNext();
-          }else{ if(!statsOff){ updateStats(cur=>{ cur.played+=1; cur.streak=0; }); } setWrong(); }
+          }else{
+            if(!statsOff){ updateStats(cur=>{ cur.played+=1; cur.streak=0; }); }
+            showWrong(String(+val));
+          }
         }
       }
 
@@ -430,18 +449,18 @@
       useEffect(()=>{ arm(); setGuesses([]); setStack([]); setDedStack([]); setMsg(""); setLocked(false); setRevealed(false); if(mode==="deduction"){ setPhase('dash'); spawnDed(); } },[mode]);
       useEffect(()=>{ if(mode==="deduction") spawnDed(); },[dedType]);
 
-      /* range handlers (snap to 100, avoid 0; each era updates its own store) */
+      /* slider handlers — each era updates its own store only */
       function setMinActive(v){
-        const val = snapYear(+v, era, minY);
+        const val = snapYear(+v, era);
         if(era==='AD'){ const clamped=Math.min(val, maxY); setAdRange(r=>({...r,min:clamped})); setMinY(clamped); }
-        else if(era==='BC'){ const clamped=Math.min(val, maxY<=-100?maxY:-100); setBcRange(r=>({...r,min:clamped})); setMinY(clamped); }
-        else { const s=val; const newMin=Math.min(s,maxY); setBothRange(r=>({...r,min:newMin})); setMinY(newMin); }
+        else if(era==='BC'){ const clamped=Math.min(val, maxY); setBcRange(r=>({...r,min:clamped})); setMinY(clamped); }
+        else { const newMin=Math.min(val,maxY); setBothRange(r=>({...r,min:newMin})); setMinY(newMin); }
       }
       function setMaxActive(v){
-        const val = snapYear(+v, era, maxY);
+        const val = snapYear(+v, era);
         if(era==='AD'){ const clamped=Math.max(val, Math.max(100,minY)); setAdRange(r=>({...r,max:clamped})); setMaxY(clamped); }
         else if(era==='BC'){ const clamped=Math.max(val, minY); setBcRange(r=>({...r,max:clamped})); setMaxY(clamped); }
-        else { const s=val; const newMax=Math.max(s,minY); setBothRange(r=>({...r,max:newMax})); setMaxY(newMax); }
+        else { const newMax=Math.max(val,minY); setBothRange(r=>({...r,max:newMax})); setMaxY(newMax); }
       }
 
       const showDash = isTimer(mode) && !active;
@@ -479,7 +498,7 @@
                        onChange={e=>setMaxActive(+e.target.value)}
                        className="w-full accent-purple-500"/>
               </div>
-              <p className="text-xs text-purple-300/70">Proleptic Gregorian calendar. Year 0 isn’t shown (1 BC ↔ year 0 internally). Each era remembers its own range. Values snap to multiples of 100.</p>
+              <p className="text-xs text-purple-300/70">Proleptic Gregorian calendar. Year 0 isn’t shown. Each era remembers its own range. Sliders snap to multiples of 100 (BC top allows −1).</p>
             </div>
           </div>
         </div>
@@ -487,14 +506,14 @@
 
       /* should reset stats create a new date? */
       function shouldNewOnReset(){
-        const avgEnabled = (mode==="classic"?trackClassic : mode==="deduction"?trackDed : true); // timers always track
+        const avgEnabled = (mode==="classic"?trackClassic : mode==="deduction"?trackDed : true);
         if(!avgEnabled && !countedWrong) return false;
         return true;
       }
 
       /* Avg toggle click handler (disable/enable) */
       function toggleAvg(disable){
-        if(mode!=="classic" && mode!=="deduction") return; // shown only there
+        if(mode!=="classic" && mode!=="deduction") return;
         if(disable){ // turning OFF tracking
           if(mode==="classic") setTrackClassic(false); else setTrackDed(false);
           tStartRef.current=null;
@@ -524,7 +543,7 @@
                 <option value="lookup">Lookup</option>
                 <option value="method">Method</option>
               </select>
-              <div className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 flex flex-col items-center leading-none text-[9px] text-white/90">
+              <div className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 flex flex-col items-center leading-none text-[7px] text-white/90">
                 <span>▲</span><span>▼</span>
               </div>
             </div>
@@ -695,7 +714,7 @@
               <>
                 <div className="mt-3 flex flex-wrap gap-2 justify-center">
                   {["year","month","day"].map(t=>(
-                    <button key={t} onPointerDown={(e)=>{e.preventDefault(); setDedType(t); setMsg(""); setLocked(false); setRevealed(false);}}
+                    <button key={t} onPointerDown={(e)=>{e.preventDefault(); setDedType(t); setMsg(""); setLocked(false); setRevealed(false); setGuesses([]); setCountedWrong(false);}}
                       className={`px-3 py-1.5 rounded-lg text-sm border ${dedType===t?'bg-purple-600 border-purple-500':'bg-purple-900/40 border-purple-800/60 hover:bg-purple-900/70'}`}>
                       {t[0].toUpperCase()+t.slice(1)}
                     </button>
@@ -731,19 +750,22 @@
 
                 <div className="mt-4 rounded-2xl panel p-3">
                   <div className="flex flex-wrap gap-2">
-                    <button type="button" className="px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm" onPointerDown={(e)=>{e.preventDefault(); setDedStack(s=>[...s,ded]); spawnDed(); setMsg(""); setLocked(false); setRevealed(false);}}>New</button>
+                    <button type="button" className="px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm" onPointerDown={(e)=>{e.preventDefault(); setDedStack(s=>[...s,ded]); spawnDed(); setMsg(""); setLocked(false); setRevealed(false); setGuesses([]); setCountedWrong(false);}}>New</button>
                     <button type="button" className={`px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm ${locked?'opacity-60 pointer-events-none':''}`} onPointerDown={(e)=>{e.preventDefault(); reveal();}}>Reveal</button>
                     <button type="button" className="px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm" onPointerDown={(e)=>{e.preventDefault(); goBack();}}>Back</button>
                   </div>
-                  {msg && <div className="mt-3 text-sm">{msg}</div>}
+                  {(msg || guesses.length>0) && (
+                    <div className="mt-3 text-sm">
+                      {msg && <div>{msg}</div>}
+                      {guesses.length>0 && (<div className="mt-2 flex flex-wrap gap-1 items-center"><span className="text-purple-300/80 text-xs mr-1">Guesses so far:</span>{guesses.map(g=><span key={g} className="chip">{g}</span>)}</div>)}
+                    </div>
+                  )}
                 </div>
               </>
             )}
 
             {/* ======= LOOKUP ======= */}
-            {mode==="lookup" && (
-              <LookupCard />
-            )}
+            {mode==="lookup" && <LookupCard />}
           </div>
         </div>
       );
