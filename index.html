@@ -31,7 +31,7 @@
   <div id="root" class="min-h-screen w-full">Loading…</div>
   <pre id="errors" style="display:none;white-space:pre-wrap;background:#2b0f3a;border:1px solid #7e22ce;color:#fca5a5;padding:.75rem;border-radius:.75rem;margin:1rem;max-width:64rem"></pre>
 
-  <!-- Robust but legacy-safe error banner (no optional chaining here) -->
+  <!-- error banner (no optional chaining) -->
   <script>
     function __errBox(){ return document.getElementById('errors'); }
     function __hideErr(){ var x=__errBox(); if(x){ x.style.display='none'; x.textContent=''; } }
@@ -232,7 +232,7 @@
         __hideErr();
         setActive(false); setMsg(""); setGuesses([]); setFlash(null); setCountedWrong(false);
         setPhase('dash'); clearTimeout(flashTimerRef.current);
-        setBlitzRemain(blitzSec); blitzStartRef.current=null; blitzPausedAtRef.current=null; blitzPausedAccRef=0; setBlitzRunning(false);
+        setBlitzRemain(blitzSec); blitzStartRef.current=null; blitzPausedAtRef.current=null; blitzPausedAccRef.current=0; setBlitzRunning(false);
         qDeadlineRef.current=null; qPausedAtRef.current=null; qPausedAccRef.current=0; setQRemain(qSec);
         flashDeadlineRef.current=null; setFlashRemainMs(flashMs);
         tStartRef.current=null;
@@ -275,7 +275,7 @@
         if(!statsOff && !countedWrong){ updateStats(cur=>{ cur.played+=1; cur.streak=0; }); }
         setCountedWrong(true);
         setMsg(`Answer: ${DAY[correct]}.`);
-        if(mode==="flash"){ clearTimeout(flashTimerRef.current); setPhase('dash'); setActive(false); flashDeadlineRef=null; setFlashRemainMs(flashMs); }
+        if(mode==="flash"){ clearTimeout(flashTimerRef.current); setPhase('dash'); setActive(false); flashDeadlineRef.current=null; setFlashRemainMs(flashMs); }
       }
 
       function goBack(){
