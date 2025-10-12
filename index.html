@@ -87,9 +87,12 @@
     /* ======================= App ======================= */
     function App(){
       const [mode,setMode]=useState("classic");
+
+      /* era + ranges (AD / BC / BOTH each stores its own range) */
       const [era,setEra]=useState('AD');                   // 'AD' | 'BOTH' | 'BC'
       const [adRange,setAdRange]=useState({min:1,max:10000});
       const [bcRange,setBcRange]=useState({min:-10000,max:-1});
+      const [bothRange,setBothRange]=useState({min:-10000,max:10000}); /* NEW */
       const [minY,setMinY]=useState(1), [maxY,setMaxY]=useState(10000);
 
       const [date,setDate]=useState(()=>randomDate(1,10000));
@@ -101,6 +104,9 @@
       const [locked,setLocked]=useState(false);                // lock options after reveal
       const [revealed,setRevealed]=useState(false);            // did reveal on this date?
       const [countedWrong,setCountedWrong]=useState(false);    // has wrong been counted?
+
+      /* store classic snapshots per era when avg-time disabled */
+      const [savedClassicByEra,setSavedClassicByEra]=useState({AD:null,BC:null,BOTH:null}); /* NEW */
 
       /* per-mode stats */
       const blankStats=()=>({played:0,good:0,streak:0,best:0,timeSum:0,timeCnt:0});
@@ -146,29 +152,68 @@
       const prevTrackDed=useRef(trackDed);
       useEffect(()=>{ if(prevTrackDed.current===false && trackDed===true){ setStatsByMode(p=>({...p, deduction:{...(p.deduction||blankStats()), timeSum:0, timeCnt:0}})); tStartRef.current=performance.now(); } prevTrackDed.current=trackDed; },[trackDed]);
 
-      /* ===== Year snap (multiples of 100; 0 -> 1) ===== */
+      /* ===== Year snap (multiples of 100; avoid 0 by biasing to sign) ===== */
       const YEAR_STEP = 100;
       const clampBoth = v => Math.max(-10000, Math.min(10000, v));
-      function snapYear(v, e){
-        let s = Math.round(v / YEAR_STEP) * YEAR_STEP;
-        if(s===0) s = 1; // no year 0 -> bias to +1
-        if(e==='AD') s = Math.max(1, Math.min(10000, s));
-        else if(e==='BC') s = Math.max(-10000, Math.min(-1, s));
+      function snapYear(v, e, prevVal){
+        // Round to nearest 100; when near 0, push to +/-100 based on context
+        let k = Math.round(v / YEAR_STEP);
+        if(k===0){
+          if(e==='AD') k = 1;
+          else if(e==='BC') k = -1;
+          else k = (prevVal!=null && prevVal<0) ? -1 : 1; // BOTH: bias to previous sign
+        }
+        let s = k * YEAR_STEP;
+        if(e==='AD') s = Math.max(100, Math.min(10000, s));
+        else if(e==='BC') s = Math.max(-10000, Math.min(-100, s));
         else s = clampBoth(s);
         return s;
       }
 
       /* Era apply */
       function applyEra(newEra){
+        // If Classic and avg-time is disabled, save a snapshot of current era before switching
+        if(mode==="classic" && !trackClassic){
+          setSavedClassicByEra(prev=>({
+            ...prev,
+            [era]: { date:{...date}, guesses:[...guesses], countedWrong, msg, locked, revealed }
+          }));
+        }
+
         setEra(newEra);
         let mn, mx;
         if(newEra==='AD'){ mn=Math.max(1, adRange.min); mx=Math.max(mn, adRange.max); }
         else if(newEra==='BC'){ mn=Math.min(-10000, bcRange.min); mx=Math.min(-1, bcRange.max); if(mn>mx){mn=-10000;mx=-1;} }
-        else { mn=bcRange.min; mx=bcRange.max; if(mn>mx){mn=-10000; mx=10000;} }
+        else { mn=bothRange.min; mx=bothRange.max; if(mn>mx){mn=-10000; mx=10000;} } /* use BOTH range */
+
         setMinY(mn); setMaxY(mx);
-        setMsg(""); setGuesses([]); setLocked(false); setRevealed(false); setCountedWrong(false);
-        setDate(randomDate(mn,mx));
-        if(mode==="deduction") spawnDed();
+
+        // Classic: preserve or generate new date depending on avg-time toggle
+        if(mode==="classic"){
+          if(!trackClassic){ // disabled -> try to restore snapshot
+            const snap = (savedClassicByEra[newEra] || null);
+            if(snap && snap.date && snap.date.y>=mn && snap.date.y<=mx){
+              setDate(snap.date);
+              setGuesses(snap.guesses||[]);
+              setCountedWrong(!!snap.countedWrong);
+              setMsg(snap.msg||"");
+              setLocked(!!snap.locked);
+              setRevealed(!!snap.revealed);
+              return;
+            }
+            // no snapshot -> generate once
+            setMsg(""); setGuesses([]); setLocked(false); setRevealed(false); setCountedWrong(false);
+            setDate(randomDate(mn,mx));
+          }else{ // enabled -> always new date
+            setMsg(""); setGuesses([]); setLocked(false); setRevealed(false); setCountedWrong(false);
+            setDate(randomDate(mn,mx));
+          }
+        }else{
+          // other modes keep existing behavior (new date on era change)
+          setMsg(""); setGuesses([]); setLocked(false); setRevealed(false); setCountedWrong(false);
+          setDate(randomDate(mn,mx));
+          if(mode==="deduction") spawnDed();
+        }
       }
 
       /* visibility pause for timers */
@@ -268,6 +313,7 @@
 
       /* Reveal */
       function reveal(){
+        if(locked) return;
         if(mode==="deduction"){
           if(!ded) return;
           if(!statsOff){ updateStats(cur=>{ cur.played+=1; cur.streak=0; }); }
@@ -317,7 +363,7 @@
         }
       }
 
-      /* Deduction generation & submission (unchanged timings) */
+      /* Deduction generation & submission */
       function spawnDed(){
         if(dedType==="year"){
           let m=rint(1,12), d=rint(1,31), y, w;
@@ -384,18 +430,18 @@
       useEffect(()=>{ arm(); setGuesses([]); setStack([]); setDedStack([]); setMsg(""); setLocked(false); setRevealed(false); if(mode==="deduction"){ setPhase('dash'); spawnDed(); } },[mode]);
       useEffect(()=>{ if(mode==="deduction") spawnDed(); },[dedType]);
 
-      /* range handlers (snap to 100, avoid 0) */
+      /* range handlers (snap to 100, avoid 0; each era updates its own store) */
       function setMinActive(v){
-        const val = snapYear(+v, era);
+        const val = snapYear(+v, era, minY);
         if(era==='AD'){ const clamped=Math.min(val, maxY); setAdRange(r=>({...r,min:clamped})); setMinY(clamped); }
-        else if(era==='BC'){ const clamped=Math.min(val, maxY<=-1?maxY:-1); setBcRange(r=>({...r,min:clamped})); setMinY(clamped); }
-        else { const s=val; setMinY(Math.min(s,maxY)); }
+        else if(era==='BC'){ const clamped=Math.min(val, maxY<=-100?maxY:-100); setBcRange(r=>({...r,min:clamped})); setMinY(clamped); }
+        else { const s=val; const newMin=Math.min(s,maxY); setBothRange(r=>({...r,min:newMin})); setMinY(newMin); }
       }
       function setMaxActive(v){
-        const val = snapYear(+v, era);
-        if(era==='AD'){ const clamped=Math.max(val, Math.max(1,minY)); setAdRange(r=>({...r,max:clamped})); setMaxY(clamped); }
+        const val = snapYear(+v, era, maxY);
+        if(era==='AD'){ const clamped=Math.max(val, Math.max(100,minY)); setAdRange(r=>({...r,max:clamped})); setMaxY(clamped); }
         else if(era==='BC'){ const clamped=Math.max(val, minY); setBcRange(r=>({...r,max:clamped})); setMaxY(clamped); }
-        else { const s=val===0?1:val; setMaxY(Math.max(s,minY)); }
+        else { const s=val; const newMax=Math.max(s,minY); setBothRange(r=>({...r,max:newMax})); setMaxY(newMax); }
       }
 
       const showDash = isTimer(mode) && !active;
@@ -433,7 +479,7 @@
                        onChange={e=>setMaxActive(+e.target.value)}
                        className="w-full accent-purple-500"/>
               </div>
-              <p className="text-xs text-purple-300/70">Proleptic Gregorian calendar. Year 0 isn’t shown (1 BC ↔ year 0 internally). AD and AD+BC remember their own ranges. Values snap to multiples of 100.</p>
+              <p className="text-xs text-purple-300/70">Proleptic Gregorian calendar. Year 0 isn’t shown (1 BC ↔ year 0 internally). Each era remembers its own range. Values snap to multiples of 100.</p>
             </div>
           </div>
         </div>
@@ -478,7 +524,7 @@
                 <option value="lookup">Lookup</option>
                 <option value="method">Method</option>
               </select>
-              <div className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 flex flex-col items-center leading-none text-[11px] text-white/90">
+              <div className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 flex flex-col items-center leading-none text-[9px] text-white/90">
                 <span>▲</span><span>▼</span>
               </div>
             </div>
@@ -553,7 +599,11 @@
                   </label>
                   <button className="text-xs px-3 py-1.5 rounded-lg bg-purple-700 hover:bg-purple-600"
                           onPointerDown={(e)=>{e.preventDefault();
-                            const needNew = shouldNewOnReset();
+                            const needNew = (()=>{
+                              const avgEnabled = (mode==="classic"?trackClassic : mode==="deduction"?trackDed : true);
+                              if(!avgEnabled && !countedWrong) return false;
+                              return true;
+                            })();
                             resetStatsCurrent();
                             if(needNew) doNew();
                           }}>Reset stats</button>
@@ -594,7 +644,7 @@
             {mode!=="lookup" && mode!=="deduction" && mode!=="method" && (
               <div className="text-center">
                 <div className="text-xs uppercase tracking-widest text-purple-100/80">What day is this?</div>
-                <div className="mt-1 text-3xl md:text-4xl font-bold">{(isTimer(mode)&&!active)?"—": (mode==="flash"&&active&&phase==='hide')?"…": headline}</div>
+                <div className="mt-1 text-3xl md:text-4xl font-bold">{(isTimer(mode)&&!active)?"—": (mode==="flash"&&active&&phase==='hide')?"…": fmt(date.y,date.m,date.d)}</div>
               </div>
             )}
             {mode==="deduction" && (
@@ -602,7 +652,7 @@
                 <div className="text-xs uppercase tracking-widest text-purple-100/80">
                   {dedType==="year"?"What year is this?":dedType==="month"?"What month is this?":"What day is this?"}
                 </div>
-                <div className="mt-1 text-3xl md:text-4xl font-bold">{ded ? dedHeadline : "—"}</div>
+                <div className="mt-1 text-3xl md:text-4xl font-bold">{ded ? (ded.type==="year"?`${MONTH[ded.m-1]} ${ded.d}`: ded.type==="month"?`${ded.d}, ${fmtYear(ded.y)}` : `${MONTH[ded.m-1]}, ${fmtYear(ded.y)}`) : "—"}</div>
                 {ded && <div className="mt-1 text-lg md:text-xl text-purple-100">Weekday:&nbsp;<span className="font-semibold text-xl">{DAY[ded.w]}</span></div>}
               </div>
             )}
@@ -610,7 +660,7 @@
             {/* ======= CLASSIC / BLITZ / SUDDEN / FLASH ======= */}
             {["classic","blitz","sudden","flash"].includes(mode) && (
               <>
-                <div className={`mt-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3 ${optionsDisabled?'opacity-60 pointer-events-none':''}`}>
+                <div className={`mt-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3 ${((isTimer(mode)&&!active)||locked)?'opacity-60 pointer-events-none':''}`}>
                   {DAY.map((n,i)=>(
                     <button key={n}
                       onPointerDown={(e)=>{ e.preventDefault(); submitDoW(i); setInput(""); if(isTouch) document.activeElement?.blur(); }}
@@ -699,7 +749,7 @@
       );
     }
 
-    /* --------- Lookup component (unchanged visuals) --------- */
+    /* --------- Lookup component --------- */
     function LookupCard(){
       const [lookupIn,setLookupIn]=React.useState("");
       const [lookupOut,setLookupOut]=React.useState("");
