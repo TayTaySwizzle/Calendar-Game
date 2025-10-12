@@ -72,7 +72,7 @@
 
     /* ---------- Icons (SVG, unified size) ---------- */
     const ChevronDown = ({className}) => (
-      <svg viewBox="0 0 24 24" className={className} width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <svg viewBox="0 0 24 24" className={className} width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
         <polyline points="6 9 12 15 18 9"></polyline>
       </svg>
     );
@@ -229,7 +229,7 @@
         setActive(false); setMsg(""); setGuesses([]); setFlash(null);
         setCountedWrong(false); setStatus(null);
         setPhase('dash'); clearTimeout(flashTimerRef.current);
-        setBlitzRemain(blitzSec); blitzStartRef.current=null; blitzPausedAtRef.current=null; blitzPausedAccRef= { current:0 }.current; // keep type
+        setBlitzRemain(blitzSec); blitzStartRef.current=null; blitzPausedAtRef.current=null; blitzPausedAccRef.current=0; /* <-- fixed */
         qDeadlineRef.current=null; qPausedAtRef.current=null; qPausedAccRef.current=0; setQRemain(qSec);
         flashDeadlineRef.current=null; setFlashRemainMs(flashMs);
         tStartRef.current=null;
