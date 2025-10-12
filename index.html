@@ -58,11 +58,12 @@
     /* ---------- Calendar helpers ---------- */
     const MONTH=["January","February","March","April","May","June","July","August","September","October","November","December"];
     const DAY=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
-    const toAstro = y => y>0?y:1-Math.abs(y);
+    const toAstro = y => y>0?y:1-Math.abs(y);                                   // 1 BC -> 0
     const isLeap = y => { y=toAstro(y); return y%400===0 || (y%4===0 && y%100!==0); };
     const dim = (y,m)=> m===2 ? (isLeap(y)?29:28) : [4,6,9,11].includes(m)?30:31;
     function jdnGregorian(y,m,d){ const a=Math.floor((14-m)/12),y2=y+4800-a,m2=m-3+12*a; return d+Math.floor((153*m2+2)/5)+365*y2+Math.floor(y2/4)-Math.floor(y2/100)+Math.floor(y2/400)-32045; }
-    const wday=(y,m,d)=> (jdnGregorian(toAstro(y),m,d)+1)%7;
+    const wday=(y,m,d)=> ((jdnGregorian(toAstro(y),m,d)+1)%7+7)%7;               // clamp to 0…6
+    const weekdayName=(y,m,d)=> DAY[wday(y,m,d)] || "Unknown";                   // avoids “undefined”
     const fmtYear = y => y>0?String(y):`${Math.abs(y)} BC`;
     const fmt=(y,m,d)=> `${MONTH[m-1]} ${d}, ${fmtYear(y)}`;
     const rint=(a,b)=>Math.floor(Math.random()*(b-a+1))+a;
@@ -86,10 +87,6 @@
         </div>
       </div>
     );
-    const Pill=({ok,label})=>{
-      const cls=ok?"bg-emerald-500/20 text-emerald-200 border border-emerald-500/40":"bg-rose-500/20 text-rose-200 border border-rose-500/40";
-      return <span className={`px-2.5 py-1 rounded-lg text-xs font-medium ${cls}`}>{label}</span>;
-    };
 
     /* ======================= App ======================= */
     function App(){
@@ -103,9 +100,9 @@
       const [stack,setStack]=useState([]), [dedStack,setDedStack]=useState([]);
 
       const correct=useMemo(()=>wday(date.y,date.m,date.d),[date]);
-      const [guesses,setGuesses]=useState([]); const [status,setStatus]=useState(null);
+      const [guesses,setGuesses]=useState([]);                 // incorrect guesses list
       const [msg,setMsg]=useState("");
-      const pillTimerRef=useRef(null);
+      const msgTimerRef=useRef(null);
 
       const blankStats=()=>({played:0,good:0,streak:0,best:0,timeSum:0,timeCnt:0});
       const [statsByMode,setStatsByMode]=useState({classic:blankStats(), blitz:blankStats(), sudden:blankStats(), flash:blankStats(), deduction:blankStats()});
@@ -135,10 +132,12 @@
       const [dedFlash,setDedFlash]=useState(null);
 
       const [countedWrong,setCountedWrong]=useState(false);
+      const ignoreNextRevealCountRef=useRef(false);           // prevents reveal-after-back from counting
       const inputRef=useRef(null), [input,setInput]=useState("");
+
       useEffect(()=>{ if(!isTouch) inputRef.current?.focus(); else document.activeElement?.blur(); },[date,mode,active]);
 
-      /* LOOKUP state & fns */
+      /* LOOKUP */
       const [lookupIn,setLookupIn]=useState(""); const [lookupOut,setLookupOut]=useState("");
       function runLookup(){
         const s=lookupIn.trim();
@@ -150,8 +149,7 @@
         if(mm<1||mm>12){ setLookupOut("Month must be 1–12."); return; }
         const maxd=dim(yy,mm);
         if(dd<1||dd>maxd){ setLookupOut(`Day must be 1–${maxd} for ${MONTH[mm-1]}.`); return; }
-        const d=DAY[wday(yy,mm,dd)];
-        setLookupOut(`${MONTH[mm-1]} ${dd}, ${fmtYear(yy)} is a ${d}.`);
+        setLookupOut(`${MONTH[mm-1]} ${dd}, ${fmtYear(yy)} is a ${weekdayName(yy,mm,dd)}.`);
       }
       function clearLookup(){ setLookupIn(""); setLookupOut(""); if(document.activeElement) document.activeElement.blur(); }
 
@@ -187,7 +185,7 @@
       }
 
       function applyEra(newEra){
-        if(newEra===era) return;  // don't regenerate if same era tapped
+        if(newEra===era) return;  // don’t regenerate if same era tapped
         setEra(newEra);
         let mn, mx;
         if(newEra==='AD'){
@@ -242,7 +240,7 @@
             if(r<=.001){
               qDeadlineRef.current=null;
               updateStats(cur=>{ cur.played+=1; cur.streak=0; });
-              setStatus('incorrect'); setMsg(`Time! Answer: ${DAY[correct]}. Game over.`); setActive(false);
+              setMsg(`Time! Answer: ${weekdayName(date.y,date.m,date.d)}. Game over.`); setActive(false);
             }
           }
           if(mode==="flash" && active && phase==='show' && flashDeadlineRef.current){
@@ -260,12 +258,14 @@
       const arm=()=>{
         __hideErr();
         setActive(false); setMsg(""); setGuesses([]); setFlash(null);
-        setCountedWrong(false); setStatus(null);
+        setCountedWrong(false);
         setPhase('dash'); clearTimeout(flashTimerRef.current);
         setBlitzRemain(blitzSec); blitzStartRef.current=null; blitzPausedAtRef.current=null; blitzPausedAccRef.current=0; setBlitzRunning(false);
         qDeadlineRef.current=null; qPausedAtRef.current=null; qPausedAccRef.current=0; setQRemain(qSec);
         flashDeadlineRef.current=null; setFlashRemainMs(flashMs);
         tStartRef.current=null;
+        ignoreNextRevealCountRef.current=false;
+        clearTimeout(msgTimerRef.current);
       };
 
       const begin=()=>{
@@ -290,6 +290,8 @@
           setStack(s=>[...s,{...date}]);
           setDate(randomDate(minY,maxY));
           setGuesses([]); setCountedWrong(false);
+          ignoreNextRevealCountRef.current=false;
+          clearTimeout(msgTimerRef.current); setMsg("");
         }
         if(mode==="deduction"){ setDedStack(s=>[...s, ded]); spawnDed(); }
       }
@@ -298,39 +300,45 @@
 
       const trackOn = ()=> isTimer(mode) || (mode==="classic"&&trackClassic) || (mode==="deduction"&&trackDed);
 
-      const doNew=()=>{ if(isTimer(mode) && !active){ setMsg("Press Begin to start."); return; } setMsg("New."); setStatus(null); setGuesses([]); pushAndNext(); };
+      const doNew=()=>{ if(isTimer(mode) && !active){ setMsg("Press Begin to start."); return; } pushAndNext(); };
 
       function reveal(){
+        // never count reveal right after a Back
+        const countThisReveal = !ignoreNextRevealCountRef.current;
+        ignoreNextRevealCountRef.current=false;
+
         if(mode==="deduction"){
           if(!ded) return;
-          if(!statsOff){ updateStats(cur=>{ cur.played+=1; cur.streak=0; }); }
+          if(!statsOff && countThisReveal){ updateStats(cur=>{ cur.played+=1; cur.streak=0; }); }
           const ans = ded.type==="year" ? fmtYear(ded.y) : ded.type==="month" ? MONTH[ded.m-1] : String(ded.d);
-          setMsg(`Answer: ${ans}.`); setStatus('incorrect'); return;
+          setMsg(`Answer: ${ans}.`);
+          clearTimeout(msgTimerRef.current);
+          msgTimerRef.current=setTimeout(()=>setMsg(""),1800);
+          return;
         }
-        if(!statsOff && !countedWrong){ updateStats(cur=>{ cur.played+=1; cur.streak=0; }); }
-        setCountedWrong(true);
-        setMsg(`Answer: ${DAY[correct]}.`); setStatus('incorrect');
-        if(mode==="flash"){
-          clearTimeout(flashTimerRef.current); setPhase('dash'); setActive(false); flashDeadlineRef.current=null; setFlashRemainMs(flashMs);
-        }
+        if(!statsOff && countThisReveal && !countedWrong){ updateStats(cur=>{ cur.played+=1; cur.streak=0; }); }
+        if(countThisReveal) setCountedWrong(true);
+        setMsg(`Answer: ${weekdayName(date.y,date.m,date.d)}.`);
+        if(mode==="flash"){ clearTimeout(flashTimerRef.current); setPhase('dash'); setActive(false); flashDeadlineRef.current=null; setFlashRemainMs(flashMs); }
+        clearTimeout(msgTimerRef.current);
+        msgTimerRef.current=setTimeout(()=>setMsg(""),1800);
       }
 
       function goBack(){
+        const prev = mode==="deduction" ? dedStack[dedStack.length-1] : stack[stack.length-1];
+        if(!prev){ setMsg("Nothing to go back to."); return; }
+
         if(mode==="deduction"){
-          const prev = dedStack[dedStack.length-1]; if(!prev){ setMsg("Nothing to go back to."); return; }
           setDedStack(s=>s.slice(0,-1)); setDed(prev);
           const ans = prev.type==="year" ? fmtYear(prev.y) : prev.type==="month" ? MONTH[prev.m-1] : String(prev.d);
-          setMsg(`Answer: ${ans}.`); setStatus(null); return;
+          setMsg(`Answer: ${ans}.`);
+        }else{
+          setStack(s=>s.slice(0,-1)); setDate(prev); setCountedWrong(false);
+          setMsg(`Answer: ${weekdayName(prev.y,prev.m,prev.d)}.`);
         }
-        const prev = stack[stack.length-1]; if(!prev){ setMsg("Nothing to go back to."); return; }
-        setStack(s=>s.slice(0,-1)); setDate(prev); setCountedWrong(false);
-        setMsg(`Answer: ${DAY[wday(prev.y,prev.m,prev.d)]}.`); setStatus(null); setGuesses([]);
-      }
-
-      function showCorrectPillBriefly(){
-        clearTimeout(pillTimerRef.current);
-        setStatus('correct');
-        pillTimerRef.current=setTimeout(()=>setStatus(null),800);
+        ignoreNextRevealCountRef.current=true;      // next Reveal won’t count
+        clearTimeout(msgTimerRef.current);
+        msgTimerRef.current=setTimeout(()=>setMsg(""),1800);
       }
 
       function submitDoW(val){
@@ -338,7 +346,6 @@
         const idx = typeof val==="number"?val: Number(val);
         if(idx===wday(date.y,date.m,date.d)){
           setFlash({type:'good', idx}); setTimeout(()=>setFlash(null),450);
-          showCorrectPillBriefly();
           if(!statsOff && tStartRef.current && trackOn()){
             const dt=(performance.now()-tStartRef.current)/1000;
             updateStats(cur=>{ cur.timeSum+=dt; cur.timeCnt+=1; });
@@ -349,16 +356,13 @@
             qDeadlineRef.current = now + qSec*1000;
             qPausedAccRef.current = 0; qPausedAtRef.current = null; setQRemain(qSec);
           }
-          if(mode==="flash"){
-            clearTimeout(flashTimerRef.current); setPhase('dash'); setActive(false); flashDeadlineRef.current=null; setFlashRemainMs(flashMs);
-          }
+          if(mode==="flash"){ clearTimeout(flashTimerRef.current); setPhase('dash'); setActive(false); flashDeadlineRef.current=null; setFlashRemainMs(flashMs); }
           pushAndNext();
         }else{
           if(!statsOff && !countedWrong){ updateStats(cur=>{ cur.played+=1; cur.streak=0; }); }
           setCountedWrong(true);
-          setStatus('incorrect');
-          setGuesses(g=>g.includes(DAY[idx])?g:[...g,DAY[idx]]);  // record incorrect guesses
-          if(mode==="sudden"){ setMsg(`Answer: ${DAY[correct]}. Game over.`); setActive(false); }
+          setGuesses(g=>g.includes(DAY[idx])?g:[...g,DAY[idx]]);
+          if(mode==="sudden"){ setMsg(`Answer: ${weekdayName(date.y,date.m,date.d)}. Game over.`); setActive(false); }
           setFlash({type:'bad', idx}); setTimeout(()=>setFlash(null),450);
         }
       }
@@ -404,35 +408,33 @@
       function submitDedAnswer(val){
         if(!ded) return;
         const setCorrectThenNext = ()=>{
-          showCorrectPillBriefly();
           requestAnimationFrame(()=>setTimeout(spawnDed, 60));
         };
-        const setWrong = ()=>{ setStatus('incorrect'); };
         if(ded.type==="year"){
           const ok = (+val)===ded.y; flashDed('year', +val, ok);
           if(ok){ if(!statsOff && trackDed && tStartRef.current){ const dt=(performance.now()-tStartRef.current)/1000; updateStats(cur=>{cur.timeSum+=dt; cur.timeCnt+=1;}); }
             if(!statsOff){ updateStats(cur=>{ cur.played+=1; cur.good+=1; cur.streak+=1; if(cur.streak>cur.best) cur.best=cur.streak; }); }
             setCorrectThenNext();
-          }else{ if(!statsOff){ updateStats(cur=>{ cur.played+=1; cur.streak=0; }); } setWrong(); }
+          }else{ if(!statsOff){ updateStats(cur=>{ cur.played+=1; cur.streak=0; }); } }
         }
         if(ded.type==="month"){
           const ok = (+val)===ded.m; flashDed('month', +val, ok);
           if(ok){ if(!statsOff && trackDed && tStartRef.current){ const dt=(performance.now()-tStartRef.current)/1000; updateStats(cur=>{cur.timeSum+=dt; cur.timeCnt+=1;}); }
             if(!statsOff){ updateStats(cur=>{ cur.played+=1; cur.good+=1; cur.streak+=1; if(cur.streak>cur.best) cur.best=cur.streak; }); }
             setCorrectThenNext();
-          }else{ if(!statsOff){ updateStats(cur=>{ cur.played+=1; cur.streak=0; }); } setWrong(); }
+          }else{ if(!statsOff){ updateStats(cur=>{ cur.played+=1; cur.streak=0; }); } }
         }
         if(ded.type==="day"){
           const ok = (+val)===ded.d; flashDed('day', +val, ok);
           if(ok){ if(!statsOff && trackDed && tStartRef.current){ const dt=(performance.now()-tStartRef.current)/1000; updateStats(cur=>{cur.timeSum+=dt; cur.timeCnt+=1;}); }
             if(!statsOff){ updateStats(cur=>{ cur.played+=1; cur.good+=1; cur.streak+=1; if(cur.streak>cur.best) cur.best=cur.streak; }); }
             setCorrectThenNext();
-          }else{ if(!statsOff){ updateStats(cur=>{ cur.played+=1; cur.streak=0; }); } setWrong(); }
+          }else{ if(!statsOff){ updateStats(cur=>{ cur.played+=1; cur.streak=0; }); } }
         }
       }
 
       useEffect(()=>{ 
-        arm(); setGuesses([]); setStatus(null); setStack([]); setDedStack([]); setMsg("");
+        arm(); setGuesses([]); setStack([]); setDedStack([]); setMsg("");
         if(mode==="deduction"){ setPhase('dash'); spawnDed(); }
       },[mode]);
       useEffect(()=>{ if(mode==="deduction") spawnDed(); },[dedType]);
@@ -451,25 +453,13 @@
       const showDash = isTimer(mode) && !active;
       const showDots = (mode==="flash" && active && phase==='hide');
 
-      const dedHeadline = ded ? (
-        ded.type==="year" ? `${MONTH[ded.m-1]} ${ded.d}` :
-        ded.type==="month" ? `${ded.d}, ${fmtYear(ded.y)}` :
-        `${MONTH[ded.m-1]}, ${fmtYear(ded.y)}`
-      ) : "—";
-
-      const headline = mode==="deduction" ? dedHeadline
-                       : (showDash ? "—" : showDots ? "…" : fmt(date.y,date.m,date.d));
-
-      const baseBtn="w-full rounded-2xl border px-4 py-3 text-base md:text-sm transition shadow-sm select-none";
-      const idleBtn="border-purple-800/60 bg-purple-900/30 hover:bg-purple-900/60";
-
       const [rangeOpen,setRangeOpen]=useState(false);
       const RangePanel = (
         <div className="mt-3 rounded-2xl card p-3">
           <button onPointerDown={(e)=>{e.preventDefault(); setRangeOpen(o=>!o);}}
                   className="w-full text-left text-sm text-purple-200/90 flex items-center justify-between">
             <span>Year range <span className="tabular-nums ml-1">{minY} → {maxY}</span></span>
-            <span className={`transition-transform text-xl ${rangeOpen?'rotate-180':''}`}>▾</span>
+            <span className={`transition-transform text-2xl ${rangeOpen?'rotate-180':''}`}>▾</span>
           </button>
           <div className="expander" style={{maxHeight:rangeOpen?'38vh':'0px'}}>
             <div className="mt-3 space-y-3 pr-1">
@@ -497,6 +487,18 @@
       const avgDisabled = statsOff || !(isTimer(mode) || (mode==="classic"&&trackClassic) || (mode==="deduction"&&trackDed));
       const avgValue = (!avgDisabled && S.timeCnt) ? `${(S.timeSum/S.timeCnt).toFixed(2)}s` : "—";
 
+      // toggle handler that enforces the penalty-new when disabling avg time
+      function handleDisableAvgToggle(checked){
+        const willDisable = checked===true; // “Disable avg time” ON
+        if(mode==="classic"){
+          setTrackClassic(!checked);
+          if(willDisable){ if(!statsOff){ updateStats(cur=>{ cur.played+=1; cur.streak=0; }); } setCountedWrong(true); pushAndNext(); }
+        }else{
+          setTrackDed(!checked);
+          if(willDisable){ if(!statsOff){ updateStats(cur=>{ cur.played+=1; cur.streak=0; }); } setCountedWrong(true); spawnDed(); }
+        }
+      }
+
       return (
         <div className="mx-auto px-4 py-5 w-full max-w-[480px] md:max-w-3xl lg:max-w-4xl">
           {/* Header */}
@@ -516,7 +518,7 @@
                 <option value="lookup">Lookup</option>
                 <option value="method">Method</option>
               </select>
-              <div className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 flex flex-col items-center leading-none text-[11px] text-white/90">
+              <div className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 flex flex-col items-center leading-none text-[8px] text-white/90">
                 <span>▲</span><span>▼</span>
               </div>
             </div>
@@ -573,7 +575,7 @@
                     <label className="flex items-center gap-2 text-sm">
                       <input type="checkbox" className="sr-only"
                         checked={!(mode==="classic"?trackClassic:trackDed)}
-                        onChange={e=> mode==="classic"?setTrackClassic(!e.target.checked):setTrackDed(!e.target.checked)} />
+                        onChange={e=>handleDisableAvgToggle(e.target.checked)} />
                       <span className={`w-10 h-6 rounded-full relative ${(!(mode==="classic"?trackClassic:trackDed))?"bg-rose-500/70":"bg-zinc-600"}`}>
                         <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${(!(mode==="classic"?trackClassic:trackDed))?"translate-x-4":""}`}></span>
                       </span>
@@ -647,7 +649,7 @@
                   {DAY.map((n,i)=>(
                     <button key={n}
                       onPointerDown={(e)=>{ e.preventDefault(); submitDoW(i); setInput(""); if(isTouch) document.activeElement?.blur(); }}
-                      className={`${baseBtn} ${flash && flash.idx===i ? (flash.type==='good'?'flash-good':'flash-bad')+' border-transparent' : idleBtn}`}>{n}</button>
+                      className={`${"w-full rounded-2xl border px-4 py-3 text-base md:text-sm transition shadow-sm select-none"} ${flash && flash.idx===i ? (flash.type==='good'?'flash-good':'flash-bad')+' border-transparent' : "border-purple-800/60 bg-purple-900/30 hover:bg-purple-900/60"}`}>{n}</button>
                   ))}
                 </div>
 
@@ -661,7 +663,6 @@
                     <button type="button" className="px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm" onPointerDown={(e)=>{e.preventDefault(); doNew();}}>New</button>
                     <button type="button" className="px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm" onPointerDown={(e)=>{e.preventDefault(); reveal();}}>Reveal</button>
                     <button type="button" className="px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm" onPointerDown={(e)=>{e.preventDefault(); goBack();}}>Back</button>
-                    <div className="ml-auto">{status && <Pill ok={status==='correct'} label={status==='correct'?'Correct':'Incorrect'} />}</div>
                   </div>
 
                   {(msg || guesses.length>0) && (
@@ -683,7 +684,7 @@
                       className={`px-3 py-1.5 rounded-lg text-sm border ${dedType===t?'bg-purple-600 border-purple-500':'bg-purple-900/40 border-purple-800/60 hover:bg-purple-900/70'}`}>
                       {t[0].toUpperCase()+t.slice(1)}
                     </button>
-                  )}
+                  ))}
                 </div>
 
                 <div className="mt-4">
@@ -691,7 +692,7 @@
                     <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
                       {Array.from({length: ded.b - ded.a + 1}, (_,i)=>ded.a+i).map(y=>(
                         <button key={y} onPointerDown={(e)=>{e.preventDefault(); submitDedAnswer(y);}}
-                          className={`${baseBtn} ${idleBtn} py-2 text-sm ${dedFlash&&dedFlash.kind==='year'&&dedFlash.value===y ? (dedFlash.ok?'flash-good':'flash-bad')+' border-transparent':''}`}>{fmtYear(y)}</button>
+                          className={`${"w-full rounded-2xl border px-4 py-3 text-base md:text-sm transition shadow-sm select-none"} ${"border-purple-800/60 bg-purple-900/30 hover:bg-purple-900/60"} py-2 text-sm ${dedFlash&&dedFlash.kind==='year'&&dedFlash.value===y ? (dedFlash.ok?'flash-good':'flash-bad')+' border-transparent':''}`}>{fmtYear(y)}</button>
                       ))}
                     </div>
                   )}
@@ -699,7 +700,7 @@
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
                       {MONTH.map((m,i)=>(
                         <button key={m} onPointerDown={(e)=>{e.preventDefault(); submitDedAnswer(i+1);}}
-                          className={`${baseBtn} ${idleBtn} ${dedFlash&&dedFlash.kind==='month'&&dedFlash.value===i+1 ? (dedFlash.ok?'flash-good':'flash-bad')+' border-transparent':''}`}>{m}</button>
+                          className={`${"w-full rounded-2xl border px-4 py-3 text-base md:text-sm transition shadow-sm select-none"} ${"border-purple-800/60 bg-purple-900/30 hover:bg-purple-900/60"} ${dedFlash&&dedFlash.kind==='month'&&dedFlash.value===i+1 ? (dedFlash.ok?'flash-good':'flash-bad')+' border-transparent':''}`}>{m}</button>
                       ))}
                     </div>
                   )}
@@ -707,7 +708,7 @@
                     <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-2">
                       {ded.options.map(dv=>(
                         <button key={dv} onPointerDown={(e)=>{e.preventDefault(); submitDedAnswer(dv);}}
-                          className={`${baseBtn} ${idleBtn} ${dedFlash&&dedFlash.kind==='day'&&dedFlash.value===dv ? (dedFlash.ok?'flash-good':'flash-bad')+' border-transparent':''}`}>{dv}</button>
+                          className={`${"w-full rounded-2xl border px-4 py-3 text-base md:text-sm transition shadow-sm select-none"} ${"border-purple-800/60 bg-purple-900/30 hover:bg-purple-900/60"} ${dedFlash&&dedFlash.kind==='day'&&dedFlash.value===dv ? (dedFlash.ok?'flash-good':'flash-bad')+' border-transparent':''}`}>{dv}</button>
                       ))}
                     </div>
                   )}
@@ -715,10 +716,9 @@
 
                 <div className="mt-4 rounded-2xl panel p-3">
                   <div className="flex flex-wrap gap-2">
-                    <button type="button" className="px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm" onPointerDown={(e)=>{e.preventDefault(); setDedStack(s=>[...s,ded]); spawnDed(); setStatus(null); setMsg("");}}>New</button>
+                    <button type="button" className="px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm" onPointerDown={(e)=>{e.preventDefault(); setDedStack(s=>[...s,ded]); spawnDed(); setMsg("");}}>New</button>
                     <button type="button" className="px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm" onPointerDown={(e)=>{e.preventDefault(); reveal();}}>Reveal</button>
                     <button type="button" className="px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm" onPointerDown={(e)=>{e.preventDefault(); goBack();}}>Back</button>
-                    <div className="ml-auto">{status && <Pill ok={status==='correct'} label={status==='correct'?'Correct':'Incorrect'} />}</div>
                   </div>
                   {msg && <div className="mt-3 text-sm">{msg}</div>}
                 </div>
