@@ -15,17 +15,22 @@
     .panel{background:rgba(88,28,135,.25);border:1px solid rgba(120,53,175,.45)}
     .thin{border:1px solid rgba(120,53,175,.35)}
     button,input,select{-webkit-tap-highlight-color:transparent}
+
     /* flash feedback */
     @keyframes flashPulse{0%{box-shadow:0 0 0 0 var(--ring);background:var(--bg0)}
       35%{box-shadow:0 0 0 10px var(--ring);background:var(--bg1)}
       100%{box-shadow:0 0 0 0 transparent;background:var(--bg0)}}
     .flash-good{--ring:rgba(16,185,129,.5);--bg0:rgba(16,185,129,.10);--bg1:rgba(16,185,129,.25);animation:flashPulse .45s ease-in-out}
     .flash-bad{--ring:rgba(239,68,68,.5);--bg0:rgba(239,68,68,.10);--bg1:rgba(239,68,68,.25);animation:flashPulse .45s ease-in-out}
+
     .chip{background:rgba(120,53,175,.25);border:1px solid rgba(120,53,175,.45);padding:.25rem .5rem;border-radius:.75rem;font-size:12px}
     .bar{height:6px;border-radius:6px;overflow:hidden;background:rgba(120,53,175,.25);border:1px solid rgba(120,53,175,.45)}
     .bar>span{display:block;height:100%;background:linear-gradient(90deg,#a855f7,#7c3aed)}
-    /* smooth expand/collapse for year-range */
+
+    /* smooth expand/collapse for year-range (sync with caret) */
     .expander{transition:max-height .35s ease;overflow:hidden;will-change:max-height}
+    .caret{transition:transform .35s ease}
+    .caret.rot{transform:rotate(180deg)}
   </style>
 </head>
 <body class="text-purple-50">
@@ -101,6 +106,7 @@
       /* Current date & stacks */
       const [date,setDate]=useState(()=>randomDate(1,10000));
       const [stack,setStack]=useState([]), [dedStack,setDedStack]=useState([]);
+      const [backView,setBackView]=useState(false); // true when viewing a previous date via Back
 
       const correct=useMemo(()=>wday(date.y,date.m,date.d),[date]);
       const [guesses,setGuesses]=useState([]);                   // wrong guesses list
@@ -189,6 +195,7 @@
           if(mn>mx){ mn=-10000; mx=10000; }
         }
         setMinY(mn); setMaxY(mx);
+        setBackView(false);
         setDate(randomDate(mn,mx));
         if(mode==="deduction") spawnDed();
       }
@@ -226,7 +233,7 @@
             const r=Math.max(0, (qDeadlineRef.current + qPausedAccRef.current - now)/1000);
             setQRemain(r);
             if(r<=.001){
-              qDeadlineRef.current=null;
+              qDeadlineRef.current=null;         // stop in background after game over
               updateStats(cur=>{ cur.played+=1; cur.streak=0; });
               setStatus('incorrect'); setMsg(`Time! Answer: ${DAY[wday(date.y,date.m,date.d)]}. Game over.`); setActive(false);
             }
@@ -247,7 +254,7 @@
       const arm=()=>{
         hideErr();
         setActive(false); setMsg(""); setGuesses([]); setFlash(null);
-        setCountedWrong(false); setStatus(null);
+        setCountedWrong(false); setStatus(null); setBackView(false);
         setPhase('dash'); clearTimeout(flashTimerRef.current);
         setBlitzRemain(blitzSec); blitzStartRef.current=null; blitzPausedAtRef.current=null; blitzPausedAccRef.current=0; setBlitzRunning(false);
         qDeadlineRef.current=null; qPausedAtRef.current=null; qPausedAccRef.current=0; setQRemain(qSec);
@@ -257,7 +264,7 @@
 
       const begin=()=>{
         hideErr();
-        setActive(true); setMsg("");
+        setActive(true); setMsg(""); setBackView(false);
         if(mode==="blitz"){ blitzStartRef.current=performance.now(); blitzPausedAccRef.current=0; blitzPausedAtRef.current=null; setBlitzRunning(true); setBlitzRemain(blitzSec); }
         if(mode==="sudden"){ const now=performance.now(); qDeadlineRef.current=now + qSec*1000; qPausedAccRef.current=0; qPausedAtRef.current=null; setQRemain(qSec); }
         if(mode==="flash"){
@@ -276,18 +283,26 @@
         if(mode==="classic"||mode==="flash"||mode==="blitz"||mode==="sudden"){
           setStack(s=>[...s,{...date}]);
           setDate(randomDate(minY,maxY));
-          setGuesses([]); setCountedWrong(false);
+          setGuesses([]); setCountedWrong(false); setBackView(false); setMsg("");
         }
-        if(mode==="deduction"){ setDedStack(s=>[...s, ded]); spawnDed(); }
+        if(mode==="deduction"){ setDedStack(s=>[...s, ded]); spawnDed(); setBackView(false); setMsg(""); }
       }
 
       useEffect(()=>{ if(mode==="classic" && trackClassic) tStartRef.current=performance.now(); },[mode,trackClassic,date]);
 
-      const trackOn = ()=> isTimer(mode) || (mode==="classic"&&trackClassic) || (mode==="deduction"&&trackDed);
+      const avgEnabled = (isTimer(mode) || (mode==="classic"&&trackClassic) || (mode==="deduction"&&trackDed)) && !statsOff;
+      const avgStr = avgEnabled ? (S.timeCnt?`${(S.timeSum/S.timeCnt).toFixed(2)}s`:"—") : "—";
 
-      const doNew=()=>{ if(isTimer(mode) && !active){ setMsg("Press Begin to start."); return; } setStatus(null); setGuesses([]); pushAndNext(); };
+      const interactDisabled = (isTimer(mode) && !active) || backView;
+
+      const doNew=()=>{
+        if(isTimer(mode) && !active){ setMsg("Press Begin to start."); return; }
+        setStatus(null); setGuesses([]); setMsg(""); setBackView(false);
+        pushAndNext();
+      };
 
       function reveal(){
+        if(backView) return; // no reveal on historical view
         if(mode==="deduction"){
           if(!ded) return;
           updateStats(cur=>{ cur.played+=1; cur.streak=0; });
@@ -297,6 +312,7 @@
         if(!countedWrong){ updateStats(cur=>{ cur.played+=1; cur.streak=0; }); }
         setCountedWrong(true);
         setMsg(`Answer: ${DAY[wday(date.y,date.m,date.d)]}.`); setStatus('incorrect');
+        if(mode==="sudden"){ qDeadlineRef.current=null; setActive(false); } // stop the per-Q timer
         if(mode==="flash"){
           clearTimeout(flashTimerRef.current); setPhase('dash'); setActive(false); flashDeadlineRef.current=null; setFlashRemainMs(flashMs);
         }
@@ -307,18 +323,18 @@
           const prev = dedStack[dedStack.length-1]; if(!prev){ setMsg("Nothing to go back to."); return; }
           setDedStack(s=>s.slice(0,-1)); setDed(prev);
           const ans = prev.type==="year" ? fmtYear(prev.y) : prev.type==="month" ? MONTH[prev.m-1] : String(prev.d);
-          setMsg(`Answer: ${ans}.`); setStatus(null); return;
+          setMsg(`Answer: ${ans}.`); setStatus(null); setBackView(true); return;
         }
         const prev = stack[stack.length-1]; if(!prev){ setMsg("Nothing to go back to."); return; }
         setStack(s=>s.slice(0,-1)); setDate(prev); setCountedWrong(false);
-        setMsg(`Answer: ${DAY[wday(prev.y,prev.m,prev.d)]}.`); setStatus(null); setGuesses([]);
+        setMsg(`Answer: ${DAY[wday(prev.y,prev.m,prev.d)]}.`); setStatus(null); setGuesses([]); setBackView(true);
       }
 
       function submitDoW(idx){
-        if(isTimer(mode) && !active){ setMsg("Press Begin to start."); return; }
+        if(interactDisabled){ setMsg(backView?"Viewing previous question. Press New.":"Press Begin to start."); return; }
         if(idx===wday(date.y,date.m,date.d)){
           setFlash({type:'good', idx}); setTimeout(()=>setFlash(null),450);
-          if(trackOn() && tStartRef.current){ const dt=(performance.now()-tStartRef.current)/1000; updateStats(cur=>{cur.timeSum+=dt; cur.timeCnt+=1;}); }
+          if(avgEnabled && tStartRef.current){ const dt=(performance.now()-tStartRef.current)/1000; updateStats(cur=>{cur.timeSum+=dt; cur.timeCnt+=1;}); }
           updateStats(cur=>{ cur.played+=1; cur.good+=1; cur.streak+=1; if(cur.streak>cur.best) cur.best=cur.streak; });
           if(mode==="sudden"){ const now=performance.now(); qDeadlineRef.current = now + qSec*1000; qPausedAccRef.current=0; qPausedAtRef.current=null; setQRemain(qSec); }
           if(mode==="flash"){ clearTimeout(flashTimerRef.current); setPhase('dash'); setActive(false); flashDeadlineRef.current=null; setFlashRemainMs(flashMs); }
@@ -328,8 +344,8 @@
           if(!countedWrong){ updateStats(cur=>{ cur.played+=1; cur.streak=0; }); }
           setCountedWrong(true);
           setStatus('incorrect');
-          if(!guesses.includes(DAY[idx])) setGuesses(g=>[...g,DAY[idx]]);
-          if(mode==="sudden"){ setMsg(`Answer: ${DAY[wday(date.y,date.m,date.d)]}. Game over.`); setActive(false); }
+          setGuesses(g=> g.includes(DAY[idx]) ? g : [...g,DAY[idx]]);
+          if(mode==="sudden"){ setMsg(`Answer: ${DAY[wday(date.y,date.m,date.d)]}. Game over.`); setActive(false); qDeadlineRef.current=null; }
           setFlash({type:'bad', idx}); setTimeout(()=>setFlash(null),450);
         }
       }
@@ -375,9 +391,10 @@
       }
       function submitDedAnswer(val){
         if(!ded) return;
+        if(backView){ setMsg("Viewing previous question. Press New."); return; }
         const nextSoon = ()=>requestAnimationFrame(()=>setTimeout(spawnDed,60));
         const okAdd = ()=>{
-          if(trackOn() && tStartRef.current){ const dt=(performance.now()-tStartRef.current)/1000; updateStats(cur=>{cur.timeSum+=dt; cur.timeCnt+=1;}); }
+          if((mode==="deduction"&&trackDed) && tStartRef.current){ const dt=(performance.now()-tStartRef.current)/1000; updateStats(cur=>{cur.timeSum+=dt; cur.timeCnt+=1;}); }
           updateStats(cur=>{ cur.played+=1; cur.good+=1; cur.streak+=1; if(cur.streak>cur.best) cur.best=cur.streak; });
           setStatus('correct'); nextSoon();
         };
@@ -390,7 +407,7 @@
 
       /* Mode changes */
       useEffect(()=>{
-        arm(); setGuesses([]); setStatus(null); setStack([]); setDedStack([]); setMsg("");
+        arm(); setGuesses([]); setStatus(null); setStack([]); setDedStack([]); setMsg(""); setBackView(false);
         if(mode==="deduction"){ setPhase('dash'); spawnDed(); }
       },[mode]);
       useEffect(()=>{ if(mode==="deduction") spawnDed(); },[dedType]);
@@ -407,15 +424,20 @@
         else { setBcRange(r=>({...r,max:val})); const clamped = era==='BC' ? Math.min(val, -1) : (val===0?1:val); setMaxY(Math.max(clamped,minY)); }
       }
 
-      /* Computed values */
-      const avgEnabled = (isTimer(mode) || (mode==="classic"&&trackClassic) || (mode==="deduction"&&trackDed)) && !statsOff;
-      const avgStr = avgEnabled ? (S.timeCnt?`${(S.timeSum/S.timeCnt).toFixed(2)}s`:"—") : "—";
+      /* Year range height measurement for smooth open/close synced with caret */
+      const [rangeOpen,setRangeOpen]=useState(false);
+      const rangeRef=useRef(null);
+      const [rangeMax,setRangeMax]=useState(0);
+      useEffect(()=>{
+        const update=()=>{ if(rangeRef.current){ setRangeMax(rangeRef.current.scrollHeight); } };
+        update(); const ro=new ResizeObserver(update); if(rangeRef.current) ro.observe(rangeRef.current);
+        addEventListener('resize',update);
+        return ()=>{ ro.disconnect(); removeEventListener('resize',update); };
+      },[]);
 
       /* UI bits */
       const baseBtn="w-full rounded-2xl border px-4 py-3 text-base md:text-sm transition shadow-sm select-none";
       const idleBtn="border-purple-800/60 bg-purple-900/30 hover:bg-purple-900/60";
-
-      const [rangeOpen,setRangeOpen]=useState(false);
 
       return (
         <div className="mx-auto px-4 py-5 w-full max-w-[480px] md:max-w-3xl lg:max-w-4xl">
@@ -434,6 +456,7 @@
                 <option value="flash">Flash</option>
                 <option value="deduction">Deduction</option>
                 <option value="lookup">Lookup</option>
+                <option value="method">Method</option>
               </select>
               {/* smaller stacked carets */}
               <div className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 flex flex-col items-center leading-none text-[10px] text-white/90">
@@ -442,8 +465,8 @@
             </div>
           </div>
 
-          {/* Stats/toggles (not on lookup) */}
-          {mode!=="lookup" && (
+          {/* Stats/toggles (not on lookup/method) */}
+          {mode!=="lookup" && mode!=="method" && (
             <>
               <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3">
                 <Stat label="Score" value={`${S.good}/${S.played}`} disabled={statsOff}/>
@@ -526,6 +549,7 @@
                     </label>
                   )}
                 </div>
+
                 <div className="flex items-center gap-3">
                   <label className="flex items-center gap-2 text-sm">
                     <input type="checkbox" className="sr-only" checked={statsOff} onChange={e=>toggleStatsOff(e.target.checked)} />
@@ -534,22 +558,40 @@
                     </span>
                     <span>Disable stats</span>
                   </label>
-                  <button className="text-xs px-3 py-1.5 rounded-lg bg-purple-700 hover:bg-purple-600" onPointerDown={(e)=>{e.preventDefault(); resetStatsCurrent();}}>Reset stats</button>
+
+                  <!-- Reset stats now also generates a new prompt -->
+                  <button
+                    className="text-xs px-3 py-1.5 rounded-lg bg-purple-700 hover:bg-purple-600"
+                    onPointerDown={(e)=>{
+                      e.preventDefault();
+                      resetStatsCurrent();
+                      setMsg(""); setGuesses([]); setStatus(null); setBackView(false);
+                      if(mode==="deduction"){ setDedStack([]); spawnDed(); }
+                      else{ pushAndNext(); }
+                    }}
+                  >
+                    Reset stats
+                  </button>
                 </div>
               </div>
             </>
           )}
 
           {/* Year range */}
-          {mode!=="lookup" && (
+          {mode!=="lookup" && mode!=="method" && (
             <div className="mt-3 rounded-2xl card p-3">
-              <button onPointerDown={(e)=>{e.preventDefault(); setRangeOpen(o=>!o);}}
-                      className="w-full text-left text-sm text-purple-200/90 flex items-center justify-between">
+              <button
+                onPointerDown={(e)=>{e.preventDefault(); setRangeOpen(o=>!o);}}
+                className="w-full text-left text-sm text-purple-200/90 flex items-center justify-between"
+              >
                 <span>Year range <span className="tabular-nums ml-1">{minY} → {maxY}</span></span>
-                <span className={`transition-transform text-lg ${rangeOpen?'rotate-180':''}`}>▾</span>
+                <span className={`caret text-xl ${rangeOpen?'rot':''}`}>▾</span>
               </button>
-              <div className="expander" style={{maxHeight:rangeOpen?'480px':'0px'}}>
-                <div className="mt-3 space-y-3 pr-1">
+              <div
+                className="expander"
+                style={{maxHeight:rangeOpen?`${rangeMax}px`:'0px'}}
+              >
+                <div ref={rangeRef} className="mt-3 space-y-3 pr-1">
                   <div className="flex items-center gap-3">
                     <input type="range"
                            min={era==='AD'?1:-10000}
@@ -564,7 +606,7 @@
                            onChange={e=>setMaxActive(+e.target.value)}
                            className="w-full accent-purple-500"/>
                   </div>
-                  <p className="text-xs text-purple-300/70">Proleptic Gregorian calendar. Year 0 isn’t shown (1 BC ↔ year 0 internally). AD and AD+BC remember their own ranges.</p>
+                  <p className="text-xs text-purple-300/70">Proleptic Gregorian calendar. Year 0 isn’t shown (1 BC ↔ year 0 internally). AD, BC and AD+BC remember their own ranges. Sliders snap to 100-year steps.</p>
                 </div>
               </div>
             </div>
@@ -592,8 +634,15 @@
               </div>
             )}
 
+            {/* Method page (blank content for now) */}
+            {mode==="method" && (
+              <div className="min-h-[40vh] flex items-center justify-center text-purple-200/70 text-sm">
+                Coming soon.
+              </div>
+            )}
+
             {/* Title + Headline */}
-            {mode!=="lookup" && mode!=="deduction" && (
+            {mode!=="lookup" && mode!=="deduction" && mode!=="method" && (
               <div className="text-center">
                 <div className="text-xs uppercase tracking-widest text-purple-100/80">What day is this?</div>
                 <div className="mt-1 text-3xl md:text-4xl font-bold">{(isTimer(mode)&&!active)?"—": (mode==="flash"&&active&&phase==='hide')?"…": fmt(date.y,date.m,date.d)}</div>
@@ -614,7 +663,7 @@
             {/* ======= CLASSIC / BLITZ / SUDDEN / FLASH ======= */}
             {["classic","blitz","sudden","flash"].includes(mode) && (
               <>
-                <div className={`mt-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3 ${(!active && isTimer(mode))?'opacity-60 pointer-events-none':''}`}>
+                <div className={`mt-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3 ${interactDisabled?'opacity-60 pointer-events-none cursor-not-allowed':''}`}>
                   {DAY.map((n,i)=>(
                     <button key={n}
                       onPointerDown={(e)=>{ e.preventDefault(); submitDoW(i); setInput(""); if(isTouch) document.activeElement?.blur(); }}
@@ -630,9 +679,14 @@
                       : <button type="button" className="px-4 py-2 rounded-xl bg-rose-600/90 text-white text-sm font-medium" onPointerDown={(e)=>{e.preventDefault(); arm();}}>Reset</button>
                     )}
                     <button type="button" className="px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm" onPointerDown={(e)=>{e.preventDefault(); doNew();}}>New</button>
-                    <button type="button" className="px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm" onPointerDown={(e)=>{e.preventDefault(); reveal();}}>Reveal</button>
+                    <button
+                      type="button"
+                      className={`px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm ${backView?'opacity-60 pointer-events-none cursor-not-allowed':''}`}
+                      onPointerDown={(e)=>{e.preventDefault(); reveal();}}
+                    >
+                      Reveal
+                    </button>
                     <button type="button" className="px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm" onPointerDown={(e)=>{e.preventDefault(); goBack();}}>Back</button>
-                    {/* no Correct/Incorrect pills anymore */}
                   </div>
 
                   {(msg || guesses.length>0) && (
@@ -649,10 +703,9 @@
             {mode==="deduction" && (
               <>
                 <div className="mt-3 flex flex-wrap gap-2 justify-center">
-                  {["year","month","day"].map((t)=>(
-                    <button
-                      key={t}
-                      onPointerDown={(e)=>{e.preventDefault(); setDedType(t);}}
+                  {["year","month","day"].map(t=>(
+                    <button key={t}
+                      onPointerDown={(e)=>{e.preventDefault(); setDedType(t); setBackView(false); setMsg("");}}
                       className={`px-3 py-1.5 rounded-lg text-sm border ${dedType===t?'bg-purple-600 border-purple-500':'bg-purple-900/40 border-purple-800/60 hover:bg-purple-900/70'}`}
                     >
                       {t[0].toUpperCase()+t.slice(1)}
@@ -662,7 +715,7 @@
 
                 <div className="mt-4">
                   {ded && ded.type==="year" && (
-                    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
+                    <div className={`grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2 ${backView?'opacity-60 pointer-events-none cursor-not-allowed':''}`}>
                       {Array.from({length: ded.b - ded.a + 1}, (_,i)=>ded.a+i).map(y=>(
                         <button key={y} onPointerDown={(e)=>{e.preventDefault(); submitDedAnswer(y);}}
                           className={`${baseBtn} ${idleBtn} py-2 text-sm ${dedFlash&&dedFlash.kind==='year'&&dedFlash.value===y ? (dedFlash.ok?'flash-good':'flash-bad')+' border-transparent':''}`}>{fmtYear(y)}</button>
@@ -670,7 +723,7 @@
                     </div>
                   )}
                   {ded && ded.type==="month" && (
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                    <div className={`grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 ${backView?'opacity-60 pointer-events-none cursor-not-allowed':''}`}>
                       {MONTH.map((m,i)=>(
                         <button key={m} onPointerDown={(e)=>{e.preventDefault(); submitDedAnswer(i+1);}}
                           className={`${baseBtn} ${idleBtn} ${dedFlash&&dedFlash.kind==='month'&&dedFlash.value===i+1 ? (dedFlash.ok?'flash-good':'flash-bad')+' border-transparent':''}`}>{m}</button>
@@ -678,7 +731,7 @@
                     </div>
                   )}
                   {ded && ded.type==="day" && (
-                    <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-2">
+                    <div className={`grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-2 ${backView?'opacity-60 pointer-events-none cursor-not-allowed':''}`}>
                       {ded.options.map(dv=>(
                         <button key={dv} onPointerDown={(e)=>{e.preventDefault(); submitDedAnswer(dv);}}
                           className={`${baseBtn} ${idleBtn} ${dedFlash&&dedFlash.kind==='day'&&dedFlash.value===dv ? (dedFlash.ok?'flash-good':'flash-bad')+' border-transparent':''}`}>{dv}</button>
@@ -689,8 +742,8 @@
 
                 <div className="mt-4 rounded-2xl panel p-3">
                   <div className="flex flex-wrap gap-2">
-                    <button type="button" className="px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm" onPointerDown={(e)=>{e.preventDefault(); setDedStack(s=>[...s,ded]); spawnDed(); setStatus(null); setMsg("");}}>New</button>
-                    <button type="button" className="px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm" onPointerDown={(e)=>{e.preventDefault(); reveal();}}>Reveal</button>
+                    <button type="button" className="px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm" onPointerDown={(e)=>{e.preventDefault(); setDedStack(s=>[...s,ded]); spawnDed(); setStatus(null); setMsg(""); setBackView(false);}}>New</button>
+                    <button type="button" className={`px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm ${backView?'opacity-60 pointer-events-none cursor-not-allowed':''}`} onPointerDown={(e)=>{e.preventDefault(); reveal();}}>Reveal</button>
                     <button type="button" className="px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm" onPointerDown={(e)=>{e.preventDefault(); goBack();}}>Back</button>
                   </div>
                   {msg && <div className="mt-3 text-sm">{msg}</div>}
@@ -705,7 +758,7 @@
       );
     }
 
-    /* -------- Lookup component (kept self-contained) -------- */
+    /* -------- Lookup component (self-contained) -------- */
     function Lookup(){
       const [lookupIn,setLookupIn]=useState("");
       const [lookupOut,setLookupOut]=useState("");
