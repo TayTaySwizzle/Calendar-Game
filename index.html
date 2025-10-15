@@ -18,12 +18,12 @@
     @keyframes flashPulse{0%{box-shadow:0 0 0 0 var(--ring);background:var(--bg0)}
       35%{box-shadow:0 0 0 10px var(--ring);background:var(--bg1)}
       100%{box-shadow:0 0 0 0 transparent;background:var(--bg0)}}
-    .flash-good{--ring:rgba(16,185,129,.5);--bg0:rgba(16,185,129,.10);--bg1:rgba(16,185,129,.25);animation:flashPulse .45s ease-in-out}
-    .flash-bad{--ring:rgba(239,68,68,.5);--bg0:rgba(239,68,68,.10);--bg1:rgba(239,68,68,.25);animation:flashPulse .45s ease-in-out}
+    .flash-good{--ring:rgba(16,185,129,.5);--bg0:rgba(16,185,129,.35);--bg1:rgba(16,185,129,.5);animation:flashPulse .45s ease-in-out}
+    .flash-bad{--ring:rgba(239,68,68,.5);--bg0:rgba(239,68,68,.35);--bg1:rgba(239,68,68,.5);animation:flashPulse .45s ease-in-out}
     .chip{background:rgba(120,53,175,.25);border:1px solid rgba(120,53,175,.45);padding:.25rem .5rem;border-radius:.75rem;font-size:12px}
     .bar{height:6px;border-radius:6px;overflow:hidden;background:rgba(120,53,175,.25);border:1px solid rgba(120,53,175,.45)}
     .bar>span{display:block;height:100%;background:linear-gradient(90deg,#a855f7,#7c3aed)}
-    .expander{transition:max-height .3s ease;overflow:hidden}
+    .expander{transition:max-height .3s ease-in-out,opacity .3s ease-in-out;overflow:hidden}
   </style>
 </head>
 <body class="text-purple-50">
@@ -140,6 +140,8 @@
       const [ded,setDed]=useState(null);
       const [dedFlash,setDedFlash]=useState(null);
 
+      const [lookupState,setLookupState]=useState({input:"", feedback:"", history:[]});
+
       const inputRef=useRef(null), [input,setInput]=useState("");
       useEffect(()=>{ if(!isTouch) inputRef.current?.focus(); else document.activeElement?.blur(); },[date,mode,active]);
 
@@ -155,7 +157,7 @@
 
       /* ===== Year snap (clean 100s; stable near 0; allow BC top −1) ===== */
       function snapYear(v, e){
-        if(e==='BC' && v>-50){ return -1; } // allow −1 as max in BC
+        if((e==='BC' || e==='BOTH') && v<0 && v>-50){ return -1; } // allow −1 near the BC ceiling
         let s = Math.round(v/100)*100;
         if(s===0) s = (v<0?-100:100);
         if(e==='AD') s = Math.max(100, Math.min(10000, s));
@@ -449,20 +451,6 @@
       useEffect(()=>{ arm(); setGuesses([]); setStack([]); setDedStack([]); setMsg(""); setLocked(false); setRevealed(false); if(mode==="deduction"){ setPhase('dash'); spawnDed(); } },[mode]);
       useEffect(()=>{ if(mode==="deduction") spawnDed(); },[dedType]);
 
-      /* slider handlers — each era updates its own store only */
-      function setMinActive(v){
-        const val = snapYear(+v, era);
-        if(era==='AD'){ const clamped=Math.min(val, maxY); setAdRange(r=>({...r,min:clamped})); setMinY(clamped); }
-        else if(era==='BC'){ const clamped=Math.min(val, maxY); setBcRange(r=>({...r,min:clamped})); setMinY(clamped); }
-        else { const newMin=Math.min(val,maxY); setBothRange(r=>({...r,min:newMin})); setMinY(newMin); }
-      }
-      function setMaxActive(v){
-        const val = snapYear(+v, era);
-        if(era==='AD'){ const clamped=Math.max(val, Math.max(100,minY)); setAdRange(r=>({...r,max:clamped})); setMaxY(clamped); }
-        else if(era==='BC'){ const clamped=Math.max(val, minY); setBcRange(r=>({...r,max:clamped})); setMaxY(clamped); }
-        else { const newMax=Math.max(val,minY); setBothRange(r=>({...r,max:newMax})); setMaxY(newMax); }
-      }
-
       const showDash = isTimer(mode) && !active;
       const showDots = (mode==="flash" && active && phase==='hide');
 
@@ -475,30 +463,213 @@
 
       /* range panel */
       const [rangeOpen,setRangeOpen]=useState(false);
+      const rangeInnerRef=useRef(null);
+      const [rangeHeight,setRangeHeight]=useState(0);
+      const [editingRange,setEditingRange]=useState(null);
+      const [rangeDraft,setRangeDraft]=useState(()=>({
+        AD:{min:String(adRange.min), max:String(adRange.max)},
+        BC:{min:String(Math.abs(bcRange.min)), max:String(Math.abs(bcRange.max))},
+        BOTH:{bc:String(Math.abs(bothRange.min)), ad:String(bothRange.max)}
+      }));
+
+      useEffect(()=>{
+        const measure=()=>{ if(rangeInnerRef.current){ setRangeHeight(rangeInnerRef.current.scrollHeight); } };
+        measure();
+      },[era,minY,maxY,rangeOpen]);
+      useEffect(()=>{
+        const onResize=()=>{ if(rangeInnerRef.current){ setRangeHeight(rangeInnerRef.current.scrollHeight); } };
+        window.addEventListener('resize', onResize);
+        return ()=>window.removeEventListener('resize', onResize);
+      },[]);
+
+      useEffect(()=>{
+        setRangeDraft(prev=>{
+          let changed=false;
+          let nextAD=prev.AD;
+          let nextBC=prev.BC;
+          let nextBOTH=prev.BOTH;
+          const adMinStr=String(adRange.min), adMaxStr=String(adRange.max);
+          const bcMinStr=String(Math.abs(bcRange.min)), bcMaxStr=String(Math.abs(bcRange.max));
+          const bothBcStr=String(Math.abs(bothRange.min)), bothAdStr=String(bothRange.max);
+          if(editingRange!=='AD:min' && nextAD.min!==adMinStr){ nextAD={...nextAD, min:adMinStr}; changed=true; }
+          if(editingRange!=='AD:max' && nextAD.max!==adMaxStr){ nextAD={...nextAD, max:adMaxStr}; changed=true; }
+          if(editingRange!=='BC:min' && nextBC.min!==bcMinStr){ nextBC={...nextBC, min:bcMinStr}; changed=true; }
+          if(editingRange!=='BC:max' && nextBC.max!==bcMaxStr){ nextBC={...nextBC, max:bcMaxStr}; changed=true; }
+          if(editingRange!=='BOTH:bc' && nextBOTH.bc!==bothBcStr){ nextBOTH={...nextBOTH, bc:bothBcStr}; changed=true; }
+          if(editingRange!=='BOTH:ad' && nextBOTH.ad!==bothAdStr){ nextBOTH={...nextBOTH, ad:bothAdStr}; changed=true; }
+          if(!changed) return prev;
+          return {AD:nextAD, BC:nextBC, BOTH:nextBOTH};
+        });
+      },[adRange.min,adRange.max,bcRange.min,bcRange.max,bothRange.min,bothRange.max,editingRange]);
+
+      const setDraftValue=(field,value)=>{
+        const digits=value.replace(/\D/g,'');
+        setRangeDraft(prev=>{
+          if(field==='AD.min'){ return {...prev, AD:{...prev.AD, min:digits}}; }
+          if(field==='AD.max'){ return {...prev, AD:{...prev.AD, max:digits}}; }
+          if(field==='BC.min'){ return {...prev, BC:{...prev.BC, min:digits}}; }
+          if(field==='BC.max'){ return {...prev, BC:{...prev.BC, max:digits}}; }
+          if(field==='BOTH.bc'){ return {...prev, BOTH:{...prev.BOTH, bc:digits}}; }
+          if(field==='BOTH.ad'){ return {...prev, BOTH:{...prev.BOTH, ad:digits}}; }
+          return prev;
+        });
+      };
+
+      const ensureDraftValue=(field,value)=>{
+        setRangeDraft(prev=>{
+          let target;
+          if(field==='AD.min'){ target={...prev.AD, min:value}; return {...prev, AD:target}; }
+          if(field==='AD.max'){ target={...prev.AD, max:value}; return {...prev, AD:target}; }
+          if(field==='BC.min'){ target={...prev.BC, min:value}; return {...prev, BC:target}; }
+          if(field==='BC.max'){ target={...prev.BC, max:value}; return {...prev, BC:target}; }
+          if(field==='BOTH.bc'){ target={...prev.BOTH, bc:value}; return {...prev, BOTH:target}; }
+          if(field==='BOTH.ad'){ target={...prev.BOTH, ad:value}; return {...prev, BOTH:target}; }
+          return prev;
+        });
+      };
+
+      const commitAdMin=()=>{
+        const raw=rangeDraft.AD.min.trim();
+        const parsed=parseInt(raw,10);
+        if(Number.isNaN(parsed)){ ensureDraftValue('AD.min', String(adRange.min)); return; }
+        let val=Math.max(1, Math.min(10000, parsed));
+        val=snapYear(val,'AD');
+        const clamped=Math.min(val, maxY);
+        setAdRange(r=>({...r,min:clamped}));
+        setMinY(clamped);
+      };
+      const commitAdMax=()=>{
+        const raw=rangeDraft.AD.max.trim();
+        const parsed=parseInt(raw,10);
+        if(Number.isNaN(parsed)){ ensureDraftValue('AD.max', String(adRange.max)); return; }
+        let val=Math.max(1, Math.min(10000, parsed));
+        val=snapYear(val,'AD');
+        const clamped=Math.max(val, minY);
+        setAdRange(r=>({...r,max:clamped}));
+        setMaxY(clamped);
+      };
+      const commitBcMin=()=>{
+        const raw=rangeDraft.BC.min.trim();
+        const parsed=parseInt(raw,10);
+        if(Number.isNaN(parsed)){ ensureDraftValue('BC.min', String(Math.abs(bcRange.min))); return; }
+        let val=Math.max(1, Math.min(10000, parsed));
+        let candidate=-val;
+        candidate=snapYear(candidate,'BC');
+        const clamped=Math.min(candidate, maxY);
+        setBcRange(r=>({...r,min:clamped}));
+        setMinY(clamped);
+      };
+      const commitBcMax=()=>{
+        const raw=rangeDraft.BC.max.trim();
+        const parsed=parseInt(raw,10);
+        if(Number.isNaN(parsed)){ ensureDraftValue('BC.max', String(Math.abs(bcRange.max))); return; }
+        let val=Math.max(1, Math.min(10000, parsed));
+        let candidate=-val;
+        candidate=snapYear(candidate,'BC');
+        const clamped=Math.max(candidate, minY);
+        setBcRange(r=>({...r,max:clamped}));
+        setMaxY(clamped);
+      };
+      const commitBothBc=()=>{
+        const raw=rangeDraft.BOTH.bc.trim();
+        const parsed=parseInt(raw,10);
+        if(Number.isNaN(parsed)){ ensureDraftValue('BOTH.bc', String(Math.abs(bothRange.min))); return; }
+        let val=Math.max(1, Math.min(10000, parsed));
+        let candidate=-val;
+        candidate=snapYear(candidate,'BOTH');
+        if(candidate>-1) candidate=-1;
+        setBothRange(r=>({...r,min:candidate}));
+        setMinY(candidate);
+      };
+      const commitBothAd=()=>{
+        const raw=rangeDraft.BOTH.ad.trim();
+        const parsed=parseInt(raw,10);
+        if(Number.isNaN(parsed)){ ensureDraftValue('BOTH.ad', String(bothRange.max)); return; }
+        let val=Math.max(1, Math.min(10000, parsed));
+        val=snapYear(val,'AD');
+        const clamped=Math.max(val, 1);
+        setBothRange(r=>({...r,max:clamped}));
+        setMaxY(clamped);
+      };
+
+      const rangeLabel=`${fmtYear(minY)} → ${fmtYear(maxY)}`;
       const RangePanel = (
         <div className="mt-3 rounded-2xl card p-3">
           <button onPointerDown={(e)=>{e.preventDefault(); setRangeOpen(o=>!o);}}
                   className="w-full text-left text-sm text-purple-200/90 flex items-center justify-between">
-            <span>Year range <span className="tabular-nums ml-1">{minY} → {maxY}</span></span>
-            <span className={`transition-transform text-base ${rangeOpen?'rotate-180':''}`}>▾</span>
+            <span>Year range <span className="tabular-nums ml-1">{rangeLabel}</span></span>
+            <span className={`transition-transform duration-300 ease-in-out text-white/90 text-[7px] leading-none ${rangeOpen?'rotate-0':'rotate-180'}`}>▲</span>
           </button>
-          <div className="expander" style={{maxHeight:rangeOpen?'38vh':'0px'}}>
-            <div className="mt-3 space-y-3 pr-1">
-              <div className="flex items-center gap-3">
-                <input type="range"
-                       min={era==='AD'?1:-10000}
-                       max={era==='BC'?-1:10000}
-                       step="1" value={minY}
-                       onChange={e=>setMinActive(+e.target.value)}
-                       className="w-full accent-purple-500"/>
-                <input type="range"
-                       min={era==='AD'?1:-10000}
-                       max={era==='BC'?-1:10000}
-                       step="1" value={maxY}
-                       onChange={e=>setMaxActive(+e.target.value)}
-                       className="w-full accent-purple-500"/>
-              </div>
-              <p className="text-xs text-purple-300/70">Proleptic Gregorian calendar. Year 0 isn’t shown. Each era remembers its own range. Sliders snap to multiples of 100 (BC top allows −1).</p>
+          <div className="expander" style={{maxHeight:rangeOpen?`${rangeHeight}px`:'0px', opacity:rangeOpen?1:0}}>
+            <div ref={rangeInnerRef} className="mt-3 space-y-4 pr-1">
+              {era==='BOTH' ? (
+                <div className="grid sm:grid-cols-2 gap-3">
+                  <label className="block text-xs text-purple-200/80">
+                    <span className="uppercase tracking-wide text-[11px] text-purple-300/80">BC minimum</span>
+                    <div className="mt-1 relative">
+                      <input
+                        value={rangeDraft.BOTH.bc}
+                        onFocus={()=>setEditingRange('BOTH:bc')}
+                        onBlur={()=>{ commitBothBc(); setEditingRange(null); }}
+                        onKeyDown={e=>{ if(e.key==='Enter'){ e.preventDefault(); commitBothBc(); e.currentTarget.blur(); } }}
+                        onChange={e=>setDraftValue('BOTH.bc', e.target.value)}
+                        inputMode="numeric"
+                        className="panel w-full rounded-xl px-3 py-2 pr-10 focus:outline-none focus:ring-2 focus:ring-purple-400"
+                        placeholder="100"/>
+                      <span className="absolute inset-y-0 right-3 flex items-center text-[11px] text-purple-200/80">BC</span>
+                    </div>
+                  </label>
+                  <label className="block text-xs text-purple-200/80">
+                    <span className="uppercase tracking-wide text-[11px] text-purple-300/80">AD maximum</span>
+                    <div className="mt-1 relative">
+                      <input
+                        value={rangeDraft.BOTH.ad}
+                        onFocus={()=>setEditingRange('BOTH:ad')}
+                        onBlur={()=>{ commitBothAd(); setEditingRange(null); }}
+                        onKeyDown={e=>{ if(e.key==='Enter'){ e.preventDefault(); commitBothAd(); e.currentTarget.blur(); } }}
+                        onChange={e=>setDraftValue('BOTH.ad', e.target.value)}
+                        inputMode="numeric"
+                        className="panel w-full rounded-xl px-3 py-2 pr-10 focus:outline-none focus:ring-2 focus:ring-purple-400"
+                        placeholder="100"/>
+                      <span className="absolute inset-y-0 right-3 flex items-center text-[11px] text-purple-200/80">AD</span>
+                    </div>
+                  </label>
+                </div>
+              ) : (
+                <div className="grid sm:grid-cols-2 gap-3">
+                  <label className="block text-xs text-purple-200/80">
+                    <span className="uppercase tracking-wide text-[11px] text-purple-300/80">Minimum</span>
+                    <div className="mt-1 relative">
+                      <input
+                        value={era==='BC'?rangeDraft.BC.min:rangeDraft.AD.min}
+                        onFocus={()=>setEditingRange(`${era}:min`)}
+                        onBlur={()=>{ era==='BC'?commitBcMin():commitAdMin(); setEditingRange(null); }}
+                        onKeyDown={e=>{ if(e.key==='Enter'){ e.preventDefault(); era==='BC'?commitBcMin():commitAdMin(); e.currentTarget.blur(); } }}
+                        onChange={e=>setDraftValue(`${era==='BC'?'BC':'AD'}.min`, e.target.value)}
+                        inputMode="numeric"
+                        className="panel w-full rounded-xl px-3 py-2 pr-10 focus:outline-none focus:ring-2 focus:ring-purple-400"
+                        placeholder="100"/>
+                      <span className="absolute inset-y-0 right-3 flex items-center text-[11px] text-purple-200/80">{era==='BC'?'BC':'AD'}</span>
+                    </div>
+                  </label>
+                  <label className="block text-xs text-purple-200/80">
+                    <span className="uppercase tracking-wide text-[11px] text-purple-300/80">Maximum</span>
+                    <div className="mt-1 relative">
+                      <input
+                        value={era==='BC'?rangeDraft.BC.max:rangeDraft.AD.max}
+                        onFocus={()=>setEditingRange(`${era}:max`)}
+                        onBlur={()=>{ era==='BC'?commitBcMax():commitAdMax(); setEditingRange(null); }}
+                        onKeyDown={e=>{ if(e.key==='Enter'){ e.preventDefault(); era==='BC'?commitBcMax():commitAdMax(); e.currentTarget.blur(); } }}
+                        onChange={e=>setDraftValue(`${era==='BC'?'BC':'AD'}.max`, e.target.value)}
+                        inputMode="numeric"
+                        className="panel w-full rounded-xl px-3 py-2 pr-10 focus:outline-none focus:ring-2 focus:ring-purple-400"
+                        placeholder="100"/>
+                      <span className="absolute inset-y-0 right-3 flex items-center text-[11px] text-purple-200/80">{era==='BC'?'BC':'AD'}</span>
+                    </div>
+                  </label>
+                </div>
+              )}
+              <p className="text-xs text-purple-300/70">Proleptic Gregorian calendar. No year 0. Each era remembers its own range. Values snap to 100-year increments (the BC side allows 1&nbsp;BC at the top).</p>
             </div>
           </div>
         </div>
@@ -646,7 +817,7 @@
             {mode==="sudden" && active && qDeadlineRef.current && (
               <div className="mb-3">
                 <div className="flex items-center justify-between text-xs text-purple-200/80 mb-1"><div>Per-question</div><div className="tabular-nums">{qRemain.toFixed(1)}s</div></div>
-                <div className="bar"><span style={{width:`${Math.max(0,Math.min(100),(qRemain/qSec)*100)}%`}}></span></div>
+                <div className="bar"><span style={{width:`${Math.max(0,Math.min(100,(qRemain/qSec)*100))}%`}}></span></div>
               </div>
             )}
             {mode==="flash" && active && phase==='show' && (
@@ -765,16 +936,18 @@
             )}
 
             {/* ======= LOOKUP ======= */}
-            {mode==="lookup" && <LookupCard />}
+            {mode==="lookup" && <LookupCard state={lookupState} setState={setLookupState} />}
           </div>
         </div>
       );
     }
 
     /* --------- Lookup component --------- */
-    function LookupCard(){
-      const [lookupIn,setLookupIn]=React.useState("");
-      const [lookupOut,setLookupOut]=React.useState("");
+    function LookupCard({state,setState}){
+      const {input,feedback,history}=state;
+      const setInput=(value)=>{
+        setState(prev=>({...prev, input:value}));
+      };
       function isLeapY(y){ y = y>0?y:1-Math.abs(y); return y%400===0 || (y%4===0 && y%100!==0); }
       function dimY(y,m){ return m===2 ? (isLeapY(y)?29:28) : [4,6,9,11].includes(m)?30:31; }
       function wdayY(y,m,d){ function jdn(y,m,d){ const a=Math.floor((14-m)/12),y2=y+4800-a,m2=m-3+12*a; return d+Math.floor((153*m2+2)/5)+365*y2+Math.floor(y2/4)-Math.floor(y2/100)+Math.floor(y2/400)-32045; } const toA = y=>y>0?y:1-Math.abs(y); return (jdn(toA(y),m,d)+1)%7; }
@@ -782,33 +955,69 @@
       const DAY=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
       const fmtYear = y => y>0?String(y):`${Math.abs(y)} BC`;
       function runLookup(){
-        const s=lookupIn.trim();
+        const s=input.trim();
         const m = /^(-?\d{1,2})\/(\d{1,2})\/(-?\d{1,5})$/.exec(s);
-        if(!m){ setLookupOut("Enter date in month/day/year format, e.g., 7/4/1776. Years allowed −10000…10000 (no year 0)."); return; }
+        if(!m){ setState(prev=>({...prev, feedback:"Enter date in month/day/year format, e.g., 7/4/1776. Years allowed −10000…10000 (no year 0)."})); return; }
         let mm=+m[1], dd=+m[2], yy=+m[3];
-        if(yy===0){ setLookupOut("There is no year 0. Use −1 for 1 BC."); return; }
-        if(yy<-10000 || yy>10000){ setLookupOut("Year must be between −10000 and 10000."); return; }
-        if(mm<1||mm>12){ setLookupOut("Month must be 1–12."); return; }
+        if(yy===0){ setState(prev=>({...prev, feedback:"There is no year 0. Use −1 for 1 BC."})); return; }
+        if(yy<-10000 || yy>10000){ setState(prev=>({...prev, feedback:"Year must be between −10000 and 10000."})); return; }
+        if(mm<1||mm>12){ setState(prev=>({...prev, feedback:"Month must be 1–12."})); return; }
         const maxd=dimY(yy,mm);
-        if(dd<1||dd>maxd){ setLookupOut(`Day must be 1–${maxd} for ${MONTH[mm-1]}.`); return; }
+        if(dd<1||dd>maxd){ setState(prev=>({...prev, feedback:`Day must be 1–${maxd} for ${MONTH[mm-1]}.`})); return; }
         const d=DAY[wdayY(yy,mm,dd)];
-        setLookupOut(`${MONTH[mm-1]} ${dd}, ${fmtYear(yy)} is a ${d}.`);
+        const display=`${MONTH[mm-1]} ${dd}, ${fmtYear(yy)}`;
+        const message=`${display} is a ${d}.`;
+        const queryMonth=String(mm).padStart(2,'0');
+        const queryDay=String(dd).padStart(2,'0');
+        const queryYear=yy>0?String(yy):`${Math.abs(yy)} BC`;
+        const entry={id:`${Date.now()}-${Math.random().toString(36).slice(2,8)}`, display, weekday:d, query: `${queryMonth}/${queryDay}/${queryYear}`};
+        setState(prev=>({
+          ...prev,
+          feedback:message,
+          history:[entry,...prev.history].slice(0,20)
+        }));
       }
-      function clearLookup(){ setLookupIn(""); if(document.activeElement) document.activeElement.blur(); setLookupOut(""); }
+      function clearLookup(){
+        setState(prev=>({...prev, input:"", feedback:""}));
+        if(document.activeElement) document.activeElement.blur();
+      }
+      function clearHistory(){
+        setState(prev=>({...prev, history:[]}));
+      }
       return (
         <div className="mt-1 rounded-2xl panel p-4">
           <div className="flex items-stretch gap-2">
-            <input value={lookupIn} onChange={e=>setLookupIn(e.target.value)} placeholder="e.g., 7/4/1776"
+            <input value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>{ if(e.key==='Enter'){ e.preventDefault(); runLookup(); } }} placeholder="e.g., 7/4/1776"
                   className="panel rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-400 flex-1 min-w-0"/>
             <button onPointerDown={(e)=>{e.preventDefault(); runLookup();}} className="px-4 py-2 rounded-xl bg-purple-600 text-white text-sm font-medium">Lookup</button>
             <button onPointerDown={(e)=>{e.preventDefault(); clearLookup();}} className="px-4 py-2 rounded-xl bg-zinc-700 text-white text-sm font-medium">Clear</button>
           </div>
-          {lookupOut && <div className="mt-3 text-sm">{lookupOut}</div>}
+          {feedback && <div className="mt-3 text-sm">{feedback}</div>}
           <ul className="mt-4 text-xs text-purple-100/90 space-y-2 list-disc list-inside">
             <li>Format: <b>month/day/year</b> (e.g., <b>7/4/1776</b>).</li>
             <li>BC years: use a leading minus (e.g., <b>-1</b> = <b>1 BC</b>). No year 0.</li>
             <li>Valid range: <b>−10000…10000</b>. Days must be valid for the month.</li>
           </ul>
+          {history.length>0 && (
+            <div className="mt-6">
+              <div className="flex items-center justify-between gap-2 text-[11px] uppercase tracking-wide text-purple-300/80">
+                <span>History</span>
+                <button onPointerDown={(e)=>{e.preventDefault(); clearHistory();}}
+                        className="text-xs font-medium text-purple-200/80 hover:text-purple-50">Clear history</button>
+              </div>
+              <ul className="mt-2 space-y-2">
+                {history.map(item=>(
+                  <li key={item.id} className="panel rounded-xl px-3 py-2">
+                    <div className="text-sm font-medium text-purple-50">{item.display}</div>
+                    <div className="mt-1 flex items-center justify-between text-[11px] text-purple-200/80">
+                      <span>{item.weekday}</span>
+                      <span className="tabular-nums">{item.query}</span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
       );
     }
