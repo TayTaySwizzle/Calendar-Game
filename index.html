@@ -19,8 +19,8 @@
     @keyframes flashPulse{0%{box-shadow:0 0 0 0 var(--ring);background:var(--bg0)}
       35%{box-shadow:0 0 0 10px var(--ring);background:var(--bg1)}
       100%{box-shadow:0 0 0 0 transparent;background:var(--bg0)}}
-    .flash-good{--ring:rgba(16,185,129,.5);--bg0:rgba(16,185,129,.10);--bg1:rgba(16,185,129,.25);animation:flashPulse .45s ease-in-out}
-    .flash-bad{--ring:rgba(239,68,68,.5);--bg0:rgba(239,68,68,.10);--bg1:rgba(239,68,68,.25);animation:flashPulse .45s ease-in-out}
+    .flash-good{--ring:rgba(16,185,129,.5);--bg0:rgba(16,185,129,.5);--bg1:rgba(16,185,129,.5);animation:flashPulse .45s ease-in-out}
+    .flash-bad{--ring:rgba(239,68,68,.5);--bg0:rgba(239,68,68,.5);--bg1:rgba(239,68,68,.5);animation:flashPulse .45s ease-in-out}
     .chip{background:rgba(120,53,175,.25);border:1px solid rgba(120,53,175,.45);padding:.25rem .5rem;border-radius:.75rem;font-size:12px}
     .bar{height:6px;border-radius:6px;overflow:hidden;background:rgba(120,53,175,.25);border:1px solid rgba(120,53,175,.45)}
     .bar>span{display:block;height:100%;background:linear-gradient(90deg,#a855f7,#7c3aed)}
@@ -67,6 +67,7 @@
     const fmt=(y,m,d)=> `${MONTH[m-1]} ${d}, ${fmtYear(y)}`;
     const rint=(a,b)=>Math.floor(Math.random()*(b-a+1))+a;
     function randomDate(minY,maxY){ for(;;){ let y=rint(minY,maxY); if(y===0) continue; let m=rint(1,12), d=rint(1,dim(y,m)); if(d<=dim(y,m)) return {y,m,d}; } }
+    const blankDedTypeStore = ()=>({year:null,month:null,day:null});
 
     const isTouch=typeof window!=="undefined" && ("ontouchstart" in window || navigator.maxTouchPoints>0 || matchMedia("(pointer:coarse)").matches);
     const isTimer = m => m==="blitz"||m==="sudden"||m==="flash";
@@ -130,6 +131,7 @@
       /* snapshots when avg-time disabled (per era) */
       const [savedClassicByEra,setSavedClassicByEra]=useState({AD:null,BC:null,BOTH:null});
       const [savedDedByEra,setSavedDedByEra]=useState({AD:null,BC:null,BOTH:null}); /* NEW */
+      const [savedDedByType,setSavedDedByType]=useState(()=>blankDedTypeStore());
 
       /* per-mode stats */
       const blankStats=()=>({played:0,good:0,streak:0,best:0,timeSum:0,timeCnt:0});
@@ -163,6 +165,8 @@
       const [dedFlash,setDedFlash]=useState(null);
       const [lookupHistory,setLookupHistory]=useState([]);
 
+      const pendingDedSwitchRef=useRef(null);
+
       const inputRef=useRef(null), [input,setInput]=useState("");
       useEffect(()=>{
         if(!isTouch){
@@ -183,7 +187,16 @@
       const prevTrackClassic=useRef(trackClassic);
       useEffect(()=>{ if(prevTrackClassic.current===false && trackClassic===true){ setStatsByMode(p=>({...p, classic:{...(p.classic||blankStats()), timeSum:0, timeCnt:0}})); tStartRef.current=performance.now(); } prevTrackClassic.current=trackClassic; },[trackClassic]);
       const prevTrackDed=useRef(trackDed);
-      useEffect(()=>{ if(prevTrackDed.current===false && trackDed===true){ setStatsByMode(p=>({...p, deduction:{...(p.deduction||blankStats()), timeSum:0, timeCnt:0}})); tStartRef.current=performance.now(); } prevTrackDed.current=trackDed; },[trackDed]);
+      useEffect(()=>{
+        if(prevTrackDed.current===false && trackDed===true){
+          setStatsByMode(p=>({...p, deduction:{...(p.deduction||blankStats()), timeSum:0, timeCnt:0}}));
+          tStartRef.current=performance.now();
+          setSavedDedByType(blankDedTypeStore());
+        }else if(prevTrackDed.current===true && trackDed===false){
+          setSavedDedByType(blankDedTypeStore());
+        }
+        prevTrackDed.current=trackDed;
+      },[trackDed]);
 
       /* ===== Range helpers ===== */
       const fmtRangeYear = (y)=> y>0?`${y} AD`:`${Math.abs(y)} BC`;
@@ -323,9 +336,11 @@
           }));
         }
         if(mode==="deduction" && !trackDed){
+          const snapshot = ded ? { ded, guesses:[...guesses], countedWrong, msg, locked, revealed } : null;
+          const typeSnapshots = {...savedDedByType, [dedType]: snapshot};
           setSavedDedByEra(prev=>({
             ...prev,
-            [era]: { ded, guesses:[...guesses], countedWrong, msg, locked, revealed }
+            [era]: { current: snapshot, byType: typeSnapshots }
           }));
         }
 
@@ -353,19 +368,19 @@
             setDate(randomDate(mn,mx));
           }
         }else if(mode==="deduction"){
+          const snap = savedDedByEra[newEra] || null;
+          const storedByType = snap?.byType ? {...snap.byType} : blankDedTypeStore();
+          setSavedDedByType(storedByType);
           if(!trackDed){
-            const snap = (savedDedByEra[newEra] || null);
-            if(snap && snap.ded){
-              setDed(snap.ded); setGuesses(snap.guesses||[]); setCountedWrong(!!snap.countedWrong);
-              setMsg(snap.msg||""); setLocked(!!snap.locked); setRevealed(!!snap.revealed);
+            const currentSnap = snap?.current || storedByType[dedType] || null;
+            if(currentSnap && currentSnap.ded){
+              setDed(currentSnap.ded); setGuesses(currentSnap.guesses||[]); setCountedWrong(!!currentSnap.countedWrong);
+              setMsg(currentSnap.msg||""); setLocked(!!currentSnap.locked); setRevealed(!!currentSnap.revealed);
               return;
             }
-            setMsg(""); setGuesses([]); setLocked(false); setRevealed(false); setCountedWrong(false);
-            spawnDedWithRange(mn,mx);
-          }else{
-            setMsg(""); setGuesses([]); setLocked(false); setRevealed(false); setCountedWrong(false);
-            spawnDedWithRange(mn,mx);
           }
+          setMsg(""); setGuesses([]); setLocked(false); setRevealed(false); setCountedWrong(false);
+          spawnDedWithRange(mn,mx);
         }else{
           // Other modes: always new
           setMsg(""); setGuesses([]); setLocked(false); setRevealed(false); setCountedWrong(false);
@@ -574,9 +589,34 @@
           const pickCount=Math.min(10, 1+bad.length);
           const picks=new Set([d]);
           while(picks.size<pickCount){ picks.add(bad[rint(0,bad.length-1)]); }
-          const opts=[...picks]; for(let i=opts.length-1;i>0;i--){ const j=rint(0,i); [opts[i],opts[j]]=[opts[j],opts[i]]; }
+          const opts=[...picks].sort((a,b)=>a-b);
           setDed({type:"day",y,m,w,d, options:opts});
         }
+      }
+
+      const captureDedSnapshot=()=> ded ? ({
+        ded,
+        guesses:[...guesses],
+        countedWrong,
+        msg,
+        locked,
+        revealed
+      }) : null;
+
+      function changeDedType(nextType){
+        if(nextType===dedType) return;
+        if(!trackDed){
+          const currentSnap=captureDedSnapshot();
+          const nextSnap=savedDedByType[nextType] || null;
+          pendingDedSwitchRef.current={snap:nextSnap};
+          setSavedDedByType(prev=>({
+            ...prev,
+            [dedType]: currentSnap
+          }));
+        }else{
+          pendingDedSwitchRef.current=null;
+        }
+        setDedType(nextType);
       }
 
       function flashDed(kind,value,ok){ setDedFlash({kind,value,ok}); setTimeout(()=>setDedFlash(null),450); }
@@ -620,8 +660,34 @@
       }
 
       /* mode changes */
-      useEffect(()=>{ arm(); setGuesses([]); setStack([]); setDedStack([]); setMsg(""); setLocked(false); setRevealed(false); if(mode==="deduction"){ setPhase('dash'); spawnDed(); } },[mode]);
-      useEffect(()=>{ if(mode==="deduction") spawnDed(); },[dedType]);
+      useEffect(()=>{ arm(); setGuesses([]); setStack([]); setDedStack([]); setMsg(""); setLocked(false); setRevealed(false);
+        if(mode==="deduction"){ setPhase('dash'); pendingDedSwitchRef.current=null; setSavedDedByType(blankDedTypeStore()); setDed(null); }
+      },[mode]);
+
+      useEffect(()=>{
+        if(mode!=="deduction") return;
+        setDedFlash(null);
+        const pending=pendingDedSwitchRef.current;
+        pendingDedSwitchRef.current=null;
+        if(!trackDed){
+          const snap=pending?.snap || savedDedByType[dedType] || null;
+          if(snap && snap.ded){
+            setDed(snap.ded);
+            setGuesses(snap.guesses||[]);
+            setCountedWrong(!!snap.countedWrong);
+            setMsg(snap.msg||"");
+            setLocked(!!snap.locked);
+            setRevealed(!!snap.revealed);
+            return;
+          }
+        }
+        setMsg("");
+        setGuesses([]);
+        setLocked(false);
+        setRevealed(false);
+        setCountedWrong(false);
+        spawnDed();
+      },[dedType, mode, trackDed, savedDedByType]);
 
       /* slider handlers — each era updates its own store only */
       const showDash = isTimer(mode) && !active;
@@ -796,7 +862,7 @@
                 <Stat label="Avg time (correct)" value={(S.timeCnt?`${(S.timeSum/S.timeCnt).toFixed(2)}s`:"—")} disabled={avgDisabled}/>
               </div>
               <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
-                <div className="flex flex-wrap items-center gap-3">
+                <div className="flex flex-wrap items-center gap-3 w-full">
                   {/* Era segmented */}
                   <div className="flex rounded-xl overflow-hidden border border-purple-800/60">
                     {[{k:'AD',label:'AD'},{k:'BOTH',label:'AD+BC'},{k:'BC',label:'BC'}].map(seg=>(
@@ -809,10 +875,10 @@
                   </div>
 
                   {mode==="blitz" && (
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 ml-auto flex-1 min-w-[150px] justify-end">
                       <span className="text-xs text-purple-300/80">Duration:</span>
                       <input type="range" min="15" max="180" step="5" value={blitzSec}
-                            onChange={e=>{const v=+e.target.value; setBlitzSec(v); if(!active) setBlitzRemain(v);}} className="accent-purple-500"/>
+                            onChange={e=>{const v=+e.target.value; setBlitzSec(v); if(!active) setBlitzRemain(v);}} className="accent-purple-500 w-28 sm:w-32"/>
                       <span className="tabular-nums text-xs w-10 text-right">{blitzSec}s</span>
                     </div>
                   )}
@@ -825,10 +891,10 @@
                     </div>
                   )}
                   {mode==="flash" && (
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 ml-auto flex-1 min-w-[150px] justify-end">
                       <span className="text-xs text-purple-300/80">Show:</span>
                       <input type="range" min="100" max="3000" step="50" value={flashMs}
-                            onChange={e=>setFlashMs(+e.target.value)} className="accent-purple-500"/>
+                            onChange={e=>setFlashMs(+e.target.value)} className="accent-purple-500 w-28 sm:w-32"/>
                       <span className="tabular-nums text-xs w-12 text-right">{flashMs}ms</span>
                     </div>
                   )}
@@ -959,7 +1025,7 @@
               <>
                 <div className="mt-3 flex flex-wrap gap-2 justify-center">
                   {["year","month","day"].map(t=>(
-                    <button key={t} type="button" onClick={()=>{ setDedType(t); setMsg(""); setLocked(false); setRevealed(false); setGuesses([]); setCountedWrong(false); }}
+                    <button key={t} type="button" onClick={()=>changeDedType(t)}
                       className={`px-3 py-1.5 rounded-lg text-sm border ${dedType===t?'bg-purple-600 border-purple-500':'bg-purple-900/40 border-purple-800/60 hover:bg-purple-900/70'}`}>
                       {t[0].toUpperCase()+t.slice(1)}
                     </button>
