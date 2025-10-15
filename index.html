@@ -24,7 +24,7 @@
     .chip{background:rgba(120,53,175,.25);border:1px solid rgba(120,53,175,.45);padding:.25rem .5rem;border-radius:.75rem;font-size:12px}
     .bar{height:6px;border-radius:6px;overflow:hidden;background:rgba(120,53,175,.25);border:1px solid rgba(120,53,175,.45)}
     .bar>span{display:block;height:100%;background:linear-gradient(90deg,#a855f7,#7c3aed)}
-    .expander{transition:max-height .35s ease-in-out;overflow:hidden;will-change:max-height}
+    .expander{transition:max-height .25s ease-in-out;overflow:hidden;will-change:max-height}
   </style>
 </head>
 <body class="text-purple-50">
@@ -473,7 +473,18 @@
       useEffect(()=>{ if(mode==="classic" && trackClassic) tStartRef.current=performance.now(); },[mode,trackClassic,date]);
 
       /* New (never counts wrong) */
-      const doNew=()=>{ if(isTimer(mode) && !active){ setMsg("Press Begin to start."); return; } pushAndNext(); };
+      const doNew=(opts={})=>{
+        const {skipInactiveMessage=false}=opts;
+        if(isTimer(mode) && !active){
+          if(skipInactiveMessage){
+            pushAndNext();
+          }else{
+            setMsg("Press Begin to start.");
+          }
+          return;
+        }
+        pushAndNext();
+      };
 
       /* Reveal */
       function reveal(){
@@ -487,8 +498,13 @@
         }
         if(!statsOff && !countedWrong){ updateStats(cur=>{ cur.played+=1; cur.streak=0; }); }
         setCountedWrong(true);
+        if(isTimer(mode)){
+          setActive(false);
+          if(mode==="blitz"){ setBlitzRunning(false); blitzStartRef.current=null; blitzPausedAtRef.current=null; blitzPausedAccRef.current=0; }
+          if(mode==="sudden"){ qDeadlineRef.current=null; qPausedAtRef.current=null; qPausedAccRef.current=0; }
+          if(mode==="flash"){ clearTimeout(flashTimerRef.current); setPhase('dash'); flashDeadlineRef.current=null; setFlashRemainMs(flashMs); }
+        }
         setMsg(`Answer: ${DAY[correct]}.`); setLocked(true); setRevealed(true);
-        if(mode==="flash"){ clearTimeout(flashTimerRef.current); setPhase('dash'); setActive(false); flashDeadlineRef.current=null; setFlashRemainMs(flashMs); }
       }
 
       /* Back */
@@ -627,7 +643,7 @@
         const inner=rangeContentRef.current;
         if(!inner) return;
         if(rangeOpen){
-          setRangeMaxHeight(`${inner.scrollHeight}px`);
+          setRangeMaxHeight(`${inner.scrollHeight + 24}px`);
         }else{
           setRangeMaxHeight('0px');
         }
@@ -638,7 +654,7 @@
         const onResize=()=>{
           const inner=rangeContentRef.current;
           if(inner){
-            setRangeMaxHeight(`${inner.scrollHeight}px`);
+            setRangeMaxHeight(`${inner.scrollHeight + 24}px`);
           }
         };
         window.addEventListener('resize', onResize);
@@ -722,6 +738,7 @@
       const flashSeconds = (active && phase==='show') ? (flashRemainMs/1000) : ((flashRemainMs/1000)<=0.05 ? 0 : (flashMs/1000));
       const flashTimeLabel = formatSecondsLabel(flashSeconds);
       const flashPercent = (active && phase==='show' && flashDeadlineRef.current && flashMs>0) ? Math.max(0, Math.min(100,(flashRemainMs/flashMs)*100)) : 100;
+      const timerBusy = isTimer(mode) && active;
 
       /* should reset stats create a new date? */
       function shouldNewOnReset(){
@@ -752,7 +769,7 @@
               <select
                 ref={modeSelectRef}
                 value={mode}
-                onChange={e=>{ __hideErr(); setMode(e.target.value); }}
+                onChange={e=>{ __hideErr(); const nextMode=e.target.value; setMode(nextMode); e.target.blur(); modeSelectRef.current?.blur(); }}
                 className="panel rounded-xl px-2.5 py-2 pr-9 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 appearance-none"
               >
                 <option value="classic">Classic</option>
@@ -844,7 +861,7 @@
                               return true;
                             })();
                             resetStatsCurrent();
-                            if(needNew) doNew();
+                            if(needNew) doNew({skipInactiveMessage:true});
                           }}>Reset stats</button>
                 </div>
               </div>
@@ -914,9 +931,17 @@
                       ? <button type="button" className="px-4 py-2 rounded-xl bg-purple-600 text-white text-sm font-medium" onClick={()=>begin()}>Begin</button>
                       : <button type="button" className="px-4 py-2 rounded-xl bg-rose-600/90 text-white text-sm font-medium" onClick={()=>arm()}>Reset</button>
                     )}
-                    <button type="button" className={`px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm`} onClick={()=>doNew()}>New</button>
+                    <button
+                      type="button"
+                      className={`px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm ${timerBusy?'opacity-60 pointer-events-none':''}`}
+                      onClick={()=>doNew()}
+                    >New</button>
                     <button type="button" className={`px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm ${locked?'opacity-60 pointer-events-none':''}`} onClick={()=>reveal()}>Reveal</button>
-                    <button type="button" className="px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm" onClick={()=>goBack()}>Back</button>
+                    <button
+                      type="button"
+                      className={`px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm ${timerBusy?'opacity-60 pointer-events-none':''}`}
+                      onClick={()=>goBack()}
+                    >Back</button>
                   </div>
 
                   {(msg || (guesses.length>0 && mode!=="sudden")) && (
@@ -1058,10 +1083,7 @@
                   <li key={entry.id}>
                     <button type="button" onClick={()=>handleHistorySelect(entry)}
                             className="w-full text-left px-3 py-2 rounded-xl panel flex items-center justify-between gap-3 text-xs">
-                      <span>
-                        <span className="block text-[13px] font-medium text-purple-100/90">{entry.label}</span>
-                        <span className="block text-[11px] text-purple-200/70">{entry.query}</span>
-                      </span>
+                      <span className="block text-[13px] font-medium text-purple-100/90">{entry.label}</span>
                       <span className="text-[12px] font-semibold text-purple-200/80">{entry.weekday}</span>
                     </button>
                   </li>
