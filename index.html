@@ -63,6 +63,7 @@
     function jdnGregorian(y,m,d){ const a=Math.floor((14-m)/12),y2=y+4800-a,m2=m-3+12*a; return d+Math.floor((153*m2+2)/5)+365*y2+Math.floor(y2/4)-Math.floor(y2/100)+Math.floor(y2/400)-32045; }
     const wday=(y,m,d)=> (jdnGregorian(toAstro(y),m,d)+1)%7;
     const fmtYear = y => y>0?String(y):`${Math.abs(y)} BC`;
+    const fmtRangeYear = y => y>0?`${y} AD`:`${Math.abs(y)} BC`;
     const fmt=(y,m,d)=> `${MONTH[m-1]} ${d}, ${fmtYear(y)}`;
     const rint=(a,b)=>Math.floor(Math.random()*(b-a+1))+a;
     function randomDate(minY,maxY){ for(;;){ let y=rint(minY,maxY); if(y===0) continue; let m=rint(1,12), d=rint(1,dim(y,m)); if(d<=dim(y,m)) return {y,m,d}; } }
@@ -94,6 +95,7 @@
       const [bcRange,setBcRange]=useState({min:-10000,max:-1});
       const [bothRange,setBothRange]=useState({min:-10000,max:10000});
       const [minY,setMinY]=useState(1), [maxY,setMaxY]=useState(10000);
+      const [minInput,setMinInput]=useState('1'), [maxInput,setMaxInput]=useState('10000');
 
       const [date,setDate]=useState(()=>randomDate(1,10000));
       const [stack,setStack]=useState([]), [dedStack,setDedStack]=useState([]);
@@ -153,15 +155,69 @@
       const prevTrackDed=useRef(trackDed);
       useEffect(()=>{ if(prevTrackDed.current===false && trackDed===true){ setStatsByMode(p=>({...p, deduction:{...(p.deduction||blankStats()), timeSum:0, timeCnt:0}})); tStartRef.current=performance.now(); } prevTrackDed.current=trackDed; },[trackDed]);
 
-      /* ===== Year snap (clean 100s; stable near 0; allow BC top −1) ===== */
-      function snapYear(v, e){
-        if(e==='BC' && v>-50){ return -1; } // allow −1 as max in BC
-        let s = Math.round(v/100)*100;
-        if(s===0) s = (v<0?-100:100);
-        if(e==='AD') s = Math.max(100, Math.min(10000, s));
-        else if(e==='BC') s = Math.max(-10000, Math.min(-1, s));
-        else s = Math.max(-10000, Math.min(10000, s));
-        return s;
+      useEffect(()=>{ setMinInput(String(minY)); },[minY]);
+      useEffect(()=>{ setMaxInput(String(maxY)); },[maxY]);
+
+      /* ===== Year normalization/clamping (no snap) ===== */
+      function normalizeYear(raw, e, kind){
+        if(raw===null || raw===undefined) return null;
+        if(typeof raw==="string"){
+          const trimmed=raw.trim();
+          if(trimmed==="" || trimmed==="-" || trimmed==="+") return null;
+          raw=trimmed;
+        }
+        const num = Number(raw);
+        if(Number.isNaN(num)) return null;
+        let v = Math.trunc(num);
+        if(v>10000) v=10000;
+        if(v<-10000) v=-10000;
+        if(e==='AD'){
+          if(v<1) v=1;
+        }else if(e==='BC'){
+          if(v>-1) v=-1;
+        }else if(v===0){
+          if(num<0) v=-1;
+          else if(num>0) v=1;
+          else v = (kind==='min'? -1 : 1);
+        }
+        if(v===0){
+          v = kind==='min' ? (e==='AD'?1:-1) : (e==='BC'?-1:1);
+        }
+        return v;
+      }
+
+      function commitMin(val){
+        if(era==='AD'){
+          const bounded=Math.min(Math.max(1, val), maxY);
+          setAdRange(r=>({...r,min:bounded}));
+          setMinY(bounded);
+        }else if(era==='BC'){
+          const bounded=Math.max(-10000, Math.min(val, maxY));
+          setBcRange(r=>({...r,min:bounded}));
+          setMinY(bounded);
+        }else{
+          const limit = (maxY===0 ? (val<0?-1:1) : maxY);
+          const bounded=Math.max(-10000, Math.min(val, limit));
+          setBothRange(r=>({...r,min:bounded}));
+          setMinY(bounded);
+        }
+      }
+
+      function commitMax(val){
+        if(era==='AD'){
+          const bounded=Math.max(Math.min(10000, val), minY);
+          setAdRange(r=>({...r,max:bounded}));
+          setMaxY(bounded);
+        }else if(era==='BC'){
+          const bounded=Math.min(-1, Math.max(val, minY));
+          setBcRange(r=>({...r,max:bounded}));
+          setMaxY(bounded);
+        }else{
+          const limit = (minY===0 ? (val>0?1:-1) : minY);
+          const bounded=Math.min(10000, Math.max(val, limit));
+          setBothRange(r=>({...r,max:bounded}));
+          setMaxY(bounded);
+        }
       }
 
       /* Era apply — with snapshots when avg-time disabled (Classic & Deduction) */
@@ -451,20 +507,33 @@
 
       /* slider handlers — each era updates its own store only */
       function setMinActive(v){
-        const val = snapYear(+v, era);
-        if(era==='AD'){ const clamped=Math.min(val, maxY); setAdRange(r=>({...r,min:clamped})); setMinY(clamped); }
-        else if(era==='BC'){ const clamped=Math.min(val, maxY); setBcRange(r=>({...r,min:clamped})); setMinY(clamped); }
-        else { const newMin=Math.min(val,maxY); setBothRange(r=>({...r,min:newMin})); setMinY(newMin); }
+        const val = normalizeYear(v, era, 'min');
+        if(val==null) return;
+        commitMin(val);
       }
       function setMaxActive(v){
-        const val = snapYear(+v, era);
-        if(era==='AD'){ const clamped=Math.max(val, Math.max(100,minY)); setAdRange(r=>({...r,max:clamped})); setMaxY(clamped); }
-        else if(era==='BC'){ const clamped=Math.max(val, minY); setBcRange(r=>({...r,max:clamped})); setMaxY(clamped); }
-        else { const newMax=Math.max(val,minY); setBothRange(r=>({...r,max:newMax})); setMaxY(newMax); }
+        const val = normalizeYear(v, era, 'max');
+        if(val==null) return;
+        commitMax(val);
       }
+
+      const handleMinInputChange = e=>{
+        const value=e.target.value;
+        setMinInput(value);
+        setMinActive(value);
+      };
+
+      const handleMaxInputChange = e=>{
+        const value=e.target.value;
+        setMaxInput(value);
+        setMaxActive(value);
+      };
 
       const showDash = isTimer(mode) && !active;
       const showDots = (mode==="flash" && active && phase==='hide');
+      const suddenPercent = Math.max(0, Math.min(100, (qRemain/qSec)*100));
+      const flashDisplayMsVal = active ? (phase==='show'?flashRemainMs:0) : flashMs;
+      const flashPercent = Math.max(0, Math.min(100, active ? (phase==='show' ? (flashRemainMs/flashMs)*100 : 0) : 100));
 
       const dedHeadline = ded ? (ded.type==="year" ? `${MONTH[ded.m-1]} ${ded.d}` : ded.type==="month" ? `${ded.d}, ${fmtYear(ded.y)}` : `${MONTH[ded.m-1]}, ${fmtYear(ded.y)}`) : "—";
       const headline = mode==="deduction" ? dedHeadline : (showDash ? "—" : showDots ? "…" : fmt(date.y,date.m,date.d));
@@ -477,13 +546,33 @@
       const [rangeOpen,setRangeOpen]=useState(false);
       const RangePanel = (
         <div className="mt-3 rounded-2xl card p-3">
-          <button onPointerDown={(e)=>{e.preventDefault(); setRangeOpen(o=>!o);}}
+          <button type="button" onClick={()=>setRangeOpen(o=>!o)}
                   className="w-full text-left text-sm text-purple-200/90 flex items-center justify-between">
-            <span>Year range <span className="tabular-nums ml-1">{minY} → {maxY}</span></span>
+            <span>Year range <span className="tabular-nums ml-1">{fmtRangeYear(minY)} → {fmtRangeYear(maxY)}</span></span>
             <span className={`transition-transform text-base ${rangeOpen?'rotate-180':''}`}>▾</span>
           </button>
           <div className="expander" style={{maxHeight:rangeOpen?'38vh':'0px'}}>
             <div className="mt-3 space-y-3 pr-1">
+              <div className="grid grid-cols-2 gap-3">
+                <label className="flex flex-col gap-1 text-xs text-purple-200/80">
+                  <span>Start year</span>
+                  <input value={minInput}
+                         onChange={handleMinInputChange}
+                         onBlur={()=>setMinInput(String(minY))}
+                         inputMode="numeric"
+                         pattern="^-?\d*$"
+                         className="thin rounded-xl bg-purple-900/40 px-3 py-2 text-sm text-purple-50 focus:outline-none focus:ring-2 focus:ring-purple-400"/>
+                </label>
+                <label className="flex flex-col gap-1 text-xs text-purple-200/80">
+                  <span>End year</span>
+                  <input value={maxInput}
+                         onChange={handleMaxInputChange}
+                         onBlur={()=>setMaxInput(String(maxY))}
+                         inputMode="numeric"
+                         pattern="^-?\d*$"
+                         className="thin rounded-xl bg-purple-900/40 px-3 py-2 text-sm text-purple-50 focus:outline-none focus:ring-2 focus:ring-purple-400"/>
+                </label>
+              </div>
               <div className="flex items-center gap-3">
                 <input type="range"
                        min={era==='AD'?1:-10000}
@@ -498,7 +587,7 @@
                        onChange={e=>setMaxActive(+e.target.value)}
                        className="w-full accent-purple-500"/>
               </div>
-              <p className="text-xs text-purple-300/70">Proleptic Gregorian calendar. Year 0 isn’t shown. Each era remembers its own range. Sliders snap to multiples of 100 (BC top allows −1).</p>
+              <p className="text-xs text-purple-300/70">Proleptic Gregorian calendar. Year 0 isn’t shown. Each era remembers its own range.</p>
             </div>
           </div>
         </div>
@@ -564,7 +653,8 @@
                   <div className="flex rounded-xl overflow-hidden border border-purple-800/60">
                     {[{k:'AD',label:'AD'},{k:'BOTH',label:'AD+BC'},{k:'BC',label:'BC'}].map(seg=>(
                       <button key={seg.k}
-                        onPointerDown={(e)=>{e.preventDefault(); if(era!==seg.k) applyEra(seg.k); }}
+                        type="button"
+                        onClick={()=>{ if(era!==seg.k) applyEra(seg.k); }}
                         className={`px-3 py-1.5 text-sm ${era===seg.k ? 'bg-purple-600' : 'bg-purple-900/40 hover:bg-purple-900/70'} ${seg.k!=='BC'?'border-r border-purple-800/60':''}`}>
                         {seg.label}
                       </button>
@@ -616,8 +706,8 @@
                     </span>
                     <span>Disable stats</span>
                   </label>
-                  <button className="text-xs px-3 py-1.5 rounded-lg bg-purple-700 hover:bg-purple-600"
-                          onPointerDown={(e)=>{e.preventDefault();
+                  <button type="button" className="text-xs px-3 py-1.5 rounded-lg bg-purple-700 hover:bg-purple-600"
+                          onClick={()=>{
                             const needNew = (()=>{
                               const avgEnabled = (mode==="classic"?trackClassic : mode==="deduction"?trackDed : true);
                               if(!avgEnabled && !countedWrong) return false;
@@ -643,16 +733,16 @@
                 <div className="bar"><span style={{width:`${Math.max(0,Math.min(100,(blitzRemain/blitzSec)*100))}%`}}></span></div>
               </div>
             )}
-            {mode==="sudden" && active && qDeadlineRef.current && (
+            {mode==="sudden" && (
               <div className="mb-3">
                 <div className="flex items-center justify-between text-xs text-purple-200/80 mb-1"><div>Per-question</div><div className="tabular-nums">{qRemain.toFixed(1)}s</div></div>
-                <div className="bar"><span style={{width:`${Math.max(0,Math.min(100),(qRemain/qSec)*100)}%`}}></span></div>
+                <div className="bar"><span style={{width:`${suddenPercent}%`}}></span></div>
               </div>
             )}
-            {mode==="flash" && active && phase==='show' && (
+            {mode==="flash" && (
               <div className="mb-3">
-                <div className="flex items-center justify-between text-xs text-purple-200/80 mb-1"><div>Flash</div><div className="tabular-nums">{(flashRemainMs/1000).toFixed(2)}s</div></div>
-                <div className="bar"><span style={{width:`${Math.max(0,Math.min(100,(flashRemainMs/flashMs)*100))}%`}}></span></div>
+                <div className="flex items-center justify-between text-xs text-purple-200/80 mb-1"><div>Flash</div><div className="tabular-nums">{(flashDisplayMsVal/1000).toFixed(2)}s</div></div>
+                <div className="bar"><span style={{width:`${flashPercent}%`}}></span></div>
               </div>
             )}
 
@@ -682,7 +772,8 @@
                 <div className={`mt-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3 ${((isTimer(mode)&&!active)||locked)?'opacity-60 pointer-events-none':''}`}>
                   {DAY.map((n,i)=>(
                     <button key={n}
-                      onPointerDown={(e)=>{ e.preventDefault(); submitDoW(i); setInput(""); if(isTouch) document.activeElement?.blur(); }}
+                      type="button"
+                      onClick={()=>{ submitDoW(i); setInput(""); if(isTouch) document.activeElement?.blur(); }}
                       className={`${baseBtn} ${flash && flash.idx===i ? (flash.type==='good'?'flash-good':'flash-bad')+' border-transparent' : idleBtn}`}>{n}</button>
                   ))}
                 </div>
@@ -691,12 +782,12 @@
                 <div className="mt-4 rounded-2xl panel p-3">
                   <div className="flex flex-wrap items-center gap-2">
                     {isTimer(mode) && (!active
-                      ? <button type="button" className="px-4 py-2 rounded-xl bg-purple-600 text-white text-sm font-medium" onPointerDown={(e)=>{e.preventDefault(); begin();}}>Begin</button>
-                      : <button type="button" className="px-4 py-2 rounded-xl bg-rose-600/90 text-white text-sm font-medium" onPointerDown={(e)=>{e.preventDefault(); arm();}}>Reset</button>
+                      ? <button type="button" className="px-4 py-2 rounded-xl bg-purple-600 text-white text-sm font-medium" onClick={()=>{ begin(); }}>Begin</button>
+                      : <button type="button" className="px-4 py-2 rounded-xl bg-rose-600/90 text-white text-sm font-medium" onClick={()=>{ arm(); }}>Reset</button>
                     )}
-                    <button type="button" className={`px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm`} onPointerDown={(e)=>{e.preventDefault(); doNew();}}>New</button>
-                    <button type="button" className={`px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm ${locked?'opacity-60 pointer-events-none':''}`} onPointerDown={(e)=>{e.preventDefault(); reveal();}}>Reveal</button>
-                    <button type="button" className="px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm" onPointerDown={(e)=>{e.preventDefault(); goBack();}}>Back</button>
+                    <button type="button" className={`px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm`} onClick={()=>{ doNew(); }}>New</button>
+                    <button type="button" className={`px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm ${locked?'opacity-60 pointer-events-none':''}`} onClick={()=>{ reveal(); }}>Reveal</button>
+                    <button type="button" className="px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm" onClick={()=>{ goBack(); }}>Back</button>
                   </div>
 
                   {(msg || (guesses.length>0 && mode!=="sudden")) && (
@@ -714,7 +805,7 @@
               <>
                 <div className="mt-3 flex flex-wrap gap-2 justify-center">
                   {["year","month","day"].map(t=>(
-                    <button key={t} onPointerDown={(e)=>{e.preventDefault(); setDedType(t); setMsg(""); setLocked(false); setRevealed(false); setGuesses([]); setCountedWrong(false);}}
+                    <button key={t} type="button" onClick={()=>{ setDedType(t); setMsg(""); setLocked(false); setRevealed(false); setGuesses([]); setCountedWrong(false); }}
                       className={`px-3 py-1.5 rounded-lg text-sm border ${dedType===t?'bg-purple-600 border-purple-500':'bg-purple-900/40 border-purple-800/60 hover:bg-purple-900/70'}`}>
                       {t[0].toUpperCase()+t.slice(1)}
                     </button>
@@ -725,7 +816,7 @@
                   {ded && ded.type==="year" && (
                     <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
                       {Array.from({length: ded.b - ded.a + 1}, (_,i)=>ded.a+i).map(y=>(
-                        <button key={y} onPointerDown={(e)=>{e.preventDefault(); submitDedAnswer(y);}}
+                        <button key={y} type="button" onClick={()=>{ submitDedAnswer(y); }}
                           className={`${baseBtn} ${idleBtn} py-2 text-sm ${dedFlash&&dedFlash.kind==='year'&&dedFlash.value===y ? (dedFlash.ok?'flash-good':'flash-bad')+' border-transparent':''}`}>{fmtYear(y)}</button>
                       ))}
                     </div>
@@ -733,7 +824,7 @@
                   {ded && ded.type==="month" && (
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
                       {MONTH.map((m,i)=>(
-                        <button key={m} onPointerDown={(e)=>{e.preventDefault(); submitDedAnswer(i+1);}}
+                        <button key={m} type="button" onClick={()=>{ submitDedAnswer(i+1); }}
                           className={`${baseBtn} ${idleBtn} ${dedFlash&&dedFlash.kind==='month'&&dedFlash.value===i+1 ? (dedFlash.ok?'flash-good':'flash-bad')+' border-transparent':''}`}>{m}</button>
                       ))}
                     </div>
@@ -741,7 +832,7 @@
                   {ded && ded.type==="day" && (
                     <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-2">
                       {ded.options.map(dv=>(
-                        <button key={dv} onPointerDown={(e)=>{e.preventDefault(); submitDedAnswer(dv);}}
+                        <button key={dv} type="button" onClick={()=>{ submitDedAnswer(dv); }}
                           className={`${baseBtn} ${idleBtn} ${dedFlash&&dedFlash.kind==='day'&&dedFlash.value===dv ? (dedFlash.ok?'flash-good':'flash-bad')+' border-transparent':''}`}>{dv}</button>
                       ))}
                     </div>
@@ -750,9 +841,9 @@
 
                 <div className="mt-4 rounded-2xl panel p-3">
                   <div className="flex flex-wrap gap-2">
-                    <button type="button" className="px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm" onPointerDown={(e)=>{e.preventDefault(); setDedStack(s=>[...s,ded]); spawnDed(); setMsg(""); setLocked(false); setRevealed(false); setGuesses([]); setCountedWrong(false);}}>New</button>
-                    <button type="button" className={`px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm ${locked?'opacity-60 pointer-events-none':''}`} onPointerDown={(e)=>{e.preventDefault(); reveal();}}>Reveal</button>
-                    <button type="button" className="px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm" onPointerDown={(e)=>{e.preventDefault(); goBack();}}>Back</button>
+                    <button type="button" className="px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm" onClick={()=>{ setDedStack(s=>[...s,ded]); spawnDed(); setMsg(""); setLocked(false); setRevealed(false); setGuesses([]); setCountedWrong(false); }}>New</button>
+                    <button type="button" className={`px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm ${locked?'opacity-60 pointer-events-none':''}`} onClick={()=>{ reveal(); }}>Reveal</button>
+                    <button type="button" className="px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm" onClick={()=>{ goBack(); }}>Back</button>
                   </div>
                   {(msg || guesses.length>0) && (
                     <div className="mt-3 text-sm">
@@ -800,8 +891,8 @@
           <div className="flex items-stretch gap-2">
             <input value={lookupIn} onChange={e=>setLookupIn(e.target.value)} placeholder="e.g., 7/4/1776"
                   className="panel rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-400 flex-1 min-w-0"/>
-            <button onPointerDown={(e)=>{e.preventDefault(); runLookup();}} className="px-4 py-2 rounded-xl bg-purple-600 text-white text-sm font-medium">Lookup</button>
-            <button onPointerDown={(e)=>{e.preventDefault(); clearLookup();}} className="px-4 py-2 rounded-xl bg-zinc-700 text-white text-sm font-medium">Clear</button>
+            <button type="button" onClick={()=>{ runLookup(); }} className="px-4 py-2 rounded-xl bg-purple-600 text-white text-sm font-medium">Lookup</button>
+            <button type="button" onClick={()=>{ clearLookup(); }} className="px-4 py-2 rounded-xl bg-zinc-700 text-white text-sm font-medium">Clear</button>
           </div>
           {lookupOut && <div className="mt-3 text-sm">{lookupOut}</div>}
           <ul className="mt-4 text-xs text-purple-100/90 space-y-2 list-disc list-inside">
