@@ -315,7 +315,15 @@
       useEffect(()=>{ if(mode==="classic" && trackClassic) tStartRef.current=performance.now(); },[mode,trackClassic,date]);
 
       /* New (never counts wrong) */
-      const doNew=()=>{ if(isTimer(mode) && !active){ setMsg("Press Begin to start."); return; } pushAndNext(); };
+      const doNew=(opts={})=>{
+        const silent = !!opts.silent;
+        if(isTimer(mode) && !active){
+          if(!silent){ setMsg("Press Begin to start."); }
+          else { setMsg(""); }
+          return;
+        }
+        pushAndNext();
+      };
 
       /* Reveal */
       function reveal(){
@@ -351,10 +359,13 @@
       function submitDoW(idx){
         if(isTimer(mode) && !active){ setMsg("Press Begin to start."); return; }
         if(locked) return;
+        const alreadyWrong = countedWrong;
         if(idx===wday(date.y,date.m,date.d)){
           setFlash({type:'good', idx}); setTimeout(()=>setFlash(null),450);
-          if(!statsOff && tStartRef.current && trackingOn()){ const dt=(performance.now()-tStartRef.current)/1000; updateStats(cur=>{ cur.timeSum+=dt; cur.timeCnt+=1; }); }
-          if(!statsOff){ updateStats(cur=>{ cur.played+=1; cur.good+=1; cur.streak+=1; if(cur.streak>cur.best) cur.best=cur.streak; }); }
+          if(!alreadyWrong){
+            if(!statsOff && tStartRef.current && trackingOn()){ const dt=(performance.now()-tStartRef.current)/1000; updateStats(cur=>{ cur.timeSum+=dt; cur.timeCnt+=1; }); }
+            if(!statsOff){ updateStats(cur=>{ cur.played+=1; cur.good+=1; cur.streak+=1; if(cur.streak>cur.best) cur.best=cur.streak; }); }
+          }
           if(mode==="sudden"){
             const now=performance.now(); qDeadlineRef.current = now + qSec*1000; qPausedAccRef.current = 0; qPausedAtRef.current = null; setQRemain(qSec);
           }
@@ -362,7 +373,7 @@
           pushAndNext();
         }else{
           if(mode!=="sudden"){ setGuesses(g=> g.includes(DAY[idx])?g:[...g,DAY[idx]] ); }
-          if(!statsOff && !countedWrong){ updateStats(cur=>{ cur.played+=1; cur.streak=0; }); }
+          if(!statsOff && !alreadyWrong){ updateStats(cur=>{ cur.played+=1; cur.streak=0; }); }
           setCountedWrong(true);
           if(mode==="sudden"){ setMsg(`Answer: ${DAY[correct]}. Game over.`); setActive(false); }
           setFlash({type:'bad', idx}); setTimeout(()=>setFlash(null),450);
@@ -408,38 +419,45 @@
       function flashDed(kind,value,ok){ setDedFlash({kind,value,ok}); setTimeout(()=>setDedFlash(null),450); }
       function submitDedAnswer(val){
         if(!ded || locked) return;
+        const alreadyWrong = countedWrong;
         const setCorrectThenNext = ()=>{ requestAnimationFrame(()=>setTimeout(spawnDed, 60)); setMsg(""); setGuesses([]); setCountedWrong(false); };
         const showWrong = (label)=>{ setGuesses(g=> g.includes(label)?g:[...g,label]); setCountedWrong(true); };
         if(ded.type==="year"){
           const ok = (+val)===ded.y; flashDed('year', +val, ok);
           if(ok){
-            if(!statsOff && trackDed && tStartRef.current){ const dt=(performance.now()-tStartRef.current)/1000; updateStats(cur=>{cur.timeSum+=dt; cur.timeCnt+=1;}); }
-            if(!statsOff){ updateStats(cur=>{ cur.played+=1; cur.good+=1; cur.streak+=1; if(cur.streak>cur.best) cur.best=cur.streak; }); }
+            if(!alreadyWrong){
+              if(!statsOff && trackDed && tStartRef.current){ const dt=(performance.now()-tStartRef.current)/1000; updateStats(cur=>{cur.timeSum+=dt; cur.timeCnt+=1;}); }
+              if(!statsOff){ updateStats(cur=>{ cur.played+=1; cur.good+=1; cur.streak+=1; if(cur.streak>cur.best) cur.best=cur.streak; }); }
+            }
             setCorrectThenNext();
           }else{
-            if(!statsOff){ updateStats(cur=>{ cur.played+=1; cur.streak=0; }); }
+            if(!statsOff && !alreadyWrong){ updateStats(cur=>{ cur.played+=1; cur.streak=0; }); }
             showWrong(fmtYear(+val));
           }
         }
         if(ded.type==="month"){
           const ok = (+val)===ded.m; flashDed('month', +val, ok);
           if(ok){
-            if(!statsOff && trackDed && tStartRef.current){ const dt=(performance.now()-tStartRef.current)/1000; updateStats(cur=>{cur.timeSum+=dt; cur.timeCnt+=1;}); }
-            if(!statsOff){ updateStats(cur=>{ cur.played+=1; cur.good+=1; cur.streak+=1; if(cur.streak>cur.best) cur.best=cur.streak; }); }
+            if(!alreadyWrong){
+              if(!statsOff && trackDed && tStartRef.current){ const dt=(performance.now()-tStartRef.current)/1000; updateStats(cur=>{cur.timeSum+=dt; cur.timeCnt+=1;}); }
+              if(!statsOff){ updateStats(cur=>{ cur.played+=1; cur.good+=1; cur.streak+=1; if(cur.streak>cur.best) cur.best=cur.streak; }); }
+            }
             setCorrectThenNext();
           }else{
-            if(!statsOff){ updateStats(cur=>{ cur.played+=1; cur.streak=0; }); }
+            if(!statsOff && !alreadyWrong){ updateStats(cur=>{ cur.played+=1; cur.streak=0; }); }
             showWrong(MONTH[+val-1]);
           }
         }
         if(ded.type==="day"){
           const ok = (+val)===ded.d; flashDed('day', +val, ok);
           if(ok){
-            if(!statsOff && trackDed && tStartRef.current){ const dt=(performance.now()-tStartRef.current)/1000; updateStats(cur=>{cur.timeSum+=dt; cur.timeCnt+=1;}); }
-            if(!statsOff){ updateStats(cur=>{ cur.played+=1; cur.good+=1; cur.streak+=1; if(cur.streak>cur.best) cur.best=cur.streak; }); }
+            if(!alreadyWrong){
+              if(!statsOff && trackDed && tStartRef.current){ const dt=(performance.now()-tStartRef.current)/1000; updateStats(cur=>{cur.timeSum+=dt; cur.timeCnt+=1;}); }
+              if(!statsOff){ updateStats(cur=>{ cur.played+=1; cur.good+=1; cur.streak+=1; if(cur.streak>cur.best) cur.best=cur.streak; }); }
+            }
             setCorrectThenNext();
           }else{
-            if(!statsOff){ updateStats(cur=>{ cur.played+=1; cur.streak=0; }); }
+            if(!statsOff && !alreadyWrong){ updateStats(cur=>{ cur.played+=1; cur.streak=0; }); }
             showWrong(String(+val));
           }
         }
@@ -591,7 +609,8 @@
                     <div className="flex items-center gap-2">
                       <span className="text-xs text-purple-300/80">Show:</span>
                       <input type="range" min="100" max="3000" step="50" value={flashMs}
-                            onChange={e=>setFlashMs(+e.target.value)} className="accent-purple-500"/>
+                            onChange={e=>{const v=+e.target.value; setFlashMs(v); if(!active) setFlashRemainMs(v);}}
+                            className="accent-purple-500"/>
                       <span className="tabular-nums text-xs w-12 text-right">{flashMs}ms</span>
                     </div>
                   )}
@@ -624,7 +643,10 @@
                               return true;
                             })();
                             resetStatsCurrent();
-                            if(needNew) doNew();
+                            if(needNew){
+                              const silent = (mode==="flash" && !active);
+                              doNew({silent});
+                            }
                           }}>Reset stats</button>
                 </div>
               </div>
@@ -643,16 +665,16 @@
                 <div className="bar"><span style={{width:`${Math.max(0,Math.min(100,(blitzRemain/blitzSec)*100))}%`}}></span></div>
               </div>
             )}
-            {mode==="sudden" && active && qDeadlineRef.current && (
+            {mode==="sudden" && (
               <div className="mb-3">
-                <div className="flex items-center justify-between text-xs text-purple-200/80 mb-1"><div>Per-question</div><div className="tabular-nums">{qRemain.toFixed(1)}s</div></div>
-                <div className="bar"><span style={{width:`${Math.max(0,Math.min(100),(qRemain/qSec)*100)}%`}}></span></div>
+                <div className="flex items-center justify-between text-xs text-purple-200/80 mb-1"><div>Per-question</div><div className="tabular-nums">{Math.max(0,qRemain).toFixed(1)}s</div></div>
+                <div className="bar"><span style={{width:`${Math.max(0,Math.min(100),(qRemain/Math.max(qSec,0.0001))*100)}%`}}></span></div>
               </div>
             )}
-            {mode==="flash" && active && phase==='show' && (
+            {mode==="flash" && (
               <div className="mb-3">
-                <div className="flex items-center justify-between text-xs text-purple-200/80 mb-1"><div>Flash</div><div className="tabular-nums">{(flashRemainMs/1000).toFixed(2)}s</div></div>
-                <div className="bar"><span style={{width:`${Math.max(0,Math.min(100,(flashRemainMs/flashMs)*100))}%`}}></span></div>
+                <div className="flex items-center justify-between text-xs text-purple-200/80 mb-1"><div>Flash</div><div className="tabular-nums">{(Math.max(0,flashRemainMs)/1000).toFixed(2)}s</div></div>
+                <div className="bar"><span style={{width:`${Math.max(0,Math.min(100,(flashRemainMs/Math.max(flashMs,1))*100))}%`}}></span></div>
               </div>
             )}
 
@@ -775,6 +797,7 @@
     function LookupCard(){
       const [lookupIn,setLookupIn]=React.useState("");
       const [lookupOut,setLookupOut]=React.useState("");
+      const [lookupHistory,setLookupHistory]=React.useState([]);
       function isLeapY(y){ y = y>0?y:1-Math.abs(y); return y%400===0 || (y%4===0 && y%100!==0); }
       function dimY(y,m){ return m===2 ? (isLeapY(y)?29:28) : [4,6,9,11].includes(m)?30:31; }
       function wdayY(y,m,d){ function jdn(y,m,d){ const a=Math.floor((14-m)/12),y2=y+4800-a,m2=m-3+12*a; return d+Math.floor((153*m2+2)/5)+365*y2+Math.floor(y2/4)-Math.floor(y2/100)+Math.floor(y2/400)-32045; } const toA = y=>y>0?y:1-Math.abs(y); return (jdn(toA(y),m,d)+1)%7; }
@@ -792,7 +815,13 @@
         const maxd=dimY(yy,mm);
         if(dd<1||dd>maxd){ setLookupOut(`Day must be 1–${maxd} for ${MONTH[mm-1]}.`); return; }
         const d=DAY[wdayY(yy,mm,dd)];
-        setLookupOut(`${MONTH[mm-1]} ${dd}, ${fmtYear(yy)} is a ${d}.`);
+        const pretty = `${MONTH[mm-1]} ${dd}, ${fmtYear(yy)}`;
+        const message = `${pretty} is a ${d}.`;
+        setLookupOut(message);
+        setLookupHistory(prev=>[
+          {id:`${yy}-${mm}-${dd}-${Date.now()}-${Math.random()}`, label:pretty, weekday:d},
+          ...prev
+        ].slice(0,10));
       }
       function clearLookup(){ setLookupIn(""); if(document.activeElement) document.activeElement.blur(); setLookupOut(""); }
       return (
@@ -804,6 +833,19 @@
             <button onPointerDown={(e)=>{e.preventDefault(); clearLookup();}} className="px-4 py-2 rounded-xl bg-zinc-700 text-white text-sm font-medium">Clear</button>
           </div>
           {lookupOut && <div className="mt-3 text-sm">{lookupOut}</div>}
+          {lookupHistory.length>0 && (
+            <div className="mt-4">
+              <div className="text-xs uppercase tracking-widest text-purple-200/70">History</div>
+              <ul className="mt-2 space-y-1 text-sm text-purple-100/90">
+                {lookupHistory.map(entry=>(
+                  <li key={entry.id} className="flex items-center justify-between gap-3 rounded-xl bg-purple-900/40 border border-purple-800/60 px-3 py-2">
+                    <span className="font-medium">{entry.label}</span>
+                    <span className="text-xs uppercase tracking-wide text-purple-200/80">{entry.weekday}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           <ul className="mt-4 text-xs text-purple-100/90 space-y-2 list-disc list-inside">
             <li>Format: <b>month/day/year</b> (e.g., <b>7/4/1776</b>).</li>
             <li>BC years: use a leading minus (e.g., <b>-1</b> = <b>1 BC</b>). No year 0.</li>
