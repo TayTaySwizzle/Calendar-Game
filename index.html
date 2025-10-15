@@ -24,7 +24,7 @@
     .chip{background:rgba(120,53,175,.25);border:1px solid rgba(120,53,175,.45);padding:.25rem .5rem;border-radius:.75rem;font-size:12px}
     .bar{height:6px;border-radius:6px;overflow:hidden;background:rgba(120,53,175,.25);border:1px solid rgba(120,53,175,.45)}
     .bar>span{display:block;height:100%;background:linear-gradient(90deg,#a855f7,#7c3aed)}
-    .expander{transition:max-height .3s ease;overflow:hidden}
+    .expander{transition:max-height .35s ease-in-out;overflow:hidden;will-change:max-height}
   </style>
 </head>
 <body class="text-purple-50">
@@ -70,6 +70,22 @@
 
     const isTouch=typeof window!=="undefined" && ("ontouchstart" in window || navigator.maxTouchPoints>0 || matchMedia("(pointer:coarse)").matches);
     const isTimer = m => m==="blitz"||m==="sudden"||m==="flash";
+    const formatSecondsLabel = (seconds)=>{
+      if(!Number.isFinite(seconds)) return "0s";
+      const value=Math.max(0,seconds);
+      if(value<=0.05) return "0s";
+      return `${value.toFixed(1)}s`;
+    };
+    const blockMinusKey = (event)=>{
+      if(event.key==="-" || event.key==="Subtract" || event.key==="Minus"){
+        event.preventDefault();
+      }
+    };
+    const blockMinusBeforeInput = (event)=>{
+      if(event.data && event.data.includes("-")){
+        event.preventDefault();
+      }
+    };
 
     /* ---------- atoms ---------- */
     const Stat=({label,value,disabled})=>(
@@ -88,6 +104,7 @@
     /* ======================= App ======================= */
     function App(){
       const [mode,setMode]=useState("classic");
+      const modeSelectRef=useRef(null);
 
       /* era + independent ranges (AD / BC / BOTH) */
       const [era,setEra]=useState('AD');                   // 'AD' | 'BOTH' | 'BC'
@@ -144,9 +161,19 @@
       const [dedType,setDedType]=useState("year");
       const [ded,setDed]=useState(null);
       const [dedFlash,setDedFlash]=useState(null);
+      const [lookupHistory,setLookupHistory]=useState([]);
 
       const inputRef=useRef(null), [input,setInput]=useState("");
-      useEffect(()=>{ if(!isTouch) inputRef.current?.focus(); else document.activeElement?.blur(); },[date,mode,active]);
+      useEffect(()=>{
+        if(!isTouch){
+          inputRef.current?.focus();
+        }else{
+          const active=document.activeElement;
+          if(active && active!==modeSelectRef.current && active.tagName==='INPUT'){
+            active.blur();
+          }
+        }
+      },[date,mode,active]);
 
       /* helpers */
       const updateStats = (mutator)=>{ setStatsByMode(prev=>{ const cur={...(prev[mode]||blankStats())}; mutator(cur); return {...prev,[mode]:cur}; }); };
@@ -161,7 +188,10 @@
       /* ===== Range helpers ===== */
       const fmtRangeYear = (y)=> y>0?`${y} AD`:`${Math.abs(y)} BC`;
       const labelForYear = (y)=> y>=0?'AD':'BC';
-      const displayInputValue = (y, scopeEra=era)=> scopeEra==='BC'?String(Math.abs(y)):String(y);
+      const displayInputValue = (y, scopeEra=era)=>{
+        if(scopeEra==='BC' || scopeEra==='BOTH') return String(Math.abs(y));
+        return String(y);
+      };
 
       function applyMinValue(val){
         if(era==='AD'){ setAdRange(r=>({...r,min:val})); }
@@ -177,37 +207,43 @@
         setMaxY(val);
       }
 
-      function sanitizeMinInputValue(raw){
+      function sanitizeMinInputValue(raw, signHint=null){
         if(!Number.isFinite(raw)) return minY;
         let val=Math.trunc(raw);
+        let sign=1;
         if(era==='AD'){
           val=Math.max(1, Math.min(10000, val));
+          sign=1;
         }else if(era==='BC'){
           val=-Math.max(1, Math.min(10000, Math.abs(val)));
+          sign=-1;
         }else{
-          if(val===0) return minY;
-          if(val>0){ val=Math.max(1, Math.min(10000, val)); }
-          else { val=Math.max(-10000, Math.min(-1, val)); }
+          sign = signHint!=null ? (signHint<0?-1:1) : (minY<0?-1:1);
+          const magnitude=Math.max(1, Math.min(10000, Math.abs(val)));
+          val = sign<0 ? -magnitude : magnitude;
         }
-        if(val>maxY) val=maxY;
-        if(val===0) val=val<0?-1:1;
+        if(era!=='BOTH' && val>maxY) val=maxY;
+        if(val===0) val = sign<0 ? -1 : 1;
         return val;
       }
 
-      function sanitizeMaxInputValue(raw){
+      function sanitizeMaxInputValue(raw, signHint=null){
         if(!Number.isFinite(raw)) return maxY;
         let val=Math.trunc(raw);
+        let sign=1;
         if(era==='AD'){
           val=Math.max(1, Math.min(10000, val));
+          sign=1;
         }else if(era==='BC'){
           val=-Math.max(1, Math.min(10000, Math.abs(val)));
+          sign=-1;
         }else{
-          if(val===0) return maxY;
-          if(val>0){ val=Math.max(1, Math.min(10000, val)); }
-          else { val=Math.max(-10000, Math.min(-1, val)); }
+          sign = signHint!=null ? (signHint<0?-1:1) : (maxY<0?-1:1);
+          const magnitude=Math.max(1, Math.min(10000, Math.abs(val)));
+          val = sign<0 ? -magnitude : magnitude;
         }
-        if(val<minY) val=minY;
-        if(val===0) val=val<0?-1:1;
+        if(era!=='BOTH' && val<minY) val=minY;
+        if(val===0) val = sign<0 ? -1 : 1;
         return val;
       }
 
@@ -215,15 +251,15 @@
         setMinInput(str);
         const trimmed=str.trim();
         if(trimmed==='') return;
-        if(era==='BOTH'){
-          if(trimmed==='-') return;
-          if(!/^-?\d+$/.test(trimmed)) return;
-        }else{
-          if(!/^\d+$/.test(trimmed)) return;
-        }
+        if(!/^\d+$/.test(trimmed)) return;
         const parsed=Number.parseInt(trimmed,10);
         if(Number.isNaN(parsed)) return;
-        const val=sanitizeMinInputValue(parsed);
+        const signHint = era==='BC' ? -1 : era==='BOTH' ? (minY<0?-1:1) : 1;
+        const val=sanitizeMinInputValue(parsed, signHint);
+        if(era==='BOTH' && val>maxY){
+          applyMaxValue(val);
+          setMaxInput(displayInputValue(val,'BOTH'));
+        }
         applyMinValue(val);
         setMinInput(displayInputValue(val));
       }
@@ -232,17 +268,43 @@
         setMaxInput(str);
         const trimmed=str.trim();
         if(trimmed==='') return;
-        if(era==='BOTH'){
-          if(trimmed==='-') return;
-          if(!/^-?\d+$/.test(trimmed)) return;
-        }else{
-          if(!/^\d+$/.test(trimmed)) return;
-        }
+        if(!/^\d+$/.test(trimmed)) return;
         const parsed=Number.parseInt(trimmed,10);
         if(Number.isNaN(parsed)) return;
-        const val=sanitizeMaxInputValue(parsed);
+        const signHint = era==='BC' ? -1 : era==='BOTH' ? (maxY<0?-1:1) : 1;
+        const val=sanitizeMaxInputValue(parsed, signHint);
+        if(era==='BOTH' && val<minY){
+          applyMinValue(val);
+          setMinInput(displayInputValue(val,'BOTH'));
+        }
         applyMaxValue(val);
         setMaxInput(displayInputValue(val));
+      }
+
+      function toggleMinSign(){
+        if(era!=='BOTH') return;
+        const magnitude=Math.max(1, Math.min(10000, Math.abs(minY)||1));
+        const nextSign = minY<0?1:-1;
+        let val = nextSign<0 ? -magnitude : magnitude;
+        if(val>maxY){
+          applyMaxValue(val);
+          setMaxInput(displayInputValue(val,'BOTH'));
+        }
+        applyMinValue(val);
+        setMinInput(displayInputValue(val,'BOTH'));
+      }
+
+      function toggleMaxSign(){
+        if(era!=='BOTH') return;
+        const magnitude=Math.max(1, Math.min(10000, Math.abs(maxY)||1));
+        const nextSign = maxY<0?1:-1;
+        let val = nextSign<0 ? -magnitude : magnitude;
+        if(val<minY){
+          applyMinValue(val);
+          setMinInput(displayInputValue(val,'BOTH'));
+        }
+        applyMaxValue(val);
+        setMaxInput(displayInputValue(val,'BOTH'));
       }
 
       const resetMinInputDisplay = ()=> setMinInput(displayInputValue(minY));
@@ -399,6 +461,15 @@
         if(mode==="deduction"){ setDedStack(s=>[...s, ded]); spawnDed(); setMsg(""); setRevealed(false); setLocked(false); setGuesses([]); setCountedWrong(false); }
       }
 
+      const pushLookupHistory = (entry)=>{
+        setLookupHistory(prev=>{
+          const next=[entry,...prev];
+          return next.slice(0,20);
+        });
+      };
+
+      const clearLookupHistory = ()=>setLookupHistory([]);
+
       useEffect(()=>{ if(mode==="classic" && trackClassic) tStartRef.current=performance.now(); },[mode,trackClassic,date]);
 
       /* New (never counts wrong) */
@@ -440,8 +511,8 @@
         if(locked) return;
         if(idx===wday(date.y,date.m,date.d)){
           setFlash({type:'good', idx}); setTimeout(()=>setFlash(null),450);
-          if(!statsOff && tStartRef.current && trackingOn()){ const dt=(performance.now()-tStartRef.current)/1000; updateStats(cur=>{ cur.timeSum+=dt; cur.timeCnt+=1; }); }
-          if(!statsOff){ updateStats(cur=>{ cur.played+=1; cur.good+=1; cur.streak+=1; if(cur.streak>cur.best) cur.best=cur.streak; }); }
+          if(!statsOff && !countedWrong && tStartRef.current && trackingOn()){ const dt=(performance.now()-tStartRef.current)/1000; updateStats(cur=>{ cur.timeSum+=dt; cur.timeCnt+=1; }); }
+          if(!statsOff && !countedWrong){ updateStats(cur=>{ cur.played+=1; cur.good+=1; cur.streak+=1; if(cur.streak>cur.best) cur.best=cur.streak; }); }
           if(mode==="sudden"){
             const now=performance.now(); qDeadlineRef.current = now + qSec*1000; qPausedAccRef.current = 0; qPausedAtRef.current = null; setQRemain(qSec);
           }
@@ -500,8 +571,8 @@
         if(ded.type==="year"){
           const ok = (+val)===ded.y; flashDed('year', +val, ok);
           if(ok){
-            if(!statsOff && trackDed && tStartRef.current){ const dt=(performance.now()-tStartRef.current)/1000; updateStats(cur=>{cur.timeSum+=dt; cur.timeCnt+=1;}); }
-            if(!statsOff){ updateStats(cur=>{ cur.played+=1; cur.good+=1; cur.streak+=1; if(cur.streak>cur.best) cur.best=cur.streak; }); }
+            if(!statsOff && !countedWrong && trackDed && tStartRef.current){ const dt=(performance.now()-tStartRef.current)/1000; updateStats(cur=>{cur.timeSum+=dt; cur.timeCnt+=1;}); }
+            if(!statsOff && !countedWrong){ updateStats(cur=>{ cur.played+=1; cur.good+=1; cur.streak+=1; if(cur.streak>cur.best) cur.best=cur.streak; }); }
             setCorrectThenNext();
           }else{
             if(!statsOff){ updateStats(cur=>{ cur.played+=1; cur.streak=0; }); }
@@ -511,8 +582,8 @@
         if(ded.type==="month"){
           const ok = (+val)===ded.m; flashDed('month', +val, ok);
           if(ok){
-            if(!statsOff && trackDed && tStartRef.current){ const dt=(performance.now()-tStartRef.current)/1000; updateStats(cur=>{cur.timeSum+=dt; cur.timeCnt+=1;}); }
-            if(!statsOff){ updateStats(cur=>{ cur.played+=1; cur.good+=1; cur.streak+=1; if(cur.streak>cur.best) cur.best=cur.streak; }); }
+            if(!statsOff && !countedWrong && trackDed && tStartRef.current){ const dt=(performance.now()-tStartRef.current)/1000; updateStats(cur=>{cur.timeSum+=dt; cur.timeCnt+=1;}); }
+            if(!statsOff && !countedWrong){ updateStats(cur=>{ cur.played+=1; cur.good+=1; cur.streak+=1; if(cur.streak>cur.best) cur.best=cur.streak; }); }
             setCorrectThenNext();
           }else{
             if(!statsOff){ updateStats(cur=>{ cur.played+=1; cur.streak=0; }); }
@@ -522,8 +593,8 @@
         if(ded.type==="day"){
           const ok = (+val)===ded.d; flashDed('day', +val, ok);
           if(ok){
-            if(!statsOff && trackDed && tStartRef.current){ const dt=(performance.now()-tStartRef.current)/1000; updateStats(cur=>{cur.timeSum+=dt; cur.timeCnt+=1;}); }
-            if(!statsOff){ updateStats(cur=>{ cur.played+=1; cur.good+=1; cur.streak+=1; if(cur.streak>cur.best) cur.best=cur.streak; }); }
+            if(!statsOff && !countedWrong && trackDed && tStartRef.current){ const dt=(performance.now()-tStartRef.current)/1000; updateStats(cur=>{cur.timeSum+=dt; cur.timeCnt+=1;}); }
+            if(!statsOff && !countedWrong){ updateStats(cur=>{ cur.played+=1; cur.good+=1; cur.streak+=1; if(cur.streak>cur.best) cur.best=cur.streak; }); }
             setCorrectThenNext();
           }else{
             if(!statsOff){ updateStats(cur=>{ cur.played+=1; cur.streak=0; }); }
@@ -549,15 +620,40 @@
 
       /* range panel */
       const [rangeOpen,setRangeOpen]=useState(false);
+      const [rangeMaxHeight,setRangeMaxHeight]=useState('0px');
+      const rangeContentRef=useRef(null);
+
+      useEffect(()=>{
+        const inner=rangeContentRef.current;
+        if(!inner) return;
+        if(rangeOpen){
+          setRangeMaxHeight(`${inner.scrollHeight}px`);
+        }else{
+          setRangeMaxHeight('0px');
+        }
+      },[rangeOpen, era, minInput, maxInput, minY, maxY]);
+
+      useEffect(()=>{
+        if(!rangeOpen) return;
+        const onResize=()=>{
+          const inner=rangeContentRef.current;
+          if(inner){
+            setRangeMaxHeight(`${inner.scrollHeight}px`);
+          }
+        };
+        window.addEventListener('resize', onResize);
+        return ()=>window.removeEventListener('resize', onResize);
+      },[rangeOpen]);
       const RangePanel = (
         <div className="mt-3 rounded-2xl card p-3">
-          <button type="button" onClick={()=>setRangeOpen(o=>!o)}
+          <button type="button" onClick={()=>setRangeOpen(o=>!o)} aria-expanded={rangeOpen}
                   className="w-full text-left text-sm text-purple-200/90 flex items-center justify-between">
             <span>Year range <span className="tabular-nums ml-1">{fmtRangeYear(minY)} → {fmtRangeYear(maxY)}</span></span>
-            <span className={`transition-transform text-base ${rangeOpen?'rotate-180':''}`}>▾</span>
+            <span className={`text-white/90 text-[7px] leading-none transition-transform ease-in-out ${rangeOpen?'rotate-180':''}`}
+                  style={{transitionDuration:'350ms'}}>▼</span>
           </button>
-          <div className="expander" style={{maxHeight:rangeOpen?'38vh':'0px'}}>
-            <div className="mt-3 space-y-4 pr-1">
+          <div className="expander" style={{maxHeight:rangeMaxHeight}}>
+            <div ref={rangeContentRef} className="mt-3 space-y-4 pr-1">
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label htmlFor={minInputId} className="block text-xs text-purple-200/80 mb-1">Start year</label>
@@ -565,14 +661,24 @@
                     <input
                       id={minInputId}
                       type="text"
-                      inputMode={era==='BOTH'?'text':'numeric'}
-                      pattern={era==='BOTH'?'-?[0-9]*':'[0-9]*'}
+                      inputMode="numeric"
+                      pattern="[0-9]*"
                       value={minInput}
                       onChange={e=>handleMinInputChange(e.target.value)}
                       onBlur={resetMinInputDisplay}
+                      onKeyDown={blockMinusKey}
+                      onBeforeInput={blockMinusBeforeInput}
                       className="w-full panel rounded-xl px-3 py-2 pr-11 focus:outline-none focus:ring-2 focus:ring-purple-400 tabular-nums"
                     />
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] font-semibold uppercase text-purple-200/80">{labelForYear(minY)}</span>
+                    <button
+                      type="button"
+                      onClick={()=>toggleMinSign()}
+                      tabIndex={era==='BOTH'?0:-1}
+                      className={`absolute right-3 top-1/2 -translate-y-1/2 text-[11px] font-semibold uppercase text-purple-200/80 focus:outline-none transition-colors ${era==='BOTH'?'cursor-pointer hover:text-purple-100':'pointer-events-none'}`}
+                      aria-label={era==='BOTH'?`Toggle start year between AD and BC (currently ${labelForYear(minY)})`:undefined}
+                    >
+                      {labelForYear(minY)}
+                    </button>
                   </div>
                 </div>
                 <div>
@@ -581,28 +687,40 @@
                     <input
                       id={maxInputId}
                       type="text"
-                      inputMode={era==='BOTH'?'text':'numeric'}
-                      pattern={era==='BOTH'?'-?[0-9]*':'[0-9]*'}
+                      inputMode="numeric"
+                      pattern="[0-9]*"
                       value={maxInput}
                       onChange={e=>handleMaxInputChange(e.target.value)}
                       onBlur={resetMaxInputDisplay}
+                      onKeyDown={blockMinusKey}
+                      onBeforeInput={blockMinusBeforeInput}
                       className="w-full panel rounded-xl px-3 py-2 pr-11 focus:outline-none focus:ring-2 focus:ring-purple-400 tabular-nums"
                     />
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] font-semibold uppercase text-purple-200/80">{labelForYear(maxY)}</span>
+                    <button
+                      type="button"
+                      onClick={()=>toggleMaxSign()}
+                      tabIndex={era==='BOTH'?0:-1}
+                      className={`absolute right-3 top-1/2 -translate-y-1/2 text-[11px] font-semibold uppercase text-purple-200/80 focus:outline-none transition-colors ${era==='BOTH'?'cursor-pointer hover:text-purple-100':'pointer-events-none'}`}
+                      aria-label={era==='BOTH'?`Toggle end year between AD and BC (currently ${labelForYear(maxY)})`:undefined}
+                    >
+                      {labelForYear(maxY)}
+                    </button>
                   </div>
                 </div>
               </div>
-              <p className="text-xs text-purple-300/70">Proleptic Gregorian calendar. Year 0 isn’t shown. Each era remembers its own range.</p>
+              <p className="text-xs text-purple-300/70">Proleptic Gregorian calendar. Year 0 isn’t available—use 1 BC or 1 AD. Each era remembers its own range.</p>
             </div>
           </div>
         </div>
       );
 
       const showSuddenBar = mode==="sudden";
-      const suddenTimeLabel = (active && qDeadlineRef.current) ? qRemain.toFixed(1) : qSec.toFixed(1);
+      const suddenSeconds = (active && qDeadlineRef.current) ? qRemain : (qRemain<=0.05 ? 0 : qSec);
+      const suddenTimeLabel = formatSecondsLabel(suddenSeconds);
       const suddenPercent = (active && qDeadlineRef.current && qSec>0) ? Math.max(0, Math.min(100,(qRemain/qSec)*100)) : 100;
       const showFlashBar = mode==="flash";
-      const flashTimeLabel = (active && phase==='show' && flashDeadlineRef.current) ? (flashRemainMs/1000).toFixed(2) : (flashMs/1000).toFixed(2);
+      const flashSeconds = (active && phase==='show') ? (flashRemainMs/1000) : ((flashRemainMs/1000)<=0.05 ? 0 : (flashMs/1000));
+      const flashTimeLabel = formatSecondsLabel(flashSeconds);
       const flashPercent = (active && phase==='show' && flashDeadlineRef.current && flashMs>0) ? Math.max(0, Math.min(100,(flashRemainMs/flashMs)*100)) : 100;
 
       /* should reset stats create a new date? */
@@ -632,8 +750,9 @@
             <h1 className="text-xl md:text-2xl font-semibold leading-none">Calendar Game</h1>
             <div className="relative">
               <select
+                ref={modeSelectRef}
                 value={mode}
-                onChange={e=>{ __hideErr(); setMode(e.target.value); e.target.blur(); }}
+                onChange={e=>{ __hideErr(); setMode(e.target.value); }}
                 className="panel rounded-xl px-2.5 py-2 pr-9 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 appearance-none"
               >
                 <option value="classic">Classic</option>
@@ -740,19 +859,19 @@
             {/* Blitz/Sudden/Flash bars */}
             {mode==="blitz" && (
               <div className="mb-3">
-                <div className="flex items-center justify-between text-xs text-purple-200/80 mb-1"><div>Blitz</div><div className="tabular-nums">{Math.floor(blitzRemain).toString().padStart(2,'0')}s</div></div>
+                <div className="flex items-center justify-between text-xs text-purple-200/80 mb-1"><div>Blitz</div><div className="tabular-nums">{formatSecondsLabel(blitzRemain)}</div></div>
                 <div className="bar"><span style={{width:`${Math.max(0,Math.min(100,(blitzRemain/blitzSec)*100))}%`}}></span></div>
               </div>
             )}
             {showSuddenBar && (
               <div className="mb-3">
-                <div className="flex items-center justify-between text-xs text-purple-200/80 mb-1"><div>Per-question</div><div className="tabular-nums">{suddenTimeLabel}s</div></div>
+                <div className="flex items-center justify-between text-xs text-purple-200/80 mb-1"><div>Per-question</div><div className="tabular-nums">{suddenTimeLabel}</div></div>
                 <div className="bar"><span style={{width:`${suddenPercent}%`}}></span></div>
               </div>
             )}
             {showFlashBar && (
               <div className="mb-3">
-                <div className="flex items-center justify-between text-xs text-purple-200/80 mb-1"><div>Flash</div><div className="tabular-nums">{flashTimeLabel}s</div></div>
+                <div className="flex items-center justify-between text-xs text-purple-200/80 mb-1"><div>Flash</div><div className="tabular-nums">{flashTimeLabel}</div></div>
                 <div className="bar"><span style={{width:`${flashPercent}%`}}></span></div>
               </div>
             )}
@@ -866,14 +985,14 @@
             )}
 
             {/* ======= LOOKUP ======= */}
-            {mode==="lookup" && <LookupCard />}
+            {mode==="lookup" && <LookupCard history={lookupHistory} onAddHistory={pushLookupHistory} onClearHistory={clearLookupHistory} />}
           </div>
         </div>
       );
     }
 
     /* --------- Lookup component --------- */
-    function LookupCard(){
+    function LookupCard({history=[], onAddHistory, onClearHistory}){
       const [lookupIn,setLookupIn]=React.useState("");
       const [lookupOut,setLookupOut]=React.useState("");
       function isLeapY(y){ y = y>0?y:1-Math.abs(y); return y%400===0 || (y%4===0 && y%100!==0); }
@@ -893,9 +1012,27 @@
         const maxd=dimY(yy,mm);
         if(dd<1||dd>maxd){ setLookupOut(`Day must be 1–${maxd} for ${MONTH[mm-1]}.`); return; }
         const d=DAY[wdayY(yy,mm,dd)];
-        setLookupOut(`${MONTH[mm-1]} ${dd}, ${fmtYear(yy)} is a ${d}.`);
+        const resultText = `${MONTH[mm-1]} ${dd}, ${fmtYear(yy)} is a ${d}.`;
+        setLookupOut(resultText);
+        if(onAddHistory){
+          const entry={
+            id:`${Date.now().toString(36)}-${Math.random().toString(36).slice(2,8)}`,
+            query:`${mm}/${dd}/${yy}`,
+            label:`${MONTH[mm-1]} ${dd}, ${fmtYear(yy)}`,
+            weekday:d,
+            result:resultText
+          };
+          onAddHistory(entry);
+        }
       }
       function clearLookup(){ setLookupIn(""); if(document.activeElement) document.activeElement.blur(); setLookupOut(""); }
+      const entries = Array.isArray(history)?history:[];
+      const handleHistorySelect = (entry)=>{
+        setLookupIn(entry?.query||"");
+        setLookupOut(entry?.result||"");
+        if(document.activeElement) document.activeElement.blur();
+      };
+      const handleClearHistory = ()=>{ if(onClearHistory) onClearHistory(); };
       return (
         <div className="mt-1 rounded-2xl panel p-4">
           <div className="flex items-stretch gap-2">
@@ -910,6 +1047,28 @@
             <li>BC years: use a leading minus (e.g., <b>-1</b> = <b>1 BC</b>). No year 0.</li>
             <li>Valid range: <b>−10000…10000</b>. Days must be valid for the month.</li>
           </ul>
+          {entries.length>0 && (
+            <div className="mt-5 pt-4 border-t border-purple-500/40">
+              <div className="flex items-center justify-between text-[11px] uppercase tracking-wide text-purple-200/70">
+                <span>History</span>
+                <button type="button" onClick={()=>handleClearHistory()} className="text-purple-200/70 font-medium">Clear history</button>
+              </div>
+              <ul className="mt-3 space-y-2">
+                {entries.map(entry=>(
+                  <li key={entry.id}>
+                    <button type="button" onClick={()=>handleHistorySelect(entry)}
+                            className="w-full text-left px-3 py-2 rounded-xl panel flex items-center justify-between gap-3 text-xs">
+                      <span>
+                        <span className="block text-[13px] font-medium text-purple-100/90">{entry.label}</span>
+                        <span className="block text-[11px] text-purple-200/70">{entry.query}</span>
+                      </span>
+                      <span className="text-[12px] font-semibold text-purple-200/80">{entry.weekday}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
       );
     }
