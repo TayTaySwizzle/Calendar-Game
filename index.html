@@ -17,8 +17,9 @@
     button,input,select{-webkit-tap-highlight-color:transparent}
     button{touch-action:manipulation}
     @keyframes flashPulse{0%{box-shadow:0 0 0 0 var(--ring);background:var(--bg0)}
-      35%{box-shadow:0 0 0 10px var(--ring);background:var(--bg1)}
-      100%{box-shadow:0 0 0 0 transparent;background:var(--bg0)}}
+      12%{box-shadow:0 0 0 10px var(--ring);background:var(--bg1)}
+      88%{box-shadow:0 0 0 10px var(--ring);background:var(--bg1)}
+      100%{box-shadow:0 0 0 0 var(--ring);background:var(--bg0)}}
     .flash-good{--ring:rgba(16,185,129,.5);--bg0:rgba(16,185,129,.5);--bg1:rgba(16,185,129,.5);animation:flashPulse .45s ease-in-out}
     .flash-bad{--ring:rgba(239,68,68,.5);--bg0:rgba(239,68,68,.5);--bg1:rgba(239,68,68,.5);animation:flashPulse .45s ease-in-out}
     .chip{background:rgba(120,53,175,.25);border:1px solid rgba(120,53,175,.45);padding:.25rem .5rem;border-radius:.75rem;font-size:12px}
@@ -57,7 +58,17 @@
 
     /* ---------- Calendar helpers ---------- */
     const MONTH=["January","February","March","April","May","June","July","August","September","October","November","December"];
+    const MONTH_ABBR=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
     const DAY=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+    const DED_YEAR_OPTION_COUNT=9;
+    const DED_DAY_OPTION_COUNT=12;
+    const DED_MONTH_OPTION_COUNT=6;
+    const DOOMSDAY_MONTH_COMMON=[4,0,0,3,5,1,3,6,2,4,0,2];
+    const DOOMSDAY_MONTH_LEAP=[3,6,0,3,5,1,3,6,2,4,0,2];
+    const shuffleArray=(arr)=>{
+      for(let i=arr.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [arr[i],arr[j]]=[arr[j],arr[i]]; }
+      return arr;
+    };
     const toAstro = y => y>0?y:1-Math.abs(y);
     const isLeap = y => { y=toAstro(y); return y%400===0 || (y%4===0 && y%100!==0); };
     const dim = (y,m)=> m===2 ? (isLeap(y)?29:28) : [4,6,9,11].includes(m)?30:31;
@@ -191,8 +202,6 @@
         if(prevTrackDed.current===false && trackDed===true){
           setStatsByMode(p=>({...p, deduction:{...(p.deduction||blankStats()), timeSum:0, timeCnt:0}}));
           tStartRef.current=performance.now();
-          setSavedDedByType(blankDedTypeStore());
-        }else if(prevTrackDed.current===true && trackDed===false){
           setSavedDedByType(blankDedTypeStore());
         }
         prevTrackDed.current=trackDed;
@@ -486,6 +495,7 @@
       const clearLookupHistory = ()=>setLookupHistory([]);
 
       useEffect(()=>{ if(mode==="classic" && trackClassic) tStartRef.current=performance.now(); },[mode,trackClassic,date]);
+      useEffect(()=>{ if(mode==="deduction" && trackDed && ded) tStartRef.current=performance.now(); },[mode,trackDed,ded]);
 
       /* New (never counts wrong) */
       const doNew=(opts={})=>{
@@ -561,36 +571,117 @@
       /* Deduction generation + helpers using current min/max (or provided) */
       function spawnDed(){ spawnDedWithRange(minY,maxY); }
       function spawnDedWithRange(lo,hi){
-        if(dedType==="year"){
-          let m=rint(1,12), d=rint(1,31), y, w;
-          for(;;){ y=rint(lo,hi); if(y===0||d>dim(y,m)) continue; w=wday(y,m,d); break; }
-          function neighbor(dir){ const step=dir>0?1:-1;
-            for(let k=1;k<=800;k++){ let yy=y+k*step; if(yy===0) yy+=step; if(yy<lo||yy>hi) break; if(d<=dim(yy,m) && wday(yy,m,d)===w) return yy; }
-            return null;
+        const clampYear=(yy)=>{
+          if(yy<lo) return lo;
+          if(yy>hi) return hi;
+          if(yy===0) return yy<0?-1:1;
+          return yy;
+        };
+        const zeroInRange = (lo<=0 && hi>=0);
+        const totalYearsInRange = Math.max(0,(hi-lo+1) - (zeroInRange?1:0));
+        const yearTargetCount = Math.max(1, Math.min(DED_YEAR_OPTION_COUNT, totalYearsInRange||1));
+        const randomYearInRange=()=>{
+          for(let tries=0;tries<400;tries++){
+            let yy=rint(lo,hi);
+            if(yy===0) continue;
+            return yy;
           }
-          const L=neighbor(-1), U=neighbor(+1);
-          let a=L==null?lo:Math.max(lo, L+1), b=U==null?hi:Math.min(hi, U-1); if(a===0) a=1; if(b===0) b=-1; if(a>b){a=b=y;}
-          setDed({type:"year",m,d,w,y, a,b});
+          return lo<=-1 && hi>=-1 ? -1 : lo>0 ? lo : hi<0 ? hi : 1;
+        };
+
+        if(dedType==="year"){
+          const attemptLimit=500;
+          for(let attempt=0;attempt<attemptLimit;attempt++){
+            const y=randomYearInRange();
+            const m=rint(1,12);
+            const d=rint(1,dim(y,m));
+            const w=wday(y,m,d);
+            const candidates=[];
+            for(let yy=lo; yy<=hi; yy++){
+              if(yy===0) continue;
+              if(d>dim(yy,m)) continue;
+              candidates.push(yy);
+            }
+            if(candidates.length < yearTargetCount) continue;
+            const wrong=candidates.filter(yy=>yy!==y && wday(yy,m,d)!==w);
+            if(wrong.length < Math.max(0,yearTargetCount-1)) continue;
+            const pool=shuffleArray(wrong.slice());
+            const options=[y, ...pool.slice(0,yearTargetCount-1)];
+            shuffleArray(options);
+            setDed({type:"year",m,d,w,y, options});
+            return;
+          }
+          const fallbackMonth=1;
+          const fallbackDay=1;
+          const fallbackYears=[];
+          for(let yy=lo; yy<=hi && fallbackYears.length<yearTargetCount; yy++){
+            if(yy===0) continue;
+            fallbackYears.push(yy);
+          }
+          const fallbackYear=fallbackYears[0] ?? clampYear(randomYearInRange());
+          if(!fallbackYears.includes(fallbackYear)) fallbackYears.unshift(fallbackYear);
+          const trimmed=fallbackYears.slice(0,yearTargetCount);
+          setDed({type:"year",m:fallbackMonth,d:fallbackDay,w:wday(fallbackYear,fallbackMonth,fallbackDay),y:fallbackYear, options:trimmed});
           return;
         }
+
         if(dedType==="month"){
-          for(;;){
-            let y=rint(lo,hi); if(y===0) continue;
-            let d=rint(1,31); let w=rint(0,6);
-            const cands=[]; for(let m=1;m<=12;m++){ if(d<=dim(y,m) && wday(y,m,d)===w) cands.push(m); }
-            if(cands.length===1){ setDed({type:"month",y,d,w,m:cands[0]}); return; }
+          const attemptLimit=500;
+          for(let attempt=0;attempt<attemptLimit;attempt++){
+            const y=randomYearInRange();
+            const m=rint(1,12);
+            const maxDay=dim(y,m);
+            const d=rint(1,Math.min(28,maxDay));
+            const w=wday(y,m,d);
+            const leap=isLeap(y);
+            const doomValues=leap?DOOMSDAY_MONTH_LEAP:DOOMSDAY_MONTH_COMMON;
+            const groups=new Map();
+            for(let mm=1;mm<=12;mm++){
+              if(d>dim(y,mm)) continue;
+              const doom=doomValues[mm-1];
+              if(!groups.has(doom)) groups.set(doom,[]);
+              groups.get(doom).push(mm);
+            }
+            const correctDoom=doomValues[m-1];
+            const uniqueOthers=[];
+            for(const [doom,months] of groups.entries()){
+              if(doom===correctDoom) continue;
+              const pool=months.filter(mm=>mm!==m);
+              if(pool.length>0){
+                uniqueOthers.push(pool[Math.floor(Math.random()*pool.length)]);
+              }
+            }
+            if(uniqueOthers.length < DED_MONTH_OPTION_COUNT-1) continue;
+            const options=[m, ...shuffleArray(uniqueOthers).slice(0,DED_MONTH_OPTION_COUNT-1)];
+            shuffleArray(options);
+            setDed({type:"month",y,d,w,m, options});
+            return;
           }
+          const fy=randomYearInRange();
+          setDed({type:"month",y:fy,d:1,w:wday(fy,1,1),m:1, options:[1]});
+          return;
         }
+
         if(dedType==="day"){
-          let y=rint(lo,hi); if(y===0) y+= (y<0?1:-1);
-          let m=rint(1,12); const D=dim(y,m);
-          let d=rint(1,D); const w=wday(y,m,d);
-          const bad=[]; for(let k=1;k<=D;k++){ if(k!==d && wday(y,m,k)!==w) bad.push(k); }
-          const pickCount=Math.min(10, 1+bad.length);
-          const picks=new Set([d]);
-          while(picks.size<pickCount){ picks.add(bad[rint(0,bad.length-1)]); }
-          const opts=[...picks].sort((a,b)=>a-b);
-          setDed({type:"day",y,m,w,d, options:opts});
+          const attemptLimit=500;
+          for(let attempt=0;attempt<attemptLimit;attempt++){
+            const y=randomYearInRange();
+            const m=rint(1,12);
+            const D=dim(y,m);
+            const d=rint(1,D);
+            const w=wday(y,m,d);
+            const allDays=Array.from({length:D},(_,i)=>i+1);
+            const wrong=allDays.filter(dd=>dd!==d && wday(y,m,dd)!==w);
+            const target=Math.min(DED_DAY_OPTION_COUNT, allDays.length);
+            if(wrong.length < Math.max(0,target-1)) continue;
+            const options=[d, ...shuffleArray(wrong.slice()).slice(0,target-1)];
+            options.sort((a,b)=>a-b);
+            setDed({type:"day",y,m,w,d, options});
+            return;
+          }
+          const fy=randomYearInRange();
+          const fm=1;
+          setDed({type:"day",y:fy,m:fm,w:wday(fy,fm,1),d:1, options:[1]});
         }
       }
 
@@ -622,7 +713,13 @@
       function flashDed(kind,value,ok){ setDedFlash({kind,value,ok}); setTimeout(()=>setDedFlash(null),450); }
       function submitDedAnswer(val){
         if(!ded || locked) return;
-        const setCorrectThenNext = ()=>{ requestAnimationFrame(()=>setTimeout(spawnDed, 60)); setMsg(""); setGuesses([]); setCountedWrong(false); };
+        const setCorrectThenNext = ()=>{
+          if(ded) setDedStack(s=>[...s,ded]);
+          setMsg("");
+          setGuesses([]);
+          setCountedWrong(false);
+          requestAnimationFrame(()=>setTimeout(()=>spawnDed(),0));
+        };
         const showWrong = (label)=>{ setGuesses(g=> g.includes(label)?g:[...g,label]); setCountedWrong(true); };
         if(ded.type==="year"){
           const ok = (+val)===ded.y; flashDed('year', +val, ok);
@@ -643,7 +740,7 @@
             setCorrectThenNext();
           }else{
             if(!statsOff){ updateStats(cur=>{ cur.played+=1; cur.streak=0; }); }
-            showWrong(MONTH[+val-1]);
+            showWrong(MONTH_ABBR[+val-1]);
           }
         }
         if(ded.type==="day"){
@@ -817,6 +914,7 @@
       function toggleAvg(disable){
         if(mode!=="classic" && mode!=="deduction") return;
         if(disable){ // turning OFF tracking
+          if(mode==="deduction"){ const snap=captureDedSnapshot(); if(snap){ setSavedDedByType(prev=>({...prev,[dedType]:snap})); } }
           if(mode==="classic") setTrackClassic(false); else setTrackDed(false);
           tStartRef.current=null;
         }else{       // turning ON tracking -> acts like New (no penalty)
@@ -861,8 +959,8 @@
                 <StatTwo label="Streak / Longest" left={S.streak} right={S.best} disabled={statsOff}/>
                 <Stat label="Avg time (correct)" value={(S.timeCnt?`${(S.timeSum/S.timeCnt).toFixed(2)}s`:"—")} disabled={avgDisabled}/>
               </div>
-              <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
-                <div className="flex flex-wrap items-center gap-3 w-full">
+              <div className="mt-2 flex flex-wrap items-start gap-3">
+                <div className="flex flex-wrap items-center gap-3 flex-1 min-w-[220px]">
                   {/* Era segmented */}
                   <div className="flex rounded-xl overflow-hidden border border-purple-800/60">
                     {[{k:'AD',label:'AD'},{k:'BOTH',label:'AD+BC'},{k:'BC',label:'BC'}].map(seg=>(
@@ -873,12 +971,22 @@
                       </button>
                     ))}
                   </div>
-
+                  <button
+                    type="button"
+                    className="px-4 py-2 rounded-xl bg-purple-700 hover:bg-purple-600 border border-purple-500/60 text-sm font-medium"
+                    onClick={()=>{
+                      const needNew = shouldNewOnReset();
+                      resetStatsCurrent();
+                      if(needNew) doNew({skipInactiveMessage:true});
+                    }}
+                  >Reset stats</button>
+                </div>
+                <div className="flex flex-1 min-w-[220px] flex-wrap items-center gap-3 justify-end">
                   {mode==="blitz" && (
-                    <div className="flex items-center gap-2 ml-auto flex-1 min-w-[150px] justify-end">
+                    <div className="flex items-center gap-2">
                       <span className="text-xs text-purple-300/80">Duration:</span>
                       <input type="range" min="15" max="180" step="5" value={blitzSec}
-                            onChange={e=>{const v=+e.target.value; setBlitzSec(v); if(!active) setBlitzRemain(v);}} className="accent-purple-500 w-28 sm:w-32"/>
+                            onChange={e=>{const v=+e.target.value; setBlitzSec(v); if(!active) setBlitzRemain(v);}} className="accent-purple-500 w-28"/>
                       <span className="tabular-nums text-xs w-10 text-right">{blitzSec}s</span>
                     </div>
                   )}
@@ -886,15 +994,15 @@
                     <div className="flex items-center gap-2">
                       <span className="text-xs text-purple-300/80">Per Q:</span>
                       <input type="range" min="3" max="20" step="1" value={qSec}
-                            onChange={e=>{const v=+e.target.value; setQSec(v); if(!active) setQRemain(v);}} className="accent-purple-500"/>
+                            onChange={e=>{const v=+e.target.value; setQSec(v); if(!active) setQRemain(v);}} className="accent-purple-500 w-24"/>
                       <span className="tabular-nums text-xs w-10 text-right">{qSec}s</span>
                     </div>
                   )}
                   {mode==="flash" && (
-                    <div className="flex items-center gap-2 ml-auto flex-1 min-w-[150px] justify-end">
+                    <div className="flex items-center gap-2">
                       <span className="text-xs text-purple-300/80">Show:</span>
                       <input type="range" min="100" max="3000" step="50" value={flashMs}
-                            onChange={e=>setFlashMs(+e.target.value)} className="accent-purple-500 w-28 sm:w-32"/>
+                            onChange={e=>setFlashMs(+e.target.value)} className="accent-purple-500 w-28"/>
                       <span className="tabular-nums text-xs w-12 text-right">{flashMs}ms</span>
                     </div>
                   )}
@@ -910,8 +1018,7 @@
                       <span>Disable avg time</span>
                     </label>
                   )}
-                </div>
-                <div className="flex items-center gap-3">
+
                   <label className="flex items-center gap-2 text-sm">
                     <input type="checkbox" className="sr-only" checked={statsOff} onChange={e=>setStatsOff(e.target.checked)} />
                     <span className={`w-10 h-6 rounded-full relative ${statsOff?"bg-rose-500/70":"bg-zinc-600"}`}>
@@ -919,16 +1026,6 @@
                     </span>
                     <span>Disable stats</span>
                   </label>
-                  <button type="button" className="text-xs px-3 py-1.5 rounded-lg bg-purple-700 hover:bg-purple-600"
-                          onClick={()=>{
-                            const needNew = (()=>{
-                              const avgEnabled = (mode==="classic"?trackClassic : mode==="deduction"?trackDed : true);
-                              if(!avgEnabled && !countedWrong) return false;
-                              return true;
-                            })();
-                            resetStatsCurrent();
-                            if(needNew) doNew({skipInactiveMessage:true});
-                          }}>Reset stats</button>
                 </div>
               </div>
             </>
@@ -1034,23 +1131,23 @@
 
                 <div className={`mt-4 ${locked?'opacity-60 pointer-events-none':''}`}>
                   {ded && ded.type==="year" && (
-                    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
-                      {Array.from({length: ded.b - ded.a + 1}, (_,i)=>ded.a+i).map(y=>(
+                    <div className="grid grid-cols-3 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                      {ded.options.map(y=>(
                         <button key={y} type="button" onClick={()=>submitDedAnswer(y)}
                           className={`${baseBtn} ${idleBtn} py-2 text-sm ${dedFlash&&dedFlash.kind==='year'&&dedFlash.value===y ? (dedFlash.ok?'flash-good':'flash-bad')+' border-transparent':''}`}>{fmtYear(y)}</button>
                       ))}
                     </div>
                   )}
                   {ded && ded.type==="month" && (
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-                      {MONTH.map((m,i)=>(
-                        <button key={m} type="button" onClick={()=>submitDedAnswer(i+1)}
-                          className={`${baseBtn} ${idleBtn} ${dedFlash&&dedFlash.kind==='month'&&dedFlash.value===i+1 ? (dedFlash.ok?'flash-good':'flash-bad')+' border-transparent':''}`}>{m}</button>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 gap-2">
+                      {ded.options.map(mv=>(
+                        <button key={mv} type="button" onClick={()=>submitDedAnswer(mv)}
+                          className={`${baseBtn} ${idleBtn} ${dedFlash&&dedFlash.kind==='month'&&dedFlash.value===mv ? (dedFlash.ok?'flash-good':'flash-bad')+' border-transparent':''}`}>{MONTH_ABBR[mv-1]}</button>
                       ))}
                     </div>
                   )}
                   {ded && ded.type==="day" && (
-                    <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-2">
+                    <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-6 gap-2">
                       {ded.options.map(dv=>(
                         <button key={dv} type="button" onClick={()=>submitDedAnswer(dv)}
                           className={`${baseBtn} ${idleBtn} ${dedFlash&&dedFlash.kind==='day'&&dedFlash.value===dv ? (dedFlash.ok?'flash-good':'flash-bad')+' border-transparent':''}`}>{dv}</button>
