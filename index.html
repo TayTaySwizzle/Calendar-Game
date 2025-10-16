@@ -16,11 +16,14 @@
     .thin{border:1px solid rgba(120,53,175,.35)}
     button,input,select{-webkit-tap-highlight-color:transparent}
     button{touch-action:manipulation}
-    @keyframes flashPulse{0%{box-shadow:0 0 0 0 var(--ring);background:var(--bg0)}
-      35%{box-shadow:0 0 0 10px var(--ring);background:var(--bg1)}
-      100%{box-shadow:0 0 0 0 transparent;background:var(--bg0)}}
-    .flash-good{--ring:rgba(16,185,129,.5);--bg0:rgba(16,185,129,.5);--bg1:rgba(16,185,129,.5);animation:flashPulse .45s ease-in-out}
-    .flash-bad{--ring:rgba(239,68,68,.5);--bg0:rgba(239,68,68,.5);--bg1:rgba(239,68,68,.5);animation:flashPulse .45s ease-in-out}
+    @keyframes flashPulse{
+      0%{box-shadow:0 0 0 0 var(--ring);background:var(--bg);opacity:1}
+      60%{box-shadow:0 0 0 10px var(--ring);background:var(--bg);opacity:1}
+      99%{box-shadow:0 0 0 10px var(--ring);background:var(--bg);opacity:1}
+      100%{box-shadow:0 0 0 0 transparent;background:transparent;opacity:0}
+    }
+    .flash-good{--ring:rgba(16,185,129,.5);--bg:rgba(16,185,129,.5);animation:flashPulse .45s ease-in-out}
+    .flash-bad{--ring:rgba(239,68,68,.5);--bg:rgba(239,68,68,.5);animation:flashPulse .45s ease-in-out}
     .chip{background:rgba(120,53,175,.25);border:1px solid rgba(120,53,175,.45);padding:.25rem .5rem;border-radius:.75rem;font-size:12px}
     .bar{height:6px;border-radius:6px;overflow:hidden;background:rgba(120,53,175,.25);border:1px solid rgba(120,53,175,.45)}
     .bar>span{display:block;height:100%;background:linear-gradient(90deg,#a855f7,#7c3aed)}
@@ -53,10 +56,11 @@
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
   <script type="text/babel" data-presets="env,react">
-    const {useEffect,useMemo,useRef,useState,useId} = React;
+    const {useEffect,useMemo,useRef,useState,useId,useCallback} = React;
 
     /* ---------- Calendar helpers ---------- */
     const MONTH=["January","February","March","April","May","June","July","August","September","October","November","December"];
+    const MONTH_ABBR=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
     const DAY=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
     const toAstro = y => y>0?y:1-Math.abs(y);
     const isLeap = y => { y=toAstro(y); return y%400===0 || (y%4===0 && y%100!==0); };
@@ -66,8 +70,16 @@
     const fmtYear = y => y>0?String(y):`${Math.abs(y)} BC`;
     const fmt=(y,m,d)=> `${MONTH[m-1]} ${d}, ${fmtYear(y)}`;
     const rint=(a,b)=>Math.floor(Math.random()*(b-a+1))+a;
+    const shuffleArray = (arr)=>{ const copy=[...arr]; for(let i=copy.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [copy[i],copy[j]]=[copy[j],copy[i]]; } return copy; };
+    const sampleUnique = (arr,count)=> shuffleArray(arr).slice(0,count);
+    const monthKeyFor = (y,m)=> (isLeap(y)?MONTH_KEY_LEAP[m-1]:MONTH_KEY_COMMON[m-1]);
     function randomDate(minY,maxY){ for(;;){ let y=rint(minY,maxY); if(y===0) continue; let m=rint(1,12), d=rint(1,dim(y,m)); if(d<=dim(y,m)) return {y,m,d}; } }
     const blankDedTypeStore = ()=>({year:null,month:null,day:null});
+    const YEAR_OPTION_COUNT=9;
+    const MONTH_OPTION_COUNT=6;
+    const DAY_OPTION_COUNT=12;
+    const MONTH_KEY_COMMON=[4,0,0,3,5,1,3,6,2,4,0,2];
+    const MONTH_KEY_LEAP=[3,6,0,3,5,1,3,6,2,4,0,2];
 
     const isTouch=typeof window!=="undefined" && ("ontouchstart" in window || navigator.maxTouchPoints>0 || matchMedia("(pointer:coarse)").matches);
     const isTimer = m => m==="blitz"||m==="sudden"||m==="flash";
@@ -182,6 +194,14 @@
       /* helpers */
       const updateStats = (mutator)=>{ setStatsByMode(prev=>{ const cur={...(prev[mode]||blankStats())}; mutator(cur); return {...prev,[mode]:cur}; }); };
       const resetStatsCurrent=()=>{ setStatsByMode(prev=>({...prev,[mode]:blankStats()})); };
+      const captureDedSnapshot = useCallback(()=> ded ? ({
+        ded,
+        guesses:[...guesses],
+        countedWrong,
+        msg,
+        locked,
+        revealed
+      }) : null, [ded, guesses, countedWrong, msg, locked, revealed]);
 
       /* avg-time toggle reset of sums when enabling */
       const prevTrackClassic=useRef(trackClassic);
@@ -193,10 +213,15 @@
           tStartRef.current=performance.now();
           setSavedDedByType(blankDedTypeStore());
         }else if(prevTrackDed.current===true && trackDed===false){
-          setSavedDedByType(blankDedTypeStore());
+          const snap = captureDedSnapshot();
+          setSavedDedByType(prev=>{
+            const next={...prev};
+            if(snap){ next[dedType]=snap; }
+            return next;
+          });
         }
         prevTrackDed.current=trackDed;
-      },[trackDed]);
+      },[trackDed, captureDedSnapshot, dedType]);
 
       /* ===== Range helpers ===== */
       const fmtRangeYear = (y)=> y>0?`${y} AD`:`${Math.abs(y)} BC`;
@@ -485,7 +510,13 @@
 
       const clearLookupHistory = ()=>setLookupHistory([]);
 
-      useEffect(()=>{ if(mode==="classic" && trackClassic) tStartRef.current=performance.now(); },[mode,trackClassic,date]);
+      useEffect(()=>{
+        if(mode==="classic" && trackClassic){
+          tStartRef.current=performance.now();
+        }else if(mode==="deduction" && trackDed && ded){
+          tStartRef.current=performance.now();
+        }
+      },[mode,trackClassic,trackDed,date,ded]);
 
       /* New (never counts wrong) */
       const doNew=(opts={})=>{
@@ -562,46 +593,93 @@
       function spawnDed(){ spawnDedWithRange(minY,maxY); }
       function spawnDedWithRange(lo,hi){
         if(dedType==="year"){
-          let m=rint(1,12), d=rint(1,31), y, w;
-          for(;;){ y=rint(lo,hi); if(y===0||d>dim(y,m)) continue; w=wday(y,m,d); break; }
-          function neighbor(dir){ const step=dir>0?1:-1;
-            for(let k=1;k<=800;k++){ let yy=y+k*step; if(yy===0) yy+=step; if(yy<lo||yy>hi) break; if(d<=dim(yy,m) && wday(yy,m,d)===w) return yy; }
-            return null;
+          let fallback=null;
+          for(let attempt=0; attempt<300; attempt++){
+            let y=rint(lo,hi);
+            if(y===0) continue;
+            const m=rint(1,12);
+            const maxDay=dim(y,m);
+            const d=rint(1,maxDay);
+            const w=wday(y,m,d);
+            const pool=[];
+            for(let yy=lo; yy<=hi; yy++){
+              if(yy===0 || yy===y) continue;
+              if(d>dim(yy,m)) continue;
+              if(wday(yy,m,d)===w) continue;
+              pool.push(yy);
+            }
+            if(pool.length===0) continue;
+            const needed=Math.min(YEAR_OPTION_COUNT-1, pool.length);
+            const picks=sampleUnique(pool, needed);
+            const options=shuffleArray([...picks, y]);
+            const payload={type:"year",y,m,d,w,options};
+            if(options.length===YEAR_OPTION_COUNT){ setDed(payload); return; }
+            if(!fallback || options.length>fallback.options.length) fallback=payload;
           }
-          const L=neighbor(-1), U=neighbor(+1);
-          let a=L==null?lo:Math.max(lo, L+1), b=U==null?hi:Math.min(hi, U-1); if(a===0) a=1; if(b===0) b=-1; if(a>b){a=b=y;}
-          setDed({type:"year",m,d,w,y, a,b});
+          if(fallback){ setDed(fallback); return; }
           return;
         }
         if(dedType==="month"){
-          for(;;){
-            let y=rint(lo,hi); if(y===0) continue;
-            let d=rint(1,31); let w=rint(0,6);
-            const cands=[]; for(let m=1;m<=12;m++){ if(d<=dim(y,m) && wday(y,m,d)===w) cands.push(m); }
-            if(cands.length===1){ setDed({type:"month",y,d,w,m:cands[0]}); return; }
+          let fallback=null;
+          for(let attempt=0; attempt<400; attempt++){
+            let y=rint(lo,hi);
+            if(y===0) continue;
+            const d=rint(1,31);
+            const w=rint(0,6);
+            const validMonths=[];
+            for(let m=1;m<=12;m++){ if(d<=dim(y,m) && wday(y,m,d)===w) validMonths.push(m); }
+            if(validMonths.length!==1) continue;
+            const answer=validMonths[0];
+            const answerKey=monthKeyFor(y,answer);
+            const buckets=new Map();
+            for(let m=1;m<=12;m++){
+              if(m===answer) continue;
+              if(d>dim(y,m)) continue;
+              if(wday(y,m,d)===w) continue;
+              const key=monthKeyFor(y,m);
+              if(key===answerKey) continue;
+              if(!buckets.has(key)) buckets.set(key,[]);
+              buckets.get(key).push(m);
+            }
+            const keys=[...buckets.keys()];
+            if(keys.length===0) continue;
+            const needed=Math.min(MONTH_OPTION_COUNT-1, keys.length);
+            const selectedKeys=sampleUnique(keys, needed);
+            const picks=selectedKeys.map(key=>{ const arr=buckets.get(key); return arr[rint(0,arr.length-1)]; });
+            const options=shuffleArray([...picks, answer]);
+            const payload={type:"month",y,d,w,m:answer,options};
+            if(options.length===MONTH_OPTION_COUNT){ setDed(payload); return; }
+            if(!fallback || options.length>fallback.options.length) fallback=payload;
           }
+          if(fallback){ setDed(fallback); return; }
+          return;
         }
         if(dedType==="day"){
-          let y=rint(lo,hi); if(y===0) y+= (y<0?1:-1);
-          let m=rint(1,12); const D=dim(y,m);
-          let d=rint(1,D); const w=wday(y,m,d);
-          const bad=[]; for(let k=1;k<=D;k++){ if(k!==d && wday(y,m,k)!==w) bad.push(k); }
-          const pickCount=Math.min(10, 1+bad.length);
-          const picks=new Set([d]);
-          while(picks.size<pickCount){ picks.add(bad[rint(0,bad.length-1)]); }
-          const opts=[...picks].sort((a,b)=>a-b);
-          setDed({type:"day",y,m,w,d, options:opts});
+          let fallback=null;
+          for(let attempt=0; attempt<300; attempt++){
+            let y=rint(lo,hi);
+            if(y===0) continue;
+            const m=rint(1,12);
+            const D=dim(y,m);
+            const d=rint(1,D);
+            const w=wday(y,m,d);
+            const pool=[];
+            for(let k=1;k<=D;k++){
+              if(k===d) continue;
+              if(wday(y,m,k)===w) continue;
+              pool.push(k);
+            }
+            if(pool.length===0) continue;
+            const needed=Math.min(DAY_OPTION_COUNT-1, pool.length);
+            const picks=sampleUnique(pool, needed);
+            const options=shuffleArray([...picks, d]);
+            const payload={type:"day",y,m,d,w,options};
+            if(options.length===DAY_OPTION_COUNT){ setDed(payload); return; }
+            if(!fallback || options.length>fallback.options.length) fallback=payload;
+          }
+          if(fallback){ setDed(fallback); return; }
         }
       }
-
-      const captureDedSnapshot=()=> ded ? ({
-        ded,
-        guesses:[...guesses],
-        countedWrong,
-        msg,
-        locked,
-        revealed
-      }) : null;
 
       function changeDedType(nextType){
         if(nextType===dedType) return;
@@ -622,7 +700,15 @@
       function flashDed(kind,value,ok){ setDedFlash({kind,value,ok}); setTimeout(()=>setDedFlash(null),450); }
       function submitDedAnswer(val){
         if(!ded || locked) return;
-        const setCorrectThenNext = ()=>{ requestAnimationFrame(()=>setTimeout(spawnDed, 60)); setMsg(""); setGuesses([]); setCountedWrong(false); };
+        const setCorrectThenNext = ()=>{
+          setDedStack(s=> ded ? [...s, ded] : s);
+          setMsg("");
+          setGuesses([]);
+          setCountedWrong(false);
+          setLocked(false);
+          setRevealed(false);
+          requestAnimationFrame(()=>spawnDed());
+        };
         const showWrong = (label)=>{ setGuesses(g=> g.includes(label)?g:[...g,label]); setCountedWrong(true); };
         if(ded.type==="year"){
           const ok = (+val)===ded.y; flashDed('year', +val, ok);
@@ -861,8 +947,8 @@
                 <StatTwo label="Streak / Longest" left={S.streak} right={S.best} disabled={statsOff}/>
                 <Stat label="Avg time (correct)" value={(S.timeCnt?`${(S.timeSum/S.timeCnt).toFixed(2)}s`:"—")} disabled={avgDisabled}/>
               </div>
-              <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
-                <div className="flex flex-wrap items-center gap-3 w-full">
+              <div className="mt-2 flex flex-wrap items-start justify-between gap-3">
+                <div className="flex flex-wrap items-center gap-3 flex-1 min-w-[240px]">
                   {/* Era segmented */}
                   <div className="flex rounded-xl overflow-hidden border border-purple-800/60">
                     {[{k:'AD',label:'AD'},{k:'BOTH',label:'AD+BC'},{k:'BC',label:'BC'}].map(seg=>(
@@ -874,8 +960,22 @@
                     ))}
                   </div>
 
+                  <button
+                    type="button"
+                    className="text-sm px-4 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 font-medium hover:bg-purple-900/70 transition-colors"
+                    onClick={()=>{
+                      const needNew = (()=>{
+                        const avgEnabled = (mode==="classic"?trackClassic : mode==="deduction"?trackDed : true);
+                        if(!avgEnabled && !countedWrong) return false;
+                        return true;
+                      })();
+                      resetStatsCurrent();
+                      if(needNew) doNew({skipInactiveMessage:true});
+                    }}>Reset stats</button>
+                </div>
+                <div className="flex flex-wrap items-center gap-3 justify-end ml-auto text-right">
                   {mode==="blitz" && (
-                    <div className="flex items-center gap-2 ml-auto flex-1 min-w-[150px] justify-end">
+                    <div className="flex items-center gap-2">
                       <span className="text-xs text-purple-300/80">Duration:</span>
                       <input type="range" min="15" max="180" step="5" value={blitzSec}
                             onChange={e=>{const v=+e.target.value; setBlitzSec(v); if(!active) setBlitzRemain(v);}} className="accent-purple-500 w-28 sm:w-32"/>
@@ -891,7 +991,7 @@
                     </div>
                   )}
                   {mode==="flash" && (
-                    <div className="flex items-center gap-2 ml-auto flex-1 min-w-[150px] justify-end">
+                    <div className="flex items-center gap-2">
                       <span className="text-xs text-purple-300/80">Show:</span>
                       <input type="range" min="100" max="3000" step="50" value={flashMs}
                             onChange={e=>setFlashMs(+e.target.value)} className="accent-purple-500 w-28 sm:w-32"/>
@@ -900,7 +1000,7 @@
                   )}
 
                   {(mode==="classic"||mode==="deduction") && (
-                    <label className="flex items-center gap-2 text-sm">
+                    <label className="flex items-center gap-2 text-sm justify-end">
                       <input type="checkbox" className="sr-only"
                         checked={!(mode==="classic"?trackClassic:trackDed)}
                         onChange={e=> toggleAvg(e.target.checked)} />
@@ -910,25 +1010,14 @@
                       <span>Disable avg time</span>
                     </label>
                   )}
-                </div>
-                <div className="flex items-center gap-3">
-                  <label className="flex items-center gap-2 text-sm">
+
+                  <label className="flex items-center gap-2 text-sm justify-end">
                     <input type="checkbox" className="sr-only" checked={statsOff} onChange={e=>setStatsOff(e.target.checked)} />
                     <span className={`w-10 h-6 rounded-full relative ${statsOff?"bg-rose-500/70":"bg-zinc-600"}`}>
                       <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${statsOff?"translate-x-4":""}`}></span>
                     </span>
                     <span>Disable stats</span>
                   </label>
-                  <button type="button" className="text-xs px-3 py-1.5 rounded-lg bg-purple-700 hover:bg-purple-600"
-                          onClick={()=>{
-                            const needNew = (()=>{
-                              const avgEnabled = (mode==="classic"?trackClassic : mode==="deduction"?trackDed : true);
-                              if(!avgEnabled && !countedWrong) return false;
-                              return true;
-                            })();
-                            resetStatsCurrent();
-                            if(needNew) doNew({skipInactiveMessage:true});
-                          }}>Reset stats</button>
                 </div>
               </div>
             </>
@@ -1035,17 +1124,17 @@
                 <div className={`mt-4 ${locked?'opacity-60 pointer-events-none':''}`}>
                   {ded && ded.type==="year" && (
                     <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
-                      {Array.from({length: ded.b - ded.a + 1}, (_,i)=>ded.a+i).map(y=>(
+                      {ded.options.map(y=>(
                         <button key={y} type="button" onClick={()=>submitDedAnswer(y)}
                           className={`${baseBtn} ${idleBtn} py-2 text-sm ${dedFlash&&dedFlash.kind==='year'&&dedFlash.value===y ? (dedFlash.ok?'flash-good':'flash-bad')+' border-transparent':''}`}>{fmtYear(y)}</button>
                       ))}
                     </div>
                   )}
                   {ded && ded.type==="month" && (
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-                      {MONTH.map((m,i)=>(
-                        <button key={m} type="button" onClick={()=>submitDedAnswer(i+1)}
-                          className={`${baseBtn} ${idleBtn} ${dedFlash&&dedFlash.kind==='month'&&dedFlash.value===i+1 ? (dedFlash.ok?'flash-good':'flash-bad')+' border-transparent':''}`}>{m}</button>
+                    <div className="grid grid-cols-3 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                      {ded.options.map(mv=>(
+                        <button key={mv} type="button" onClick={()=>submitDedAnswer(mv)} title={MONTH[mv-1]}
+                          className={`${baseBtn} ${idleBtn} ${dedFlash&&dedFlash.kind==='month'&&dedFlash.value===mv ? (dedFlash.ok?'flash-good':'flash-bad')+' border-transparent':''}`}>{MONTH_ABBR[mv-1]}</button>
                       ))}
                     </div>
                   )}
