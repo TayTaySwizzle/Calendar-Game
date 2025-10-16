@@ -16,11 +16,13 @@
     .thin{border:1px solid rgba(120,53,175,.35)}
     button,input,select{-webkit-tap-highlight-color:transparent}
     button{touch-action:manipulation}
-    @keyframes flashPulse{0%{box-shadow:0 0 0 0 var(--ring);background:var(--bg0)}
-      35%{box-shadow:0 0 0 10px var(--ring);background:var(--bg1)}
-      100%{box-shadow:0 0 0 0 transparent;background:var(--bg0)}}
-    .flash-good{--ring:rgba(16,185,129,.5);--bg0:rgba(16,185,129,.5);--bg1:rgba(16,185,129,.5);animation:flashPulse .45s ease-in-out}
-    .flash-bad{--ring:rgba(239,68,68,.5);--bg0:rgba(239,68,68,.5);--bg1:rgba(239,68,68,.5);animation:flashPulse .45s ease-in-out}
+    @keyframes flashPulse{
+      0%{box-shadow:0 0 0 0 var(--ring);background:var(--bg0)}
+      80%{box-shadow:0 0 0 10px var(--ring);background:var(--bg0)}
+      100%{box-shadow:0 0 0 0 transparent;background:transparent}
+    }
+    .flash-good{--ring:rgba(16,185,129,.5);--bg0:rgba(16,185,129,.5);animation:flashPulse .45s ease-in-out}
+    .flash-bad{--ring:rgba(239,68,68,.5);--bg0:rgba(239,68,68,.5);animation:flashPulse .45s ease-in-out}
     .chip{background:rgba(120,53,175,.25);border:1px solid rgba(120,53,175,.45);padding:.25rem .5rem;border-radius:.75rem;font-size:12px}
     .bar{height:6px;border-radius:6px;overflow:hidden;background:rgba(120,53,175,.25);border:1px solid rgba(120,53,175,.45)}
     .bar>span{display:block;height:100%;background:linear-gradient(90deg,#a855f7,#7c3aed)}
@@ -66,8 +68,16 @@
     const fmtYear = y => y>0?String(y):`${Math.abs(y)} BC`;
     const fmt=(y,m,d)=> `${MONTH[m-1]} ${d}, ${fmtYear(y)}`;
     const rint=(a,b)=>Math.floor(Math.random()*(b-a+1))+a;
+    const shuffle=(arr)=>{ const copy=[...arr]; for(let i=copy.length-1;i>0;i--){ const j=rint(0,i); [copy[i],copy[j]]=[copy[j],copy[i]]; } return copy; };
     function randomDate(minY,maxY){ for(;;){ let y=rint(minY,maxY); if(y===0) continue; let m=rint(1,12), d=rint(1,dim(y,m)); if(d<=dim(y,m)) return {y,m,d}; } }
     const blankDedTypeStore = ()=>({year:null,month:null,day:null});
+    const DOOMSDAY_MONTH={
+      common:[4,0,0,3,5,1,3,6,2,4,0,2],
+      leap:[3,6,0,3,5,1,3,6,2,4,0,2]
+    };
+    const DED_YEAR_OPTIONS=6;
+    const DED_MONTH_OPTIONS=7;
+    const DED_DAY_OPTIONS=12;
 
     const isTouch=typeof window!=="undefined" && ("ontouchstart" in window || navigator.maxTouchPoints>0 || matchMedia("(pointer:coarse)").matches);
     const isTimer = m => m==="blitz"||m==="sudden"||m==="flash";
@@ -166,6 +176,7 @@
       const [lookupHistory,setLookupHistory]=useState([]);
 
       const pendingDedSwitchRef=useRef(null);
+      const skipDedRefreshRef=useRef(false);
 
       const inputRef=useRef(null), [input,setInput]=useState("");
       useEffect(()=>{
@@ -473,7 +484,7 @@
           setDate(nd);
           setGuesses([]); setRevealed(false); setLocked(false); setCountedWrong(false); setMsg("");
         }
-        if(mode==="deduction"){ setDedStack(s=>[...s, ded]); spawnDed(); setMsg(""); setRevealed(false); setLocked(false); setGuesses([]); setCountedWrong(false); }
+        if(mode==="deduction"){ if(ded){ setDedStack(s=>[...s,ded]); } spawnDed(); setMsg(""); setRevealed(false); setLocked(false); setGuesses([]); setCountedWrong(false); }
       }
 
       const pushLookupHistory = (entry)=>{
@@ -561,36 +572,105 @@
       /* Deduction generation + helpers using current min/max (or provided) */
       function spawnDed(){ spawnDedWithRange(minY,maxY); }
       function spawnDedWithRange(lo,hi){
+        let nextDed=null;
         if(dedType==="year"){
-          let m=rint(1,12), d=rint(1,31), y, w;
-          for(;;){ y=rint(lo,hi); if(y===0||d>dim(y,m)) continue; w=wday(y,m,d); break; }
-          function neighbor(dir){ const step=dir>0?1:-1;
-            for(let k=1;k<=800;k++){ let yy=y+k*step; if(yy===0) yy+=step; if(yy<lo||yy>hi) break; if(d<=dim(yy,m) && wday(yy,m,d)===w) return yy; }
-            return null;
-          }
-          const L=neighbor(-1), U=neighbor(+1);
-          let a=L==null?lo:Math.max(lo, L+1), b=U==null?hi:Math.min(hi, U-1); if(a===0) a=1; if(b===0) b=-1; if(a>b){a=b=y;}
-          setDed({type:"year",m,d,w,y, a,b});
-          return;
-        }
-        if(dedType==="month"){
+          let y,m,d,w;
           for(;;){
-            let y=rint(lo,hi); if(y===0) continue;
-            let d=rint(1,31); let w=rint(0,6);
-            const cands=[]; for(let m=1;m<=12;m++){ if(d<=dim(y,m) && wday(y,m,d)===w) cands.push(m); }
-            if(cands.length===1){ setDed({type:"month",y,d,w,m:cands[0]}); return; }
+            m=rint(1,12);
+            d=rint(1,31);
+            y=rint(lo,hi);
+            if(y===0 || d>dim(y,m)) continue;
+            w=wday(y,m,d);
+            break;
           }
-        }
-        if(dedType==="day"){
-          let y=rint(lo,hi); if(y===0) y+= (y<0?1:-1);
-          let m=rint(1,12); const D=dim(y,m);
-          let d=rint(1,D); const w=wday(y,m,d);
-          const bad=[]; for(let k=1;k<=D;k++){ if(k!==d && wday(y,m,k)!==w) bad.push(k); }
-          const pickCount=Math.min(10, 1+bad.length);
+          const options=new Set([y]);
+          const isValidYear=(yy)=>{
+            if(yy===0 || yy<lo || yy>hi) return false;
+            if(d>dim(yy,m)) return false;
+            if(wday(yy,m,d)===w) return false;
+            return true;
+          };
+          let step=1;
+          while(options.size<DED_YEAR_OPTIONS && (y-step>=lo || y+step<=hi)){
+            const down=y-step;
+            if(isValidYear(down)) options.add(down);
+            if(options.size>=DED_YEAR_OPTIONS) break;
+            const up=y+step;
+            if(isValidYear(up)) options.add(up);
+            step++;
+          }
+          if(options.size<DED_YEAR_OPTIONS){
+            for(let yy=lo; yy<=hi && options.size<DED_YEAR_OPTIONS; yy++){
+              if(options.has(yy)) continue;
+              if(isValidYear(yy)) options.add(yy);
+            }
+          }
+          const opts=Array.from(options).sort((a,b)=>a-b);
+          nextDed={type:"year",m,d,w,y, options:opts};
+        }else if(dedType==="month"){
+          let y,m,d;
+          for(;;){
+            y=rint(lo,hi);
+            if(y===0) continue;
+            m=rint(1,12);
+            d=rint(1,dim(y,m));
+            break;
+          }
+          const w=wday(y,m,d);
+          const table=isLeap(y)?DOOMSDAY_MONTH.leap:DOOMSDAY_MONTH.common;
+          const anchor=table[m-1];
+          const groups=new Map();
+          for(let mm=1; mm<=12; mm++){
+            const key=table[mm-1];
+            if(!groups.has(key)) groups.set(key,[]);
+            groups.get(key).push(mm);
+          }
+          const picks=[m];
+          const otherAnchors=shuffle(Array.from(groups.keys()).filter(val=>val!==anchor));
+          for(const anchorVal of otherAnchors){
+            if(picks.length>=DED_MONTH_OPTIONS) break;
+            const pool=groups.get(anchorVal)||[];
+            const filtered=pool.filter(mm=>mm!==m);
+            if(filtered.length>0){
+              picks.push(filtered[rint(0,filtered.length-1)]);
+            }else if(pool.length>0){
+              const candidate=pool[0];
+              if(!picks.includes(candidate)) picks.push(candidate);
+            }
+          }
+          if(picks.length<DED_MONTH_OPTIONS){
+            for(let mm=1; mm<=12 && picks.length<DED_MONTH_OPTIONS; mm++){
+              if(!picks.includes(mm)) picks.push(mm);
+            }
+          }
+          const opts=shuffle(picks);
+          nextDed={type:"month",y,d,w,m, options:opts};
+        }else if(dedType==="day"){
+          let y=rint(lo,hi);
+          if(y===0) y+= (y<0?1:-1);
+          const m=rint(1,12);
+          const D=dim(y,m);
+          const d=rint(1,D);
+          const w=wday(y,m,d);
+          const wrong=[];
+          for(let k=1;k<=D;k++){
+            if(k!==d && wday(y,m,k)!==w) wrong.push(k);
+          }
+          const need=Math.min(DED_DAY_OPTIONS-1, wrong.length);
           const picks=new Set([d]);
-          while(picks.size<pickCount){ picks.add(bad[rint(0,bad.length-1)]); }
-          const opts=[...picks].sort((a,b)=>a-b);
-          setDed({type:"day",y,m,w,d, options:opts});
+          shuffle(wrong).slice(0,need).forEach(val=>picks.add(val));
+          if(picks.size<DED_DAY_OPTIONS){
+            for(const val of wrong){
+              if(picks.size>=DED_DAY_OPTIONS) break;
+              picks.add(val);
+            }
+          }
+          const opts=Array.from(picks).sort((a,b)=>a-b).slice(0,Math.min(DED_DAY_OPTIONS,picks.size));
+          nextDed={type:"day",y,m,w,d, options:opts};
+        }
+        if(nextDed){
+          setDed(nextDed);
+          tStartRef.current = trackDed ? performance.now() : null;
         }
       }
 
@@ -622,7 +702,15 @@
       function flashDed(kind,value,ok){ setDedFlash({kind,value,ok}); setTimeout(()=>setDedFlash(null),450); }
       function submitDedAnswer(val){
         if(!ded || locked) return;
-        const setCorrectThenNext = ()=>{ requestAnimationFrame(()=>setTimeout(spawnDed, 60)); setMsg(""); setGuesses([]); setCountedWrong(false); };
+        const setCorrectThenNext = ()=>{
+          if(ded){ setDedStack(s=>[...s,ded]); }
+          setMsg("");
+          setGuesses([]);
+          setCountedWrong(false);
+          setLocked(false);
+          setRevealed(false);
+          requestAnimationFrame(()=>{ spawnDed(); });
+        };
         const showWrong = (label)=>{ setGuesses(g=> g.includes(label)?g:[...g,label]); setCountedWrong(true); };
         if(ded.type==="year"){
           const ok = (+val)===ded.y; flashDed('year', +val, ok);
@@ -669,7 +757,17 @@
         setDedFlash(null);
         const pending=pendingDedSwitchRef.current;
         pendingDedSwitchRef.current=null;
+        const skipping=skipDedRefreshRef.current;
+        if(skipping){
+          skipDedRefreshRef.current=false;
+          if(trackDed){
+            return;
+          }
+        }
         if(!trackDed){
+          if(skipping && !pending){
+            return;
+          }
           const snap=pending?.snap || savedDedByType[dedType] || null;
           if(snap && snap.ded){
             setDed(snap.ded);
@@ -813,14 +911,20 @@
         return true;
       }
 
+      const handleResetStatsClick = ()=>{
+        const needNew = shouldNewOnReset();
+        resetStatsCurrent();
+        if(needNew) doNew({skipInactiveMessage:true});
+      };
+
       /* Avg toggle click handler (disable/enable) */
       function toggleAvg(disable){
         if(mode!=="classic" && mode!=="deduction") return;
         if(disable){ // turning OFF tracking
-          if(mode==="classic") setTrackClassic(false); else setTrackDed(false);
+          if(mode==="classic") setTrackClassic(false); else { skipDedRefreshRef.current=true; setTrackDed(false); }
           tStartRef.current=null;
         }else{       // turning ON tracking -> acts like New (no penalty)
-          if(mode==="classic") setTrackClassic(true); else setTrackDed(true);
+          if(mode==="classic") setTrackClassic(true); else { skipDedRefreshRef.current=true; setTrackDed(true); }
           doNew();
           tStartRef.current=performance.now();
         }
@@ -861,8 +965,8 @@
                 <StatTwo label="Streak / Longest" left={S.streak} right={S.best} disabled={statsOff}/>
                 <Stat label="Avg time (correct)" value={(S.timeCnt?`${(S.timeSum/S.timeCnt).toFixed(2)}s`:"—")} disabled={avgDisabled}/>
               </div>
-              <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
-                <div className="flex flex-wrap items-center gap-3 w-full">
+              <div className="mt-2 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
                   {/* Era segmented */}
                   <div className="flex rounded-xl overflow-hidden border border-purple-800/60">
                     {[{k:'AD',label:'AD'},{k:'BOTH',label:'AD+BC'},{k:'BC',label:'BC'}].map(seg=>(
@@ -874,25 +978,32 @@
                     ))}
                   </div>
 
+                  <button
+                    type="button"
+                    className="px-4 py-2 rounded-xl bg-purple-700 hover:bg-purple-600 text-sm font-semibold shadow-sm transition flex-shrink-0 whitespace-nowrap"
+                    onClick={handleResetStatsClick}
+                  >Reset stats</button>
+                </div>
+                <div className="flex flex-wrap items-center gap-3 w-full md:w-auto md:ml-auto md:justify-end">
                   {mode==="blitz" && (
-                    <div className="flex items-center gap-2 ml-auto flex-1 min-w-[150px] justify-end">
-                      <span className="text-xs text-purple-300/80">Duration:</span>
+                    <div className="flex items-center gap-2 md:pl-4">
+                      <span className="text-xs text-purple-300/80 whitespace-nowrap">Duration:</span>
                       <input type="range" min="15" max="180" step="5" value={blitzSec}
                             onChange={e=>{const v=+e.target.value; setBlitzSec(v); if(!active) setBlitzRemain(v);}} className="accent-purple-500 w-28 sm:w-32"/>
-                      <span className="tabular-nums text-xs w-10 text-right">{blitzSec}s</span>
+                      <span className="tabular-nums text-xs w-12 text-right">{blitzSec}s</span>
                     </div>
                   )}
                   {mode==="sudden" && (
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-purple-300/80">Per Q:</span>
+                    <div className="flex items-center gap-2 md:pl-4">
+                      <span className="text-xs text-purple-300/80 whitespace-nowrap">Per Q:</span>
                       <input type="range" min="3" max="20" step="1" value={qSec}
                             onChange={e=>{const v=+e.target.value; setQSec(v); if(!active) setQRemain(v);}} className="accent-purple-500"/>
-                      <span className="tabular-nums text-xs w-10 text-right">{qSec}s</span>
+                      <span className="tabular-nums text-xs w-12 text-right">{qSec}s</span>
                     </div>
                   )}
                   {mode==="flash" && (
-                    <div className="flex items-center gap-2 ml-auto flex-1 min-w-[150px] justify-end">
-                      <span className="text-xs text-purple-300/80">Show:</span>
+                    <div className="flex items-center gap-2 md:pl-4">
+                      <span className="text-xs text-purple-300/80 whitespace-nowrap">Show:</span>
                       <input type="range" min="100" max="3000" step="50" value={flashMs}
                             onChange={e=>setFlashMs(+e.target.value)} className="accent-purple-500 w-28 sm:w-32"/>
                       <span className="tabular-nums text-xs w-12 text-right">{flashMs}ms</span>
@@ -910,8 +1021,7 @@
                       <span>Disable avg time</span>
                     </label>
                   )}
-                </div>
-                <div className="flex items-center gap-3">
+
                   <label className="flex items-center gap-2 text-sm">
                     <input type="checkbox" className="sr-only" checked={statsOff} onChange={e=>setStatsOff(e.target.checked)} />
                     <span className={`w-10 h-6 rounded-full relative ${statsOff?"bg-rose-500/70":"bg-zinc-600"}`}>
@@ -919,16 +1029,6 @@
                     </span>
                     <span>Disable stats</span>
                   </label>
-                  <button type="button" className="text-xs px-3 py-1.5 rounded-lg bg-purple-700 hover:bg-purple-600"
-                          onClick={()=>{
-                            const needNew = (()=>{
-                              const avgEnabled = (mode==="classic"?trackClassic : mode==="deduction"?trackDed : true);
-                              if(!avgEnabled && !countedWrong) return false;
-                              return true;
-                            })();
-                            resetStatsCurrent();
-                            if(needNew) doNew({skipInactiveMessage:true});
-                          }}>Reset stats</button>
                 </div>
               </div>
             </>
@@ -1034,23 +1134,23 @@
 
                 <div className={`mt-4 ${locked?'opacity-60 pointer-events-none':''}`}>
                   {ded && ded.type==="year" && (
-                    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
-                      {Array.from({length: ded.b - ded.a + 1}, (_,i)=>ded.a+i).map(y=>(
+                    <div className="grid grid-cols-3 sm:grid-cols-3 md:grid-cols-6 gap-2">
+                      {ded.options.map(y=>(
                         <button key={y} type="button" onClick={()=>submitDedAnswer(y)}
                           className={`${baseBtn} ${idleBtn} py-2 text-sm ${dedFlash&&dedFlash.kind==='year'&&dedFlash.value===y ? (dedFlash.ok?'flash-good':'flash-bad')+' border-transparent':''}`}>{fmtYear(y)}</button>
                       ))}
                     </div>
                   )}
                   {ded && ded.type==="month" && (
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-                      {MONTH.map((m,i)=>(
-                        <button key={m} type="button" onClick={()=>submitDedAnswer(i+1)}
-                          className={`${baseBtn} ${idleBtn} ${dedFlash&&dedFlash.kind==='month'&&dedFlash.value===i+1 ? (dedFlash.ok?'flash-good':'flash-bad')+' border-transparent':''}`}>{m}</button>
+                    <div className="grid grid-cols-3 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                      {ded.options.map(mv=>(
+                        <button key={mv} type="button" onClick={()=>submitDedAnswer(mv)}
+                          className={`${baseBtn} ${idleBtn} ${dedFlash&&dedFlash.kind==='month'&&dedFlash.value===mv ? (dedFlash.ok?'flash-good':'flash-bad')+' border-transparent':''}`}>{MONTH[mv-1]}</button>
                       ))}
                     </div>
                   )}
                   {ded && ded.type==="day" && (
-                    <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-2">
+                    <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-6 gap-2">
                       {ded.options.map(dv=>(
                         <button key={dv} type="button" onClick={()=>submitDedAnswer(dv)}
                           className={`${baseBtn} ${idleBtn} ${dedFlash&&dedFlash.kind==='day'&&dedFlash.value===dv ? (dedFlash.ok?'flash-good':'flash-bad')+' border-transparent':''}`}>{dv}</button>
@@ -1061,7 +1161,7 @@
 
                 <div className="mt-4 rounded-2xl panel p-3">
                   <div className="flex flex-wrap gap-2">
-                    <button type="button" className="px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm" onClick={()=>{ setDedStack(s=>[...s,ded]); spawnDed(); setMsg(""); setLocked(false); setRevealed(false); setGuesses([]); setCountedWrong(false); }}>New</button>
+                    <button type="button" className="px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm" onClick={()=>{ if(ded){ setDedStack(s=>[...s,ded]); } spawnDed(); setMsg(""); setLocked(false); setRevealed(false); setGuesses([]); setCountedWrong(false); }}>New</button>
                     <button type="button" className={`px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm ${locked?'opacity-60 pointer-events-none':''}`} onClick={()=>reveal()}>Reveal</button>
                     <button type="button" className="px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm" onClick={()=>goBack()}>Back</button>
                   </div>
