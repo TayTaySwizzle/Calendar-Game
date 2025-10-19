@@ -11,8 +11,8 @@
   <style>
     :root{--bg1:#0b0714;--bg2:#140b22}
     body{background:linear-gradient(180deg,var(--bg1),var(--bg2))}
-    .card{background:rgba(26,15,43,.85);border:1px solid rgba(120,53,175,.45)}
-    .panel{background:rgba(88,28,135,.25);border:1px solid rgba(120,53,175,.45)}
+    .card{background:rgba(26,15,43,.85);border:1px solid rgba(120,53,175,.45);border-radius:1.5rem}
+    .panel{background:rgba(88,28,135,.25);border:1px solid rgba(120,53,175,.45);border-radius:1rem}
     .thin{border:1px solid rgba(120,53,175,.35)}
     button,input,select{-webkit-tap-highlight-color:transparent}
     button{touch-action:manipulation}
@@ -257,6 +257,7 @@
       const [revealed,setRevealed]=useState(false);            // did reveal on this date?
       const [countedWrong,setCountedWrong]=useState(false);    // has wrong been counted?
       const [calcOpen,setCalcOpen]=useState(false);            // is the calculation panel open?
+      const calcOpenMapRef=useRef(new Map());
 
       /* snapshots when avg-time disabled (per era) */
       const [savedClassicByEra,setSavedClassicByEra]=useState({AD:null,BC:null,BOTH:null});
@@ -1261,9 +1262,11 @@
         }
         return date;
       },[mode,date?.y,date?.m,date?.d, ded?.y, ded?.m, ded?.d]);
-      const calcKey = calcTarget ? `${calcTarget.y}-${calcTarget.m}-${calcTarget.d}-${mode}` : `${mode}-none`;
+      const calcKey = mode;
 
-      useEffect(()=>{ setCalcOpen(false); },[calcKey]);
+      useEffect(()=>{
+        setCalcOpen(calcOpenMapRef.current.get(calcKey) ?? false);
+      },[calcKey]);
 
       /* should reset stats create a new date? */
       function shouldNewOnReset(){
@@ -1306,6 +1309,7 @@
           applyCalculationPenalty();
         }
         setCalcOpen(next);
+        calcOpenMapRef.current.set(calcKey,next);
       };
 
       /* Avg toggle click handler (disable/enable) */
@@ -1381,7 +1385,7 @@
           {mode!=="lookup" && mode!=="method" && RangePanel}
 
           {/* MAIN CARD */}
-          <div className="mt-5 p-5 rounded-3xl card">
+          <div className="mt-5 p-5 card">
             {/* Blitz/Sudden/Flash bars */}
             {mode==="blitz" && (
               <div className="mb-3">
@@ -1391,7 +1395,7 @@
             )}
             {showSuddenBar && (
               <div className="mb-3">
-                <div className="flex items-center justify-between text-xs text-purple-200/80 mb-1"><div>Per Q:</div><div className="tabular-nums">{suddenTimeLabel}</div></div>
+                <div className="flex items-center justify-between text-xs text-purple-200/80 mb-1"><div className="whitespace-nowrap">Per Q:</div><div className="tabular-nums">{suddenTimeLabel}</div></div>
                 <div className="bar"><span style={{width:`${suddenPercent}%`}}></span></div>
               </div>
             )}
@@ -1434,7 +1438,7 @@
                 </div>
 
                 {/* Action bubble */}
-                <div className="mt-4 rounded-2xl panel p-3">
+                <div className="mt-4 panel p-3">
                   <div className="flex flex-wrap items-center gap-2">
                     {isTimer(mode) && (!active
                       ? <button type="button" className="px-4 py-2 rounded-xl bg-purple-600 text-white text-sm font-medium" onClick={()=>begin()}>Begin</button>
@@ -1502,7 +1506,7 @@
                   )}
                 </div>
 
-                <div className="mt-4 rounded-2xl panel p-3">
+                <div className="mt-4 panel p-3">
                   <div className="flex flex-wrap gap-2">
                     <button type="button" className="px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm" onClick={()=>{ setDedStack(s=> ded ? [...s,ded] : s); spawnDed(); setMsg(""); setLocked(false); setRevealed(false); setGuesses([]); setCountedWrong(false); }}>New</button>
                     <button type="button" className={`px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm ${(locked||calcOpen)?'opacity-60 pointer-events-none':''}`} onClick={()=>reveal()}>Reveal</button>
@@ -1521,7 +1525,7 @@
             {/* ======= LOOKUP ======= */}
             {mode==="lookup" && <LookupCard history={lookupHistory} onAddHistory={pushLookupHistory} onClearHistory={clearLookupHistory} />}
 
-            {mode!=="method" && mode!=="lookup" && <MethodBreakdownSection date={calcTarget} open={calcOpen} onOpenChange={handleCalculationOpenChange}/>}
+        {mode!=="method" && mode!=="lookup" && <MethodBreakdownSection date={calcTarget} open={calcOpen} onOpenChange={handleCalculationOpenChange} onRequestNew={doNew}/>}
           </div>
         </div>
       );
@@ -1538,7 +1542,7 @@
           </div>
 
           <div className="grid gap-5 md:grid-cols-2">
-            <div className="rounded-2xl panel p-4 space-y-3">
+            <div className="panel p-4 space-y-3">
               <h3 className="text-sm font-semibold text-purple-100/90 uppercase tracking-wide">Definitions</h3>
               <ul className="space-y-1 text-[13px] text-purple-100/80">
                 <li>Sunday = 0</li>
@@ -1553,7 +1557,7 @@
                 Let the year equal <i>abcd</i>, where <i>a</i>, <i>b</i>, and <i>c</i> are the last three digits and <i>d</i> is every preceding digit. For very large years only the last three digits are needed.
               </p>
             </div>
-            <div className="rounded-2xl panel p-4 space-y-3">
+            <div className="panel p-4 space-y-3">
               <h3 className="text-sm font-semibold text-purple-100/90 uppercase tracking-wide">Math tools</h3>
               <div>
                 <p className="text-[13px] text-purple-200/80"><strong>Mod explained:</strong> <i>n mod m</i> is the remainder after dividing <i>n</i> by <i>m</i>.</p>
@@ -1574,7 +1578,7 @@
             </div>
           </div>
 
-          <div className="rounded-2xl panel p-4 space-y-4">
+          <div className="panel p-4 space-y-4">
             <h3 className="text-sm font-semibold text-purple-100/90 uppercase tracking-wide">Counting using fingers</h3>
             <p className="text-[13px] text-purple-200/80">Use a mod 7 system by touching your thumb to seven points on the pointer and middle finger of your right hand:</p>
             <ul className="grid gap-1 text-[13px] text-purple-100/80 md:grid-cols-2">
@@ -1590,7 +1594,7 @@
           </div>
 
           <div className="grid gap-5 md:grid-cols-2">
-            <div className="rounded-2xl panel p-4">
+            <div className="panel p-4">
               <h3 className="text-sm font-semibold text-purple-100/90 uppercase tracking-wide">Month codes</h3>
               <div className="grid grid-cols-2 gap-y-1 text-[13px] text-purple-100/80 mt-2">
                 {Object.entries(METHOD_MONTH_CODES).map(([monthIndex,code])=>(
@@ -1598,7 +1602,7 @@
                 ))}
               </div>
             </div>
-            <div className="rounded-2xl panel p-4 space-y-3">
+            <div className="panel p-4 space-y-3">
               <h3 className="text-sm font-semibold text-purple-100/90 uppercase tracking-wide">ab mod 4 codes</h3>
               {METHOD_AB_MOD4_CODES.map(section=>(
                 <div key={section.label}>
@@ -1614,7 +1618,7 @@
             </div>
           </div>
 
-          <div className="rounded-2xl panel p-4 space-y-3">
+          <div className="panel p-4 space-y-3">
             <h3 className="text-sm font-semibold text-purple-100/90 uppercase tracking-wide">Key cd years and codes</h3>
             {METHOD_KEY_YEAR_TABLES.map(section=>(
               <div key={section.label} className="space-y-2">
@@ -1629,7 +1633,7 @@
             ))}
           </div>
 
-          <div className="rounded-2xl panel p-4 space-y-3">
+          <div className="panel p-4 space-y-3">
             <h3 className="text-sm font-semibold text-purple-100/90 uppercase tracking-wide">Method</h3>
             <ol className="space-y-2 text-[13px] text-purple-100/80 list-decimal list-inside">
               <li>Start with the month code.</li>
@@ -1642,7 +1646,7 @@
             </ol>
           </div>
 
-          <div className="rounded-2xl panel p-4 space-y-4">
+          <div className="panel p-4 space-y-4">
             <h3 className="text-sm font-semibold text-purple-100/90 uppercase tracking-wide">Example: February 26, 1992</h3>
             <p className="text-[13px] text-purple-200/80">1992 is an AD leap year. Below is the step-by-step computation using both the beginner list and the advanced list.</p>
             <div className="grid gap-4 md:grid-cols-2">
@@ -1685,7 +1689,7 @@
       );
     }
 
-    function MethodExplanation({date}){
+    function MethodExplanation({date, onRequestNew}){
       const memoKey = date ? `${date.y}-${date.m}-${date.d}` : "";
       const breakdowns = React.useMemo(()=> date ? buildMethodBreakdowns(date) : null,[memoKey]);
       const [viewMode,setViewMode]=React.useState('advanced');
@@ -1703,47 +1707,71 @@
       const cdValue = ((date.y%100)+100)%100;
       return (
         <div className="space-y-4">
-          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-            <div className="text-sm text-purple-100/80">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="text-sm text-purple-100/80 flex-1 min-w-[200px]">
               <div><span className="font-semibold">Date:</span> {fmt(date.y,date.m,date.d)}</div>
               <div><span className="font-semibold">Weekday:</span> {weekdayLabel}</div>
               <div><span className="font-semibold">Month code:</span> {METHOD_MONTH_CODES[date.m]}</div>
               <div><span className="font-semibold">cd:</span> {cdValue<10?`0${cdValue}`:cdValue}</div>
             </div>
-            <div className="flex items-center gap-2 text-sm">
-              <span className="text-xs uppercase tracking-wide text-purple-200/70">Show:</span>
-              <div className="flex overflow-hidden rounded-lg border border-purple-700/60">
-                <button
-                  type="button"
-                  onClick={()=>setViewMode('advanced')}
-                  className={`px-3 py-1.5 text-xs font-semibold ${viewMode==='advanced'?'bg-purple-600 text-white':'bg-purple-900/40 text-purple-100/80 hover:bg-purple-900/70'}`}
-                >
-                  Advanced
-                </button>
-                <button
-                  type="button"
-                  onClick={()=>setViewMode('beginner')}
-                  className={`px-3 py-1.5 text-xs font-semibold border-l border-purple-700/60 ${viewMode==='beginner'?'bg-purple-600 text-white':'bg-purple-900/40 text-purple-100/80 hover:bg-purple-900/70'}`}
-                >
-                  Beginner
-                </button>
+            <div className="flex flex-col items-end gap-2 text-sm flex-shrink-0 min-w-[120px]">
+              <div className="flex items-center gap-2">
+                <span className="text-xs uppercase tracking-wide text-purple-200/70 whitespace-nowrap">Show:</span>
+                <div className="flex overflow-hidden rounded-lg border border-purple-700/60">
+                  <button
+                    type="button"
+                    onClick={()=>setViewMode('advanced')}
+                    className={`px-3 py-1.5 text-xs font-semibold ${viewMode==='advanced'?'bg-purple-600 text-white':'bg-purple-900/40 text-purple-100/80 hover:bg-purple-900/70'}`}
+                  >
+                    Advanced
+                  </button>
+                  <button
+                    type="button"
+                    onClick={()=>setViewMode('beginner')}
+                    className={`px-3 py-1.5 text-xs font-semibold border-l border-purple-700/60 ${viewMode==='beginner'?'bg-purple-600 text-white':'bg-purple-900/40 text-purple-100/80 hover:bg-purple-900/70'}`}
+                  >
+                    Beginner
+                  </button>
+                </div>
               </div>
+              {onRequestNew && (
+                <button
+                  type="button"
+                  onClick={onRequestNew}
+                  className="px-3 py-1.5 text-sm font-medium border border-purple-700/60 bg-purple-900/50 hover:bg-purple-900/70 rounded-xl"
+                >
+                  New
+                </button>
+              )}
             </div>
           </div>
-          <div className="rounded-2xl panel p-3">
+          <div className="panel p-3">
             <MethodStepsList title={`${viewMode==='advanced'?'Advanced':'Beginner'} path`} breakdown={activeBreakdown}/>
           </div>
         </div>
       );
     }
 
-    function MethodBreakdownSection({date, open:controlledOpen, onOpenChange}){
+    function MethodBreakdownSection({date, open:controlledOpen, onOpenChange, onRequestNew}){
       const isControlled = typeof controlledOpen === 'boolean' && typeof onOpenChange === 'function';
       const [internalOpen,setInternalOpen]=React.useState(false);
       const key=date?`${date.y}-${date.m}-${date.d}`:"";
       React.useEffect(()=>{ if(!isControlled) setInternalOpen(false); },[key, isControlled]);
       if(!date) return null;
       const open = isControlled ? controlledOpen : internalOpen;
+      React.useEffect(()=>{
+        if(!open) return;
+        if(typeof window === 'undefined') return;
+        const schedule = window.requestAnimationFrame ? window.requestAnimationFrame.bind(window) : (cb=>window.setTimeout(cb,0));
+        const cancel = window.cancelAnimationFrame ? window.cancelAnimationFrame.bind(window) : window.clearTimeout.bind(window);
+        const handle = schedule(()=>{
+          const target = document.scrollingElement || document.documentElement || document.body;
+          if(target){
+            window.scrollTo({top: target.scrollHeight, behavior: 'smooth'});
+          }
+        });
+        return ()=>cancel(handle);
+      },[open]);
       const toggle = ()=>{
         if(isControlled){
           onOpenChange(!open);
@@ -1761,8 +1789,8 @@
             {open?"Hide calculations":"Show calculations"}
           </button>
           {open && (
-            <div className="mt-3 rounded-2xl panel p-4">
-              <MethodExplanation date={date}/>
+            <div className="mt-3 panel p-4">
+              <MethodExplanation date={date} onRequestNew={onRequestNew}/>
             </div>
           )}
         </div>
@@ -1818,7 +1846,7 @@
       };
       const handleClearHistory = ()=>{ if(onClearHistory) onClearHistory(); };
       return (
-        <div className="mt-1 rounded-2xl panel p-4">
+        <div className="mt-1 panel p-4">
           <div className="flex items-stretch gap-2">
             <input value={lookupIn} onChange={e=>setLookupIn(e.target.value)} placeholder="e.g., 7/4/1776"
                   className="panel rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-400 flex-1 min-w-0"/>
