@@ -74,6 +74,277 @@
     function randomDate(minY,maxY){ for(;;){ let y=rint(minY,maxY); if(y===0) continue; let m=rint(1,12), d=rint(1,dim(y,m)); if(d<=dim(y,m)) return {y,m,d}; } }
     const blankDedTypeStore = ()=>({year:null,month:null,day:null});
 
+    /* ---------- Manual method data ---------- */
+    const METHOD_MONTH_CODES=[
+      {month:"January", code:6},
+      {month:"February", code:2},
+      {month:"March", code:2},
+      {month:"April", code:5},
+      {month:"May", code:0},
+      {month:"June", code:3},
+      {month:"July", code:5},
+      {month:"August", code:1},
+      {month:"September", code:4},
+      {month:"October", code:6},
+      {month:"November", code:2},
+      {month:"December", code:4}
+    ];
+    const METHOD_MONTH_CODE_MAP=METHOD_MONTH_CODES.reduce((acc,{month,code},idx)=>{ acc[idx+1]=code; return acc; },{});
+    const METHOD_AB_CODES_BEGINNER=[
+      {label:"0", code:0},
+      {label:"1", code:-2},
+      {label:"2", code:3},
+      {label:"3", code:1},
+      {label:"4", code:0},
+      {label:"5", code:-2},
+      {label:"6", code:3},
+      {label:"7", code:1},
+      {label:"8", code:0},
+      {label:"9", code:-2}
+    ];
+    const METHOD_AB_CODES_ADVANCED=[
+      {label:"4", code:0},
+      {label:"8", code:-3},
+      {label:"12", code:1},
+      {label:"16", code:-2},
+      {label:"20", code:4},
+      {label:"24", code:2},
+      {label:"28", code:-1},
+      {label:"32", code:0},
+      {label:"36", code:3},
+      {label:"40", code:-4},
+      {label:"44", code:2},
+      {label:"48", code:-1},
+      {label:"52", code:0}
+    ];
+    const METHOD_AB_CODE_MAP_BEGINNER=METHOD_AB_CODES_BEGINNER.reduce((acc,{label,code})=>{ const mod=((code%7)+7)%7; acc[Number(label)%4]=mod; return acc; },{});
+    const METHOD_AB_CODE_MAP_ADVANCED=METHOD_AB_CODES_ADVANCED.reduce((acc,{label,code})=>{ const mod=((code%7)+7)%7; acc[Number(label)]=mod; return acc; },{});
+    const METHOD_KEY_CODES_BEGINNER=[
+      {year:0, code:0},
+      {year:12, code:1},
+      {year:24, code:2},
+      {year:36, code:3},
+      {year:48, code:4},
+      {year:60, code:5},
+      {year:72, code:6},
+      {year:84, code:0},
+      {year:96, code:1}
+    ];
+    const METHOD_KEY_CODES_ADVANCED=[
+      {year:6, code:0},
+      {year:18, code:1},
+      {year:30, code:2},
+      {year:42, code:3},
+      {year:54, code:4},
+      {year:66, code:5},
+      {year:78, code:6},
+      {year:90, code:0},
+      {year:92, code:3}
+    ];
+    const METHOD_KEY_CODE_MAP_BEGINNER=METHOD_KEY_CODES_BEGINNER.reduce((acc,{year,code})=>{ acc[year]=((code%7)+7)%7; return acc; },{});
+    const METHOD_KEY_CODE_MAP_ADVANCED=METHOD_KEY_CODES_ADVANCED.reduce((acc,{year,code})=>{ acc[year]=((code%7)+7)%7; return acc; },{});
+
+    const manualMod7 = n => ((n%7)+7)%7;
+    const manualPreferred = mod => (mod<=3?mod:mod-7);
+    const manualLabel = mod => {
+      const norm=manualMod7(mod);
+      const preferred=manualPreferred(norm);
+      return {mod:norm, preferred, text: preferred===norm?`${preferred}`:`${preferred} (≡ ${norm} mod 7)`};
+    };
+    const computeAbMod4 = ab => {
+      const tens=Math.floor(ab/10);
+      const ones=ab%10;
+      return tens%2===0 ? (ones%4) : ((ones+2)%4);
+    };
+
+    function buildManualBreakdown(date){
+      if(!date || typeof date.y!=="number" || typeof date.m!=="number" || typeof date.d!=="number"){
+        return {error:"This method needs a complete AD date."};
+      }
+      const {y,m,d}=date;
+      if(y<=0){
+        return {error:"This manual covers AD years only. Switch to an AD year to apply the method."};
+      }
+      const monthCode = METHOD_MONTH_CODE_MAP[m];
+      if(monthCode==null){
+        return {error:"Invalid month supplied."};
+      }
+      const monthName = MONTH[m-1];
+      const dayMod = manualMod7(d);
+      const ab = Math.floor((y%10000)/100);
+      const abStr = String(ab).padStart(2,"0");
+      const tens=Math.floor(ab/10);
+      const ones=ab%10;
+      const abMod = computeAbMod4(ab);
+      const abBeginnerMod = METHOD_AB_CODE_MAP_BEGINNER[abMod] ?? 0;
+      const abBeginnerLabel = manualLabel(abBeginnerMod);
+      const abAdvancedMod = METHOD_AB_CODE_MAP_ADVANCED[ab];
+      const abAdvancedLabel = abAdvancedMod!=null ? manualLabel(abAdvancedMod) : null;
+      const cd = y%100;
+      const cdStr = String(cd).padStart(2,"0");
+      const beginnerKeys = Object.keys(METHOD_KEY_CODE_MAP_BEGINNER).map(Number).sort((a,b)=>a-b);
+      let baseKey = beginnerKeys[0];
+      for(const key of beginnerKeys){ if(key<=cd) baseKey=key; }
+      const baseKeyStr = String(baseKey).padStart(2,"0");
+      const baseKeyMod = METHOD_KEY_CODE_MAP_BEGINNER[baseKey] ?? 0;
+      const baseKeyLabel = manualLabel(baseKeyMod);
+      const diff = cd-baseKey;
+      const diffMod = manualMod7(diff);
+      const diffModLabel = manualLabel(diffMod);
+      const diffLeap = Math.floor(diff/4);
+      const diffLeapLabel = manualLabel(diffLeap);
+      const diffTotalMod = manualMod7(diffMod + diffLeap);
+      const diffTotalLabel = manualLabel(diffTotalMod);
+      const advancedKeyMod = METHOD_KEY_CODE_MAP_ADVANCED[cd];
+      const advancedKeyLabel = advancedKeyMod!=null ? manualLabel(advancedKeyMod) : null;
+      const leapNeeded = (m===1 || m===2) && isLeap(y);
+
+      const beginnerSteps=[];
+      let running = manualMod7(monthCode);
+      beginnerSteps.push({
+        label:"Start with the month code",
+        explanation:`${monthName}'s month code is ${monthCode}.`,
+        addition:manualLabel(monthCode),
+        total:manualLabel(running)
+      });
+      running=manualMod7(running + dayMod);
+      beginnerSteps.push({
+        label:"Add the day of the month",
+        explanation:`Take ${d} mod 7 = ${dayMod} and add it.`,
+        addition:manualLabel(dayMod),
+        total:manualLabel(running)
+      });
+      const abSentence = tens%2===0
+        ? `The tens digit ${tens} is even, so ab mod 4 is the ones digit modulo 4: ${ones} mod 4 = ${abMod}.`
+        : `The tens digit ${tens} is odd, so add 2 to the ones digit before reducing: (${ones} + 2) mod 4 = ${abMod}.`;
+      running=manualMod7(running + abBeginnerMod);
+      beginnerSteps.push({
+        label:"Compute ab mod 4",
+        explanation:`ab = ${abStr}. ${abSentence} Use the ab mod 4 code ${abBeginnerLabel.text}.`,
+        addition:abBeginnerLabel,
+        total:manualLabel(running)
+      });
+      running=manualMod7(running + baseKeyMod);
+      const keySentence = baseKey===cd
+        ? `${cdStr} is on the beginner key-year list, so add its code ${baseKeyLabel.text}.`
+        : `The closest beginner key year ≤ ${cdStr} is ${baseKeyStr} with code ${baseKeyLabel.text}.`;
+      beginnerSteps.push({
+        label:"Add the nearest key cd year",
+        explanation:keySentence,
+        addition:baseKeyLabel,
+        total:manualLabel(running)
+      });
+      if(diff>0){
+        running=manualMod7(running + diffTotalMod);
+        beginnerSteps.push({
+          label:"Step forward from the key year",
+          explanation:`${cdStr} − ${baseKeyStr} = ${diff}. ${diff} mod 7 = ${diffMod}. ⌊${diff}/4⌋ = ${diffLeap}. Add them for ${diffModLabel.preferred} + ${diffLeapLabel.preferred} = ${diffTotalLabel.preferred}.`,
+          addition:diffTotalLabel,
+          total:manualLabel(running)
+        });
+      }
+      if(leapNeeded){
+        running=manualMod7(running - 1);
+        beginnerSteps.push({
+          label:"Leap-year adjustment",
+          explanation:`${y} is a leap year and the month is ${monthName}, so subtract 1.`,
+          addition:manualLabel(-1),
+          total:manualLabel(running)
+        });
+      }
+      const beginnerTotal=running;
+
+      const advancedSteps=[];
+      let advRunning = manualMod7(monthCode);
+      advancedSteps.push({
+        label:"Start with the month code",
+        explanation:`Begin the same way: ${monthName}'s month code is ${monthCode}.`,
+        addition:manualLabel(monthCode),
+        total:manualLabel(advRunning)
+      });
+      advRunning=manualMod7(advRunning + dayMod);
+      advancedSteps.push({
+        label:"Add the day of the month",
+        explanation:`Add ${d} mod 7 = ${dayMod}.`,
+        addition:manualLabel(dayMod),
+        total:manualLabel(advRunning)
+      });
+      if(abAdvancedLabel){
+        advRunning=manualMod7(advRunning + abAdvancedMod);
+        advancedSteps.push({
+          label:"Use memorized ab code",
+          explanation:`With ab = ${abStr}, use the advanced code ${abAdvancedLabel.text}.`,
+          addition:abAdvancedLabel,
+          total:manualLabel(advRunning)
+        });
+      }else{
+        advRunning=manualMod7(advRunning + abBeginnerMod);
+        advancedSteps.push({
+          label:"Compute ab mod 4",
+          explanation:`No advanced shortcut for ab = ${abStr}; reuse the beginner code ${abBeginnerLabel.text}.`,
+          addition:abBeginnerLabel,
+          total:manualLabel(advRunning)
+        });
+      }
+      let advancedUsedDirectKey=false;
+      if(advancedKeyLabel){
+        advancedUsedDirectKey=true;
+        advRunning=manualMod7(advRunning + advancedKeyMod);
+        advancedSteps.push({
+          label:"Advanced key cd year",
+          explanation:`${cdStr} is on the advanced key-year list with code ${advancedKeyLabel.text}, so add it directly and skip the stepping.`,
+          addition:advancedKeyLabel,
+          total:manualLabel(advRunning)
+        });
+      }else{
+        advRunning=manualMod7(advRunning + baseKeyMod);
+        advancedSteps.push({
+          label:"Add the nearest key cd year",
+          explanation:`Use the same key year as the beginner path: ${baseKeyStr} with code ${baseKeyLabel.text}.`,
+          addition:baseKeyLabel,
+          total:manualLabel(advRunning)
+        });
+        if(diff>0){
+          advRunning=manualMod7(advRunning + diffTotalMod);
+          advancedSteps.push({
+            label:"Step forward from the key year",
+            explanation:`Since ${cdStr} is not memorized, add ${diffModLabel.preferred} for the remainder and ${diffLeapLabel.preferred} for leap steps → ${diffTotalLabel.text}.`,
+            addition:diffTotalLabel,
+            total:manualLabel(advRunning)
+          });
+        }
+      }
+      if(leapNeeded){
+        advRunning=manualMod7(advRunning - 1);
+        advancedSteps.push({
+          label:"Leap-year adjustment",
+          explanation:`Subtract 1 because ${y} is a leap year and the month is ${monthName}.`,
+          addition:manualLabel(-1),
+          total:manualLabel(advRunning)
+        });
+      }
+      const advancedTotal=advRunning;
+
+      return {
+        date:{y,m,d},
+        monthName,
+        ab:{value:ab, mod:abMod},
+        cd:{value:cd, base:baseKey, diff},
+        leap:{needed:leapNeeded},
+        beginner:{
+          steps:beginnerSteps,
+          total:manualLabel(beginnerTotal),
+          weekday:DAY[beginnerTotal]
+        },
+        advanced:{
+          steps:advancedSteps,
+          total:manualLabel(advancedTotal),
+          weekday:DAY[advancedTotal],
+          usedAdvanced:advancedUsedDirectKey || !!abAdvancedLabel
+        }
+      };
+    }
+
     const isTouch=typeof window!=="undefined" && ("ontouchstart" in window || navigator.maxTouchPoints>0 || matchMedia("(pointer:coarse)").matches);
     const isTimer = m => m==="blitz"||m==="sudden"||m==="flash";
     const formatSecondsLabel = (seconds)=>{
@@ -169,6 +440,11 @@
       const [ded,setDed]=useState(null);
       const [dedFlash,setDedFlash]=useState(null);
       const [lookupHistory,setLookupHistory]=useState([]);
+
+      const [showCalc,setShowCalc]=useState(false);
+      const calcDate = mode==="deduction" ? (ded ? {y:ded.y,m:ded.m,d:ded.d} : null) : date;
+      const calcKey = calcDate ? `${calcDate.y}-${calcDate.m}-${calcDate.d}` : "none";
+      useEffect(()=>{ setShowCalc(false); }, [mode, calcKey]);
 
       const pendingDedSwitchRef=useRef(null);
 
@@ -1235,8 +1511,8 @@
               </div>
             )}
 
-            {/* Method page (blank for now) */}
-            {mode==="method" && <div className="min-h-[40vh]"></div>}
+            {/* Method page */}
+            {mode==="method" && <MethodPage/>}
 
             {/* Headline */}
             {mode!=="lookup" && mode!=="deduction" && mode!=="method" && (
@@ -1253,6 +1529,19 @@
                 <div className="mt-1 text-3xl md:text-4xl font-bold">{ded ? (ded.type==="year"?`${MONTH[ded.m-1]} ${ded.d}`: ded.type==="month"?`${ded.d}, ${fmtYear(ded.y)}` : `${MONTH[ded.m-1]}, ${fmtYear(ded.y)}`) : "—"}</div>
                 {ded && <div className="mt-1 text-lg md:text-xl text-purple-100">Weekday:&nbsp;<span className="font-semibold text-xl">{DAY[ded.w]}</span></div>}
               </div>
+            )}
+
+            {mode!=="method" && mode!=="lookup" && calcDate && (
+              <div className="mt-4 flex justify-center">
+                <button
+                  type="button"
+                  className="px-4 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm"
+                  onClick={()=>setShowCalc(v=>!v)}
+                >{showCalc?"Hide calculations":"Show calculations"}</button>
+              </div>
+            )}
+            {mode!=="method" && mode!=="lookup" && calcDate && showCalc && (
+              <CalculationPanel date={calcDate} />
             )}
 
             {/* ======= CLASSIC / BLITZ / SUDDEN / FLASH ======= */}
@@ -1362,6 +1651,8 @@
     function LookupCard({history=[], onAddHistory, onClearHistory}){
       const [lookupIn,setLookupIn]=React.useState("");
       const [lookupOut,setLookupOut]=React.useState("");
+      const [showCalc,setShowCalc]=React.useState(false);
+      const [calcDate,setCalcDate]=React.useState(null);
       function isLeapY(y){ y = y>0?y:1-Math.abs(y); return y%400===0 || (y%4===0 && y%100!==0); }
       function dimY(y,m){ return m===2 ? (isLeapY(y)?29:28) : [4,6,9,11].includes(m)?30:31; }
       function wdayY(y,m,d){ function jdn(y,m,d){ const a=Math.floor((14-m)/12),y2=y+4800-a,m2=m-3+12*a; return d+Math.floor((153*m2+2)/5)+365*y2+Math.floor(y2/4)-Math.floor(y2/100)+Math.floor(y2/400)-32045; } const toA = y=>y>0?y:1-Math.abs(y); return (jdn(toA(y),m,d)+1)%7; }
@@ -1371,32 +1662,43 @@
       function runLookup(){
         const s=lookupIn.trim();
         const m = /^(-?\d{1,2})\/(\d{1,2})\/(-?\d{1,5})$/.exec(s);
-        if(!m){ setLookupOut("Enter date in month/day/year format, e.g., 7/4/1776. Years allowed −10000…10000 (no year 0)."); return; }
+        if(!m){ setShowCalc(false); setCalcDate(null); setLookupOut("Enter date in month/day/year format, e.g., 7/4/1776. Years allowed −10000…10000 (no year 0)."); return; }
         let mm=+m[1], dd=+m[2], yy=+m[3];
-        if(yy===0){ setLookupOut("There is no year 0. Use −1 for 1 BC."); return; }
-        if(yy<-10000 || yy>10000){ setLookupOut("Year must be between −10000 and 10000."); return; }
-        if(mm<1||mm>12){ setLookupOut("Month must be 1–12."); return; }
+        if(yy===0){ setShowCalc(false); setCalcDate(null); setLookupOut("There is no year 0. Use −1 for 1 BC."); return; }
+        if(yy<-10000 || yy>10000){ setShowCalc(false); setCalcDate(null); setLookupOut("Year must be between −10000 and 10000."); return; }
+        if(mm<1||mm>12){ setShowCalc(false); setCalcDate(null); setLookupOut("Month must be 1–12."); return; }
         const maxd=dimY(yy,mm);
-        if(dd<1||dd>maxd){ setLookupOut(`Day must be 1–${maxd} for ${MONTH[mm-1]}.`); return; }
+        if(dd<1||dd>maxd){ setShowCalc(false); setCalcDate(null); setLookupOut(`Day must be 1–${maxd} for ${MONTH[mm-1]}.`); return; }
         const d=DAY[wdayY(yy,mm,dd)];
         const resultText = `${MONTH[mm-1]} ${dd}, ${fmtYear(yy)} is a ${d}.`;
         setLookupOut(resultText);
+        setCalcDate({y:yy,m:mm,d:dd});
+        setShowCalc(false);
         if(onAddHistory){
           const entry={
             id:`${Date.now().toString(36)}-${Math.random().toString(36).slice(2,8)}`,
             query:`${mm}/${dd}/${yy}`,
             label:`${MONTH[mm-1]} ${dd}, ${fmtYear(yy)}`,
             weekday:d,
-            result:resultText
+            result:resultText,
+            year:yy,
+            month:mm,
+            day:dd
           };
           onAddHistory(entry);
         }
       }
-      function clearLookup(){ setLookupIn(""); if(document.activeElement) document.activeElement.blur(); setLookupOut(""); }
+      function clearLookup(){ setLookupIn(""); if(document.activeElement) document.activeElement.blur(); setLookupOut(""); setCalcDate(null); setShowCalc(false); }
       const entries = Array.isArray(history)?history:[];
       const handleHistorySelect = (entry)=>{
         setLookupIn(entry?.query||"");
         setLookupOut(entry?.result||"");
+        if(entry && typeof entry.year==='number' && typeof entry.month==='number' && typeof entry.day==='number'){
+          setCalcDate({y:entry.year,m:entry.month,d:entry.day});
+        }else{
+          setCalcDate(null);
+        }
+        setShowCalc(false);
         if(document.activeElement) document.activeElement.blur();
       };
       const handleClearHistory = ()=>{ if(onClearHistory) onClearHistory(); };
@@ -1409,6 +1711,14 @@
             <button type="button" onClick={()=>clearLookup()} className="px-4 py-2 rounded-xl bg-zinc-700 text-white text-sm font-medium">Clear</button>
           </div>
           {lookupOut && <div className="mt-3 text-sm">{lookupOut}</div>}
+          {calcDate && (
+            <div className="mt-3">
+              <button type="button" onClick={()=>setShowCalc(v=>!v)} className="px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm">
+                {showCalc?"Hide calculations":"Show calculations"}
+              </button>
+            </div>
+          )}
+          {calcDate && showCalc && <CalculationPanel date={calcDate} compact />}
           <ul className="mt-4 text-xs text-purple-100/90 space-y-2 list-disc list-inside">
             <li>Format: <b>month/day/year</b> (e.g., <b>7/4/1776</b>).</li>
             <li>BC years: use a leading minus (e.g., <b>-1</b> = <b>1 BC</b>). No year 0.</li>
@@ -1431,6 +1741,243 @@
                   </li>
                 ))}
               </ul>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    function MethodPage(){
+      const example=buildManualBreakdown({y:1992,m:2,d:26});
+      const beginnerExampleSteps=example?.beginner?.steps||[];
+      const advancedExampleSteps=example?.advanced?.steps||[];
+      return (
+        <div className="text-left text-sm text-purple-100/90 space-y-8">
+          <section>
+            <h2 className="text-2xl font-semibold text-purple-50">My Day of the Week Method</h2>
+            <p className="mt-2 text-sm text-purple-200/80">Assumes the proleptic Gregorian calendar for all AD dates.</p>
+          </section>
+
+          <section className="space-y-3">
+            <h3 className="text-lg font-semibold text-purple-50">Definitions</h3>
+            <ul className="list-disc list-inside space-y-1">
+              <li>Sunday = 0</li>
+              <li>Monday = 1</li>
+              <li>Tuesday = 2</li>
+              <li>Wednesday = 3</li>
+              <li>Thursday = 4</li>
+              <li>Friday = 5</li>
+              <li>Saturday = 6</li>
+            </ul>
+            <p>Let the year equal <span className="font-semibold">abcd</span>, where <span className="font-semibold">b</span>, <span className="font-semibold">c</span>, and <span className="font-semibold">d</span> are the last three digits and <span className="font-semibold">a</span> is all preceding digits. For very large years, only the last four digits are needed.</p>
+            <p><span className="font-semibold">Mod explained:</span> <span className="font-mono">n mod m</span> is the remainder after dividing <span className="font-mono">n</span> by <span className="font-mono">m</span>.</p>
+            <div className="space-y-1">
+              <div className="font-semibold text-purple-50">Determining mod 4 for 2 digits <span className="font-mono">nm</span>:</div>
+              <ul className="list-disc list-inside ml-4 space-y-1">
+                <li>If <span className="font-mono">n</span> is even: <span className="font-mono">nm mod 4 = m mod 4</span>.</li>
+                <li>If <span className="font-mono">n</span> is odd: <span className="font-mono">nm mod 4 = (m + 2) mod 4</span>.</li>
+              </ul>
+            </div>
+            <p><span className="font-semibold">Leap year:</span> a year is a leap year if <span className="font-mono">mod 4 = 0</span>, unless <span className="font-mono">mod 100 = 0</span> and <span className="font-mono">mod 400 ≠ 0</span>.</p>
+            <p><span className="font-semibold">Integer division:</span> <span className="font-mono">⌊n / m⌋</span> is <span className="font-mono">n / m</span> where the remainder is dropped. Equivalently, <span className="font-mono">⌊n / m⌋ = (n - n mod m) / m</span>.</p>
+          </section>
+
+          <section className="space-y-3">
+            <h3 className="text-lg font-semibold text-purple-50">Counting Using Fingers</h3>
+            <p>Counting is done with a mod 7 system. Use the right hand to keep track of the numbers by touching the thumb to seven different segments of the pointer and middle finger:</p>
+            <ul className="list-disc list-inside ml-4 space-y-1">
+              <li>0 is the outside (by the thumb) of the bottom segment of the pointer finger.</li>
+              <li>1 is the bottom segment of the pointer finger.</li>
+              <li>2 is the middle segment of the pointer finger.</li>
+              <li>3 is the top segment of the pointer finger.</li>
+              <li>4 is the bottom segment of the middle finger.</li>
+              <li>5 is the middle segment of the middle finger.</li>
+              <li>6 is the top segment of the middle finger.</li>
+            </ul>
+            <p>When adding numbers, simply move the thumb to different parts of your pointer and middle fingers and keep learning patterns.</p>
+            <div>
+              <div className="font-semibold text-purple-50">Speed tips when adding:</div>
+              <ul className="list-disc list-inside ml-4 space-y-1">
+                <li>I turn all 6's into -1 and all 5's into -2.</li>
+                <li>I can do 3 into -4 from positions 4–6, and I turn adding 4 into -3 from positions 3–6. The gain can be used to add 7 when needed. Otherwise, all additions are straightforward.</li>
+              </ul>
+            </div>
+            <p>Counting like this ensures that only numbers 0–6 are held regardless of what is added or subtracted. The final answer then immediately corresponds to the weekday represented on your hand.</p>
+          </section>
+
+          <section className="space-y-5">
+            <h3 className="text-lg font-semibold text-purple-50">Reference Codes</h3>
+            <div>
+              <h4 className="text-sm font-semibold text-purple-200/90 uppercase tracking-wide">Month Codes</h4>
+              <div className="mt-2 grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {METHOD_MONTH_CODES.map(({month,code})=>(
+                  <div key={month} className="panel rounded-xl px-3 py-2">
+                    <div className="text-xs text-purple-200/70 uppercase tracking-wide">{month}</div>
+                    <div className="text-lg font-semibold text-purple-50">{code}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid md:grid-cols-2 gap-4">
+              <div className="rounded-2xl panel p-4">
+                <h4 className="text-sm font-semibold text-purple-200/90 uppercase tracking-wide">ab mod 4 Codes – Beginner</h4>
+                <table className="mt-2 w-full text-xs">
+                  <tbody>
+                    {METHOD_AB_CODES_BEGINNER.map(({label,code})=>(
+                      <tr key={label}>
+                        <td className="py-1 pr-3 text-purple-200/80">{label} →</td>
+                        <td className="py-1 font-mono text-purple-50">{manualLabel(code).text}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="rounded-2xl panel p-4">
+                <h4 className="text-sm font-semibold text-purple-200/90 uppercase tracking-wide">ab mod 4 Codes – Advanced</h4>
+                <table className="mt-2 w-full text-xs">
+                  <tbody>
+                    {METHOD_AB_CODES_ADVANCED.map(({label,code})=>(
+                      <tr key={label}>
+                        <td className="py-1 pr-3 text-purple-200/80">{label} →</td>
+                        <td className="py-1 font-mono text-purple-50">{manualLabel(code).text}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <p className="mt-2 text-[11px] text-purple-200/70">Note that the advanced codes mod 7 simplify to the beginner ones, so you can subtract 7 when helpful.</p>
+              </div>
+            </div>
+
+            <div className="grid md:grid-cols-2 gap-4">
+              <div className="rounded-2xl panel p-4">
+                <h4 className="text-sm font-semibold text-purple-200/90 uppercase tracking-wide">Key <span className="font-mono">cd</span> Years – Beginner</h4>
+                <table className="mt-2 w-full text-xs">
+                  <tbody>
+                    {METHOD_KEY_CODES_BEGINNER.map(({year,code})=>(
+                      <tr key={year}>
+                        <td className="py-1 pr-3 text-purple-200/80">{String(year).padStart(2,'0')} →</td>
+                        <td className="py-1 font-mono text-purple-50">{manualLabel(code).text}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="rounded-2xl panel p-4">
+                <h4 className="text-sm font-semibold text-purple-200/90 uppercase tracking-wide">Advanced key <span className="font-mono">cd</span> additions</h4>
+                <table className="mt-2 w-full text-xs">
+                  <tbody>
+                    {METHOD_KEY_CODES_ADVANCED.map(({year,code})=>(
+                      <tr key={year}>
+                        <td className="py-1 pr-3 text-purple-200/80">{String(year).padStart(2,'0')} →</td>
+                        <td className="py-1 font-mono text-purple-50">{manualLabel(code).text}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+
+          <section className="space-y-2">
+            <h3 className="text-lg font-semibold text-purple-50">Method</h3>
+            <ol className="list-decimal list-inside space-y-2">
+              <li>Start with the month code.</li>
+              <li>Add the day of the month.</li>
+              <li>Compute <span className="font-mono">ab mod 4</span>. Subtract the nearest multiple of 7 if needed so the amount you add is between −3 and 3.</li>
+              <li>Find the closest key <span className="font-mono">cd</span> year from the reference list (use the advanced entries if you have them memorized). Add its code.</li>
+              <li>If the <span className="font-mono">cd</span> value is not itself a key year, subtract the key year you used, add the difference mod 7, and add ⌊difference ÷ 4⌋ for the leap-year steps. Again, subtract 7 as needed to keep the adjustment small.</li>
+              <li>If the month is January or February and the year is a leap year, subtract 1 at the end.</li>
+            </ol>
+          </section>
+
+          <section className="space-y-3">
+            <h3 className="text-lg font-semibold text-purple-50">Example: February 26, 1992</h3>
+            <p>The steps below follow the beginner path on the left and the advanced memorized values on the right.</p>
+            <div className="grid md:grid-cols-2 gap-4">
+              <div className="rounded-2xl panel p-4">
+                <h4 className="text-sm font-semibold text-purple-200/90 uppercase tracking-wide">Beginner</h4>
+                <ol className="mt-2 list-decimal list-inside space-y-2">
+                  {beginnerExampleSteps.map((step,idx)=>(
+                    <li key={idx}>
+                      <div>{step.explanation}</div>
+                      <div className="text-[11px] text-purple-200/70">Add {step.addition.text}. Running total: {step.total.text} → {DAY[step.total.mod]}.</div>
+                    </li>
+                  ))}
+                </ol>
+                <div className="mt-3 text-[12px] text-purple-200/80">Total: {example?.beginner?.total?.text} → {example?.beginner?.weekday}.</div>
+              </div>
+              <div className="rounded-2xl panel p-4">
+                <h4 className="text-sm font-semibold text-purple-200/90 uppercase tracking-wide">Advanced</h4>
+                <ol className="mt-2 list-decimal list-inside space-y-2">
+                  {advancedExampleSteps.map((step,idx)=>(
+                    <li key={idx}>
+                      <div>{step.explanation}</div>
+                      <div className="text-[11px] text-purple-200/70">Add {step.addition.text}. Running total: {step.total.text} → {DAY[step.total.mod]}.</div>
+                    </li>
+                  ))}
+                </ol>
+                <div className="mt-3 text-[12px] text-purple-200/80">Total: {example?.advanced?.total?.text} → {example?.advanced?.weekday}.</div>
+              </div>
+            </div>
+            <p>The final answer is Wednesday.</p>
+          </section>
+        </div>
+      );
+    }
+
+    function CalculationPanel({date, onClose, compact=false, title}){
+      const key = date ? `${date.y}-${date.m}-${date.d}` : "none";
+      const breakdown = React.useMemo(()=>buildManualBreakdown(date), [key]);
+      if(!date){
+        return null;
+      }
+      const heading = title || `Manual breakdown for ${fmt(date.y,date.m,date.d)}`;
+      return (
+        <div className={`mt-4 rounded-2xl panel ${compact?'p-3':'p-4'}`}>
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="text-sm font-semibold text-purple-100">{heading}</h3>
+            {onClose && (
+              <button type="button" onClick={onClose} className="text-xs text-purple-200/70 hover:text-purple-100">Close</button>
+            )}
+          </div>
+          {breakdown.error ? (
+            <p className="mt-3 text-sm text-purple-100/80">{breakdown.error}</p>
+          ) : (
+            <div className="mt-3 space-y-5 text-sm text-purple-100/90">
+              <div>
+                <div className="font-semibold text-purple-50">Date:</div>
+                <div>{fmt(date.y,date.m,date.d)} — numbers map to weekdays with 0 = Sunday, 1 = Monday, …, 6 = Saturday.</div>
+              </div>
+              <div>
+                <h4 className="text-sm font-semibold text-purple-200/90 uppercase tracking-wide">Beginner walkthrough</h4>
+                <ol className="mt-2 list-decimal list-inside space-y-2">
+                  {breakdown.beginner.steps.map((step,idx)=>(
+                    <li key={idx}>
+                      <div>{step.explanation}</div>
+                      <div className="text-[11px] text-purple-200/70">Add {step.addition.text}. Running total: {step.total.text} → {DAY[step.total.mod]}.</div>
+                    </li>
+                  ))}
+                </ol>
+                <div className="mt-2 text-[12px] text-purple-200/80">Beginner total: {breakdown.beginner.total.text} → {breakdown.beginner.weekday}.</div>
+              </div>
+              <div>
+                <h4 className="text-sm font-semibold text-purple-200/90 uppercase tracking-wide">Advanced memory notes</h4>
+                {breakdown.advanced.steps.length>0 ? (
+                  <ol className="mt-2 list-decimal list-inside space-y-2">
+                    {breakdown.advanced.steps.map((step,idx)=>(
+                      <li key={idx}>
+                        <div>{step.explanation}</div>
+                        <div className="text-[11px] text-purple-200/70">Add {step.addition.text}. Running total: {step.total.text} → {DAY[step.total.mod]}.</div>
+                      </li>
+                    ))}
+                  </ol>
+                ) : (
+                  <p className="mt-2">No advanced shortcuts are memorized for this date—follow the beginner steps.</p>
+                )}
+                <div className="mt-2 text-[12px] text-purple-200/80">Advanced total: {breakdown.advanced.total.text} → {breakdown.advanced.weekday}.</div>
+              </div>
+              <p className="text-[11px] text-purple-200/70">Finish by reading the result off your fingers: 0 = Sunday, 1 = Monday, 2 = Tuesday, 3 = Wednesday, 4 = Thursday, 5 = Friday, 6 = Saturday.</p>
             </div>
           )}
         </div>
