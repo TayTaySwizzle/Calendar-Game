@@ -88,7 +88,7 @@
     const isLeap = y => { y=toAstro(y); return y%400===0 || (y%4===0 && y%100!==0); };
     const dim = (y,m)=> m===2 ? (isLeap(y)?29:28) : [4,6,9,11].includes(m)?30:31;
     function jdnGregorian(y,m,d){ const a=Math.floor((14-m)/12),y2=y+4800-a,m2=m-3+12*a; return d+Math.floor((153*m2+2)/5)+365*y2+Math.floor(y2/4)-Math.floor(y2/100)+Math.floor(y2/400)-32045; }
-    const wday=(y,m,d)=> (jdnGregorian(toAstro(y),m,d)+1)%7;
+    const wday=(y,m,d)=>{ const value=(jdnGregorian(toAstro(y),m,d)+1)%7; return (value+7)%7; };
     const fmtYear = y => y>0?String(y):`${Math.abs(y)} BC`;
     const fmt=(y,m,d)=> `${MONTH[m-1]} ${d}, ${fmtYear(y)}`;
     const rint=(a,b)=>Math.floor(Math.random()*(b-a+1))+a;
@@ -125,7 +125,7 @@
       running=(running+dayMod)%7;
       steps.push({
         title:"Add the day",
-        detail:`Add the day modulo 7: ${d} mod 7 = ${dayMod}. Running total: ${running}.`,
+        detail:`Add the day mod 7: ${d} mod 7 = ${dayMod}. Running total: ${running}.`,
         total:running
       });
 
@@ -1126,7 +1126,7 @@
         if(mode==="sudden"){
           return (
             <div className="flex items-center gap-2 w-full">
-              <span className="text-xs text-purple-300/80">Per Q:</span>
+              <span className="text-xs text-purple-300/80 whitespace-nowrap">Per&nbsp;Q:</span>
               <input type="range" min="3" max="20" step="1" value={qSec}
                 onChange={e=>{const v=+e.target.value; setQSec(v); if(!active) setQRemain(v);}}
                 className="accent-purple-500 w-full max-w-[8rem]"/>
@@ -1274,6 +1274,43 @@
         if(needNew) doNew({skipInactiveMessage:true});
       };
 
+      const handleShowCalculationsOpen = ()=>{
+        if(isTimer(mode)){
+          setActive(false);
+          if(mode==="blitz"){
+            setBlitzRunning(false);
+            blitzStartRef.current=null;
+            blitzPausedAtRef.current=null;
+            blitzPausedAccRef.current=0;
+          }
+          if(mode==="sudden"){
+            qDeadlineRef.current=null;
+            qPausedAtRef.current=null;
+            qPausedAccRef.current=0;
+          }
+          if(mode==="flash"){
+            clearTimeout(flashTimerRef.current);
+            setPhase('dash');
+            flashDeadlineRef.current=null;
+            setFlashRemainMs(flashMs);
+          }
+        }
+        if(!statsOff && !countedWrong){
+          updateStats(cur=>{ cur.played+=1; cur.streak=0; });
+        }
+        if(mode==="deduction"){
+          if(ded){
+            const ans = ded.type==="year" ? fmtYear(ded.y) : ded.type==="month" ? MONTH[ded.m-1] : String(ded.d);
+            setMsg(`Answer: ${ans}.`);
+          }
+        }else{
+          setMsg(`Answer: ${DAY[correct]}.`);
+        }
+        setCountedWrong(true);
+        setLocked(true);
+        setRevealed(true);
+      };
+
       /* Avg toggle click handler (disable/enable) */
       function toggleAvg(disable){
         if(mode!=="classic" && mode!=="deduction") return;
@@ -1290,7 +1327,7 @@
       return (
         <div className="mx-auto px-4 py-5 w-full max-w-[480px] md:max-w-3xl lg:max-w-4xl">
           {/* Header */}
-          <div className="flex items-center justify-between gap-4">
+          <div className={`flex items-center justify-between gap-4 ${mode==="method" ? 'sticky top-0 z-30 -mx-4 px-4 py-3 bg-[rgba(20,11,34,0.95)] border border-purple-700/50 rounded-2xl shadow-lg backdrop-blur-md' : ''}`}>
             <h1 className="text-xl md:text-2xl font-semibold leading-none">Calendar Game</h1>
             <div className="relative">
               <select
@@ -1300,10 +1337,10 @@
                 className="panel rounded-xl px-2.5 py-2 pr-9 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 appearance-none"
               >
                 <option value="classic">Classic</option>
+                <option value="deduction">Deduction</option>
                 <option value="blitz">Blitz</option>
                 <option value="sudden">Sudden Death</option>
                 <option value="flash">Flash</option>
-                <option value="deduction">Deduction</option>
                 <option value="lookup">Lookup</option>
                 <option value="method">Method</option>
               </select>
@@ -1328,7 +1365,7 @@
                 </div>
                 <div className="col-span-1 md:col-span-2 flex justify-end">
                   <button type="button"
-                    className="text-xs px-3 py-1.5 rounded-lg bg-purple-700 hover:bg-purple-600 w-full md:w-auto h-full flex items-center justify-center"
+                    className="text-sm font-medium px-3 py-1.5 rounded-lg bg-purple-700 hover:bg-purple-600 w-full md:w-auto h-full flex items-center justify-center"
                     onClick={handleResetStats}>Reset stats</button>
                 </div>
                 <div className="col-span-1 md:col-span-2 flex items-center">
@@ -1485,7 +1522,7 @@
             {/* ======= LOOKUP ======= */}
             {mode==="lookup" && <LookupCard history={lookupHistory} onAddHistory={pushLookupHistory} onClearHistory={clearLookupHistory} />}
 
-            {mode!=="method" && mode!=="lookup" && <MethodBreakdownSection date={calcTarget}/>}
+            {mode!=="method" && mode!=="lookup" && <MethodBreakdownSection date={calcTarget} onOpen={handleShowCalculationsOpen}/>}
           </div>
         </div>
       );
@@ -1652,6 +1689,8 @@
     function MethodExplanation({date}){
       const memoKey = date ? `${date.y}-${date.m}-${date.d}` : "";
       const breakdowns = React.useMemo(()=> date ? buildMethodBreakdowns(date) : null,[memoKey]);
+      const [methodView,setMethodView] = React.useState('advanced');
+      React.useEffect(()=>{ setMethodView('advanced'); },[memoKey]);
       if(!date){
         return <div className="text-sm text-purple-200/80">Pick a date first.</div>;
       }
@@ -1660,30 +1699,51 @@
         return <div className="text-sm text-purple-100/80">{beginner?.error || "The manual method only applies to AD dates."}</div>;
       }
       const advanced=breakdowns.advanced;
+      const selected = methodView==='advanced' ? advanced : beginner;
+      const selectedLabel = methodView==='advanced' ? 'Advanced' : 'Beginner';
       return (
         <div className="space-y-4">
-          <div className="text-sm text-purple-100/80">
-            <div><span className="font-semibold">Date:</span> {fmt(date.y,date.m,date.d)}</div>
-            <div><span className="font-semibold">Weekday:</span> {DAY[beginner.total]}</div>
-            <div><span className="font-semibold">Month code:</span> {METHOD_MONTH_CODES[date.m]}</div>
-            <div><span className="font-semibold">cd:</span> {date.y%100<10?`0${date.y%100}`:date.y%100}</div>
+          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+            <div className="text-sm text-purple-100/80">
+              <div><span className="font-semibold">Date:</span> {fmt(date.y,date.m,date.d)}</div>
+              <div><span className="font-semibold">Weekday:</span> {DAY[beginner.total]}</div>
+              <div><span className="font-semibold">Month code:</span> {METHOD_MONTH_CODES[date.m]}</div>
+              <div><span className="font-semibold">cd:</span> {date.y%100<10?`0${date.y%100}`:date.y%100}</div>
+            </div>
+            <div className="flex md:justify-end">
+              <div className="flex rounded-xl overflow-hidden border border-purple-700/60">
+                {[{key:'advanced',label:'Advanced'},{key:'beginner',label:'Beginner'}].map(option=>(
+                  <button
+                    key={option.key}
+                    type="button"
+                    onClick={()=>setMethodView(option.key)}
+                    className={`px-3 py-1.5 text-sm font-medium ${methodView===option.key ? 'bg-purple-600 text-white' : 'bg-purple-900/40 text-purple-200/80 hover:bg-purple-900/70'}`}
+                    aria-pressed={methodView===option.key}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="rounded-2xl panel p-3">
-              <MethodStepsList title="Beginner path" breakdown={beginner}/>
-            </div>
-            <div className="rounded-2xl panel p-3">
-              <MethodStepsList title="Advanced path" breakdown={advanced}/>
-            </div>
+          <div className="rounded-2xl panel p-3">
+            <MethodStepsList title={`${selectedLabel} path`} breakdown={selected}/>
           </div>
         </div>
       );
     }
 
-    function MethodBreakdownSection({date}){
+    function MethodBreakdownSection({date,onOpen}){
       const [open,setOpen]=React.useState(false);
       const key=date?`${date.y}-${date.m}-${date.d}`:"";
-      React.useEffect(()=>{ setOpen(false); },[key]);
+      const prevOpenRef=React.useRef(false);
+      React.useEffect(()=>{ setOpen(false); prevOpenRef.current=false; },[key]);
+      React.useEffect(()=>{
+        if(open && !prevOpenRef.current){
+          if(onOpen) onOpen();
+        }
+        prevOpenRef.current=open;
+      },[open,onOpen]);
       if(!date) return null;
       return (
         <div className="mt-5">
