@@ -257,8 +257,10 @@
       const [revealed,setRevealed]=useState(false);            // did reveal on this date?
       const [countedWrong,setCountedWrong]=useState(false);    // has wrong been counted?
       const [calcOpen,setCalcOpen]=useState(false);            // is the calculation panel open?
-      const calcOpenStatesRef=useRef(new Map());
+      const [calcUsed,setCalcUsed]=useState(false);            // has the calculation view been used this round?
+      const calcStateRef=useRef(new Map());
       const skipScrollOnOpenRef=useRef(false);
+      const calcSectionRef=useRef(null);
 
       /* snapshots when avg-time disabled (per era) */
       const [savedClassicByEra,setSavedClassicByEra]=useState({AD:null,BC:null,BOTH:null});
@@ -292,9 +294,10 @@
       const flashDeadlineRef=useRef(null);
 
       /* deduction */
-      const [dedType,setDedType]=useState("year");
+      const [dedType,setDedType]=useState("day");
       const [ded,setDed]=useState(null);
       const [dedFlash,setDedFlash]=useState(null);
+      const dedFlashSeqRef=useRef(0);
       const [lookupHistory,setLookupHistory]=useState([]);
 
       const pendingDedSwitchRef=useRef(null);
@@ -611,6 +614,10 @@
       };
 
       function runDeductionRound(){
+        setCalcOpen(false);
+        setCalcUsed(false);
+        calcStateRef.current.set('deduction',{open:false, used:false});
+        if(mode!=="deduction"){ calcStateRef.current.set(mode,{open:false, used:false}); }
         setDedStack(s=> ded ? [...s, ded] : s);
         spawnDed();
         setMsg("");
@@ -621,6 +628,9 @@
       }
 
       function pushAndNext(){
+        calcStateRef.current.set(mode,{open:false, used:false});
+        setCalcOpen(false);
+        setCalcUsed(false);
         if(mode==="classic"||mode==="flash"||mode==="blitz"||mode==="sudden"){
           setStack(s=>[...s,{...date}]);
           const nd = randomDate(minY,maxY);
@@ -1001,7 +1011,16 @@
         setDedType(nextType);
       }
 
-      function flashDed(kind,value,ok){ setDedFlash({kind,value,ok}); setTimeout(()=>setDedFlash(null),450); }
+      function flashDed(kind,value,ok){
+        if(!ded) return;
+        const options=Array.isArray(ded.options)?ded.options:[];
+        const index=options.findIndex(opt=>opt===value);
+        const token=++dedFlashSeqRef.current;
+        setDedFlash({kind,value,ok,index,questionKey:dedQuestionKey,token});
+        setTimeout(()=>{
+          setDedFlash(prev=> prev && prev.token===token ? null : prev);
+        },450);
+      }
       function submitDedAnswer(val){
         if(!ded || locked) return;
         const setCorrectThenNext = ()=>{
@@ -1088,7 +1107,7 @@
 
       const baseBtn="w-full rounded-2xl border px-4 py-3 text-base md:text-sm transition shadow-sm select-none";
       const idleBtn="border-purple-800/60 bg-purple-900/30 hover:bg-purple-900/60";
-      const optionsDisabled = ((isTimer(mode) && !active) || locked || calcOpen);
+      const optionsDisabled = ((isTimer(mode) && !active) || locked || calcUsed);
 
       const eraControl = (
         <div className="flex rounded-xl overflow-hidden border border-purple-800/60 w-full">
@@ -1274,19 +1293,26 @@
         return date;
       },[mode,date?.y,date?.m,date?.d, ded?.y, ded?.m, ded?.d]);
       const calcTargetKey = calcTarget ? `${calcTarget.y}-${calcTarget.m}-${calcTarget.d}` : 'none';
+      const dedQuestionKey = React.useMemo(()=>{
+        if(!ded) return null;
+        return `${ded.type}|${ded.y}|${ded.m}|${ded.d}|${ded.w}`;
+      },[ded?.type, ded?.y, ded?.m, ded?.d, ded?.w]);
 
       useEffect(()=>{
-        const saved = calcOpenStatesRef.current.has(mode)
-          ? !!calcOpenStatesRef.current.get(mode)
-          : false;
+        const saved = calcStateRef.current.get(mode);
+        const savedOpen = typeof saved === 'object' ? !!saved.open : !!saved;
+        const savedUsed = typeof saved === 'object' ? !!saved.used : (savedOpen ? true : false);
+        calcStateRef.current.set(mode,{open:savedOpen, used:savedUsed});
         skipScrollOnOpenRef.current = true;
-        setCalcOpen(saved);
+        setCalcOpen(savedOpen);
+        setCalcUsed(savedUsed);
       },[mode]);
 
       useEffect(()=>{
         skipScrollOnOpenRef.current = true;
         setCalcOpen(false);
-        calcOpenStatesRef.current.set(mode,false);
+        setCalcUsed(false);
+        calcStateRef.current.set(mode,{open:false, used:false});
       },[calcTargetKey, mode]);
 
       useEffect(()=>{
@@ -1294,10 +1320,17 @@
           if(skipScrollOnOpenRef.current){
             skipScrollOnOpenRef.current=false;
           }else{
-            window.scrollTo({top:document.documentElement.scrollHeight,behavior:'smooth'});
+            const scrollToSection=()=>{
+              const node=calcSectionRef.current;
+              if(node){
+                node.scrollIntoView({behavior:'smooth', block:'end'});
+              }else{
+                window.scrollTo({top:document.documentElement.scrollHeight,behavior:'smooth'});
+              }
+            };
+            requestAnimationFrame(()=>requestAnimationFrame(scrollToSection));
           }
-        }
-        if(!calcOpen){
+        }else{
           skipScrollOnOpenRef.current=false;
         }
       },[calcOpen]);
@@ -1343,7 +1376,11 @@
           applyCalculationPenalty();
         }
         setCalcOpen(next);
-        calcOpenStatesRef.current.set(mode,next);
+        setCalcUsed(prev=>{
+          const updated = next ? true : prev;
+          calcStateRef.current.set(mode,{open:next, used:updated});
+          return updated;
+        });
       };
 
       const handleMethodNewRequest = ()=>{
@@ -1491,7 +1528,7 @@
                       className={`px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm ${timerBusy?'opacity-60 pointer-events-none':''}`}
                       onClick={()=>doNew()}
                     >New</button>
-                    <button type="button" className={`px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm ${(locked||calcOpen)?'opacity-60 pointer-events-none':''}`} onClick={()=>reveal()}>Reveal</button>
+                    <button type="button" className={`px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm ${(locked||calcUsed)?'opacity-60 pointer-events-none':''}`} onClick={()=>reveal()}>Reveal</button>
                     <button
                       type="button"
                       className={`px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm ${timerBusy?'opacity-60 pointer-events-none':''}`}
@@ -1513,7 +1550,7 @@
             {mode==="deduction" && (
               <>
                 <div className="mt-3 flex flex-wrap gap-2 justify-center">
-                  {["year","month","day"].map(t=>(
+                  {["day","month","year"].map(t=>(
                     <button key={t} type="button" onClick={()=>changeDedType(t)}
                       className={`px-3 py-1.5 rounded-xl text-sm border ${dedType===t?'bg-purple-600 border-purple-500':'bg-purple-900/40 border-purple-800/60 hover:bg-purple-900/70'}`}>
                       {t[0].toUpperCase()+t.slice(1)}
@@ -1521,28 +1558,28 @@
                   ))}
                 </div>
 
-                <div className={`mt-4 ${(locked||calcOpen)?'opacity-60 pointer-events-none':''}`}>
+                <div className={`mt-4 ${(locked||calcUsed)?'opacity-60 pointer-events-none':''}`}>
                   {ded && ded.type==="year" && (
                     <div className="grid grid-cols-3 gap-2">
-                      {ded.options.map(y=>(
+                      {ded.options.map((y,optionIndex)=>(
                         <button key={y} type="button" onClick={()=>submitDedAnswer(y)}
-                          className={`${baseBtn} ${idleBtn} py-2 text-sm ${dedFlash&&dedFlash.kind==='year'&&dedFlash.value===y ? (dedFlash.ok?'flash-good':'flash-bad')+' border-transparent':''}`}>{fmtYear(y)}</button>
+                          className={`${baseBtn} ${idleBtn} py-2 text-sm ${dedFlash&&dedFlash.kind==='year'&&dedFlash.questionKey===dedQuestionKey&&dedFlash.index===optionIndex ? (dedFlash.ok?'flash-good':'flash-bad')+' border-transparent':''}`}>{fmtYear(y)}</button>
                       ))}
                     </div>
                   )}
                   {ded && ded.type==="month" && (
                     <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-7 gap-2">
-                      {ded.options.map(mv=>(
+                      {ded.options.map((mv,optionIndex)=>(
                         <button key={mv} type="button" onClick={()=>submitDedAnswer(mv)}
-                          className={`${baseBtn} ${idleBtn} ${dedFlash&&dedFlash.kind==='month'&&dedFlash.value===mv ? (dedFlash.ok?'flash-good':'flash-bad')+' border-transparent':''}`}>{MONTH_ABBR[mv-1]}</button>
+                          className={`${baseBtn} ${idleBtn} py-2 text-sm ${dedFlash&&dedFlash.kind==='month'&&dedFlash.questionKey===dedQuestionKey&&dedFlash.index===optionIndex ? (dedFlash.ok?'flash-good':'flash-bad')+' border-transparent':''}`}>{MONTH_ABBR[mv-1]}</button>
                       ))}
                     </div>
                   )}
                   {ded && ded.type==="day" && (
                     <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-7 gap-2">
-                      {ded.options.map(dv=>(
+                      {ded.options.map((dv,optionIndex)=>(
                         <button key={dv} type="button" onClick={()=>submitDedAnswer(dv)}
-                          className={`${baseBtn} ${idleBtn} ${dedFlash&&dedFlash.kind==='day'&&dedFlash.value===dv ? (dedFlash.ok?'flash-good':'flash-bad')+' border-transparent':''}`}>{dv}</button>
+                          className={`${baseBtn} ${idleBtn} py-2 text-sm ${dedFlash&&dedFlash.kind==='day'&&dedFlash.questionKey===dedQuestionKey&&dedFlash.index===optionIndex ? (dedFlash.ok?'flash-good':'flash-bad')+' border-transparent':''}`}>{dv}</button>
                       ))}
                     </div>
                   )}
@@ -1551,7 +1588,7 @@
                 <div className="mt-4 rounded-2xl panel p-3">
                   <div className="flex flex-wrap gap-2">
                     <button type="button" className="px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm" onClick={()=>runDeductionRound()}>New</button>
-                    <button type="button" className={`px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm ${(locked||calcOpen)?'opacity-60 pointer-events-none':''}`} onClick={()=>reveal()}>Reveal</button>
+                    <button type="button" className={`px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm ${(locked||calcUsed)?'opacity-60 pointer-events-none':''}`} onClick={()=>reveal()}>Reveal</button>
                     <button type="button" className="px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm" onClick={()=>goBack()}>Back</button>
                   </div>
                   {(msg || guesses.length>0) && (
@@ -1567,7 +1604,7 @@
             {/* ======= LOOKUP ======= */}
             {mode==="lookup" && <LookupCard history={lookupHistory} onAddHistory={pushLookupHistory} onClearHistory={clearLookupHistory} />}
 
-            {mode!=="method" && mode!=="lookup" && <MethodBreakdownSection date={calcTarget} open={calcOpen} onOpenChange={handleCalculationOpenChange} onRequestNew={handleMethodNewRequest}/>}
+            {mode!=="method" && mode!=="lookup" && <MethodBreakdownSection date={calcTarget} open={calcOpen} onOpenChange={handleCalculationOpenChange} onRequestNew={handleMethodNewRequest} scrollRef={calcSectionRef}/>}
           </div>
         </div>
       );
@@ -1757,8 +1794,7 @@
               <div><span className="font-semibold">cd:</span> {cdValue<10?`0${cdValue}`:cdValue}</div>
             </div>
             <div className="flex flex-col items-end gap-2 text-sm">
-              <div className="flex items-center gap-2">
-                <span className="text-xs uppercase tracking-wide text-purple-200/70">Show:</span>
+              <div className="flex items-center justify-end">
                 <div className="flex overflow-hidden rounded-xl border border-purple-700/60">
                   <button
                     type="button"
@@ -1794,7 +1830,7 @@
       );
     }
 
-    function MethodBreakdownSection({date, open:controlledOpen, onOpenChange, onRequestNew}){
+    function MethodBreakdownSection({date, open:controlledOpen, onOpenChange, onRequestNew, scrollRef}){
       const isControlled = typeof controlledOpen === 'boolean' && typeof onOpenChange === 'function';
       const [internalOpen,setInternalOpen]=React.useState(false);
       const key=date?`${date.y}-${date.m}-${date.d}`:"";
@@ -1809,7 +1845,7 @@
         }
       };
       return (
-        <div className="mt-5">
+        <div className="mt-5" ref={scrollRef}>
           <button
             type="button"
             onClick={toggle}
