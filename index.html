@@ -88,7 +88,7 @@
     const isLeap = y => { y=toAstro(y); return y%400===0 || (y%4===0 && y%100!==0); };
     const dim = (y,m)=> m===2 ? (isLeap(y)?29:28) : [4,6,9,11].includes(m)?30:31;
     function jdnGregorian(y,m,d){ const a=Math.floor((14-m)/12),y2=y+4800-a,m2=m-3+12*a; return d+Math.floor((153*m2+2)/5)+365*y2+Math.floor(y2/4)-Math.floor(y2/100)+Math.floor(y2/400)-32045; }
-    const wday=(y,m,d)=> (jdnGregorian(toAstro(y),m,d)+1)%7;
+    const wday=(y,m,d)=> ((jdnGregorian(toAstro(y),m,d)+1)%7+7)%7;
     const fmtYear = y => y>0?String(y):`${Math.abs(y)} BC`;
     const fmt=(y,m,d)=> `${MONTH[m-1]} ${d}, ${fmtYear(y)}`;
     const rint=(a,b)=>Math.floor(Math.random()*(b-a+1))+a;
@@ -125,7 +125,7 @@
       running=(running+dayMod)%7;
       steps.push({
         title:"Add the day",
-        detail:`Add the day modulo 7: ${d} mod 7 = ${dayMod}. Running total: ${running}.`,
+        detail:`Add the day mod 7: ${d} mod 7 = ${dayMod}. Running total: ${running}.`,
         total:running
       });
 
@@ -256,6 +256,7 @@
       const [locked,setLocked]=useState(false);                // lock options after reveal
       const [revealed,setRevealed]=useState(false);            // did reveal on this date?
       const [countedWrong,setCountedWrong]=useState(false);    // has wrong been counted?
+      const [calcOpen,setCalcOpen]=useState(false);            // is the calculation panel open?
 
       /* snapshots when avg-time disabled (per era) */
       const [savedClassicByEra,setSavedClassicByEra]=useState({AD:null,BC:null,BOTH:null});
@@ -1075,7 +1076,7 @@
 
       const baseBtn="w-full rounded-2xl border px-4 py-3 text-base md:text-sm transition shadow-sm select-none";
       const idleBtn="border-purple-800/60 bg-purple-900/30 hover:bg-purple-900/60";
-      const optionsDisabled = ( (isTimer(mode) && !active) || locked );
+      const optionsDisabled = ((isTimer(mode) && !active) || locked || calcOpen);
 
       const eraControl = (
         <div className="flex rounded-xl overflow-hidden border border-purple-800/60 w-full">
@@ -1260,6 +1261,9 @@
         }
         return date;
       },[mode,date?.y,date?.m,date?.d, ded?.y, ded?.m, ded?.d]);
+      const calcKey = calcTarget ? `${calcTarget.y}-${calcTarget.m}-${calcTarget.d}-${mode}` : `${mode}-none`;
+
+      useEffect(()=>{ setCalcOpen(false); },[calcKey]);
 
       /* should reset stats create a new date? */
       function shouldNewOnReset(){
@@ -1272,6 +1276,36 @@
         const needNew = shouldNewOnReset();
         resetStatsCurrent();
         if(needNew) doNew({skipInactiveMessage:true});
+      };
+
+      const applyCalculationPenalty = ()=>{
+        const firstPenalty = !countedWrong;
+        if(firstPenalty){
+          if(!statsOff){
+            updateStats(cur=>{ cur.played+=1; cur.streak=0; });
+          }
+          if(mode==="deduction" && ded){
+            const ans = ded.type==="year" ? fmtYear(ded.y) : ded.type==="month" ? MONTH[ded.m-1] : String(ded.d);
+            setMsg(`Answer: ${ans}.`);
+          }else if(mode!=="deduction"){
+            setMsg(`Answer: ${DAY[correct]}.`);
+          }
+          if(isTimer(mode)){
+            setActive(false);
+            if(mode==="blitz"){ setBlitzRunning(false); blitzStartRef.current=null; blitzPausedAtRef.current=null; blitzPausedAccRef.current=0; }
+            if(mode==="sudden"){ qDeadlineRef.current=null; qPausedAtRef.current=null; qPausedAccRef.current=0; }
+            if(mode==="flash"){ clearTimeout(flashTimerRef.current); setPhase('dash'); flashDeadlineRef.current=null; setFlashRemainMs(flashMs); }
+          }
+        }
+        if(!revealed) setRevealed(true);
+        if(!countedWrong) setCountedWrong(true);
+      };
+
+      const handleCalculationOpenChange = (next)=>{
+        if(next){
+          applyCalculationPenalty();
+        }
+        setCalcOpen(next);
       };
 
       /* Avg toggle click handler (disable/enable) */
@@ -1290,25 +1324,27 @@
       return (
         <div className="mx-auto px-4 py-5 w-full max-w-[480px] md:max-w-3xl lg:max-w-4xl">
           {/* Header */}
-          <div className="flex items-center justify-between gap-4">
-            <h1 className="text-xl md:text-2xl font-semibold leading-none">Calendar Game</h1>
-            <div className="relative">
-              <select
-                ref={modeSelectRef}
-                value={mode}
-                onChange={e=>{ __hideErr(); const nextMode=e.target.value; setMode(nextMode); e.target.blur(); modeSelectRef.current?.blur(); }}
-                className="panel rounded-xl px-2.5 py-2 pr-9 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 appearance-none"
-              >
-                <option value="classic">Classic</option>
-                <option value="blitz">Blitz</option>
-                <option value="sudden">Sudden Death</option>
-                <option value="flash">Flash</option>
-                <option value="deduction">Deduction</option>
-                <option value="lookup">Lookup</option>
-                <option value="method">Method</option>
-              </select>
-              <div className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 flex flex-col items-center leading-none text-[7px] text-white/90">
-                <span>▲</span><span>▼</span>
+          <div className={mode==="method"?"sticky top-4 z-30":""}>
+            <div className={`flex items-center justify-between gap-4 ${mode==="method"?"card rounded-2xl px-4 py-3 backdrop-blur-md shadow-lg":""}`}>
+              <h1 className="text-xl md:text-2xl font-semibold leading-none">Calendar Game</h1>
+              <div className="relative">
+                <select
+                  ref={modeSelectRef}
+                  value={mode}
+                  onChange={e=>{ __hideErr(); const nextMode=e.target.value; setMode(nextMode); e.target.blur(); modeSelectRef.current?.blur(); }}
+                  className="panel rounded-xl px-2.5 py-2 pr-9 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 appearance-none"
+                >
+                  <option value="classic">Classic</option>
+                  <option value="deduction">Deduction</option>
+                  <option value="blitz">Blitz</option>
+                  <option value="sudden">Sudden Death</option>
+                  <option value="flash">Flash</option>
+                  <option value="lookup">Lookup</option>
+                  <option value="method">Method</option>
+                </select>
+                <div className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 flex flex-col items-center leading-none text-[7px] text-white/90">
+                  <span>▲</span><span>▼</span>
+                </div>
               </div>
             </div>
           </div>
@@ -1328,7 +1364,7 @@
                 </div>
                 <div className="col-span-1 md:col-span-2 flex justify-end">
                   <button type="button"
-                    className="text-xs px-3 py-1.5 rounded-lg bg-purple-700 hover:bg-purple-600 w-full md:w-auto h-full flex items-center justify-center"
+                    className="text-sm px-3 py-1.5 rounded-lg bg-purple-700 hover:bg-purple-600 w-full md:w-auto h-full flex items-center justify-center"
                     onClick={handleResetStats}>Reset stats</button>
                 </div>
                 <div className="col-span-1 md:col-span-2 flex items-center">
@@ -1355,7 +1391,7 @@
             )}
             {showSuddenBar && (
               <div className="mb-3">
-                <div className="flex items-center justify-between text-xs text-purple-200/80 mb-1"><div>Per-question</div><div className="tabular-nums">{suddenTimeLabel}</div></div>
+                <div className="flex items-center justify-between text-xs text-purple-200/80 mb-1"><div>Per Q:</div><div className="tabular-nums">{suddenTimeLabel}</div></div>
                 <div className="bar"><span style={{width:`${suddenPercent}%`}}></span></div>
               </div>
             )}
@@ -1389,7 +1425,7 @@
             {/* ======= CLASSIC / BLITZ / SUDDEN / FLASH ======= */}
             {["classic","blitz","sudden","flash"].includes(mode) && (
               <>
-                <div className={`mt-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3 ${((isTimer(mode)&&!active)||locked)?'opacity-60 pointer-events-none':''}`}>
+                <div className={`mt-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3 ${optionsDisabled?'opacity-60 pointer-events-none':''}`}>
                   {DAY.map((n,i)=>(
                     <button key={n} type="button"
                       onClick={()=>{ submitDoW(i); setInput(""); if(isTouch) document.activeElement?.blur(); }}
@@ -1409,7 +1445,7 @@
                       className={`px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm ${timerBusy?'opacity-60 pointer-events-none':''}`}
                       onClick={()=>doNew()}
                     >New</button>
-                    <button type="button" className={`px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm ${locked?'opacity-60 pointer-events-none':''}`} onClick={()=>reveal()}>Reveal</button>
+                    <button type="button" className={`px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm ${(locked||calcOpen)?'opacity-60 pointer-events-none':''}`} onClick={()=>reveal()}>Reveal</button>
                     <button
                       type="button"
                       className={`px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm ${timerBusy?'opacity-60 pointer-events-none':''}`}
@@ -1439,7 +1475,7 @@
                   ))}
                 </div>
 
-                <div className={`mt-4 ${locked?'opacity-60 pointer-events-none':''}`}>
+                <div className={`mt-4 ${(locked||calcOpen)?'opacity-60 pointer-events-none':''}`}>
                   {ded && ded.type==="year" && (
                     <div className="grid grid-cols-3 gap-2">
                       {ded.options.map(y=>(
@@ -1469,7 +1505,7 @@
                 <div className="mt-4 rounded-2xl panel p-3">
                   <div className="flex flex-wrap gap-2">
                     <button type="button" className="px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm" onClick={()=>{ setDedStack(s=> ded ? [...s,ded] : s); spawnDed(); setMsg(""); setLocked(false); setRevealed(false); setGuesses([]); setCountedWrong(false); }}>New</button>
-                    <button type="button" className={`px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm ${locked?'opacity-60 pointer-events-none':''}`} onClick={()=>reveal()}>Reveal</button>
+                    <button type="button" className={`px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm ${(locked||calcOpen)?'opacity-60 pointer-events-none':''}`} onClick={()=>reveal()}>Reveal</button>
                     <button type="button" className="px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm" onClick={()=>goBack()}>Back</button>
                   </div>
                   {(msg || guesses.length>0) && (
@@ -1485,7 +1521,7 @@
             {/* ======= LOOKUP ======= */}
             {mode==="lookup" && <LookupCard history={lookupHistory} onAddHistory={pushLookupHistory} onClearHistory={clearLookupHistory} />}
 
-            {mode!=="method" && mode!=="lookup" && <MethodBreakdownSection date={calcTarget}/>}
+            {mode!=="method" && mode!=="lookup" && <MethodBreakdownSection date={calcTarget} open={calcOpen} onOpenChange={handleCalculationOpenChange}/>}
           </div>
         </div>
       );
@@ -1652,6 +1688,8 @@
     function MethodExplanation({date}){
       const memoKey = date ? `${date.y}-${date.m}-${date.d}` : "";
       const breakdowns = React.useMemo(()=> date ? buildMethodBreakdowns(date) : null,[memoKey]);
+      const [viewMode,setViewMode]=React.useState('advanced');
+      React.useEffect(()=>{ setViewMode('advanced'); },[memoKey]);
       if(!date){
         return <div className="text-sm text-purple-200/80">Pick a date first.</div>;
       }
@@ -1660,36 +1698,64 @@
         return <div className="text-sm text-purple-100/80">{beginner?.error || "The manual method only applies to AD dates."}</div>;
       }
       const advanced=breakdowns.advanced;
+      const activeBreakdown = viewMode==='advanced' ? advanced : beginner;
+      const weekdayLabel = activeBreakdown?.weekday || beginner?.weekday || '';
+      const cdValue = ((date.y%100)+100)%100;
       return (
         <div className="space-y-4">
-          <div className="text-sm text-purple-100/80">
-            <div><span className="font-semibold">Date:</span> {fmt(date.y,date.m,date.d)}</div>
-            <div><span className="font-semibold">Weekday:</span> {DAY[beginner.total]}</div>
-            <div><span className="font-semibold">Month code:</span> {METHOD_MONTH_CODES[date.m]}</div>
-            <div><span className="font-semibold">cd:</span> {date.y%100<10?`0${date.y%100}`:date.y%100}</div>
+          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+            <div className="text-sm text-purple-100/80">
+              <div><span className="font-semibold">Date:</span> {fmt(date.y,date.m,date.d)}</div>
+              <div><span className="font-semibold">Weekday:</span> {weekdayLabel}</div>
+              <div><span className="font-semibold">Month code:</span> {METHOD_MONTH_CODES[date.m]}</div>
+              <div><span className="font-semibold">cd:</span> {cdValue<10?`0${cdValue}`:cdValue}</div>
+            </div>
+            <div className="flex items-center gap-2 text-sm">
+              <span className="text-xs uppercase tracking-wide text-purple-200/70">Show:</span>
+              <div className="flex overflow-hidden rounded-lg border border-purple-700/60">
+                <button
+                  type="button"
+                  onClick={()=>setViewMode('advanced')}
+                  className={`px-3 py-1.5 text-xs font-semibold ${viewMode==='advanced'?'bg-purple-600 text-white':'bg-purple-900/40 text-purple-100/80 hover:bg-purple-900/70'}`}
+                >
+                  Advanced
+                </button>
+                <button
+                  type="button"
+                  onClick={()=>setViewMode('beginner')}
+                  className={`px-3 py-1.5 text-xs font-semibold border-l border-purple-700/60 ${viewMode==='beginner'?'bg-purple-600 text-white':'bg-purple-900/40 text-purple-100/80 hover:bg-purple-900/70'}`}
+                >
+                  Beginner
+                </button>
+              </div>
+            </div>
           </div>
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="rounded-2xl panel p-3">
-              <MethodStepsList title="Beginner path" breakdown={beginner}/>
-            </div>
-            <div className="rounded-2xl panel p-3">
-              <MethodStepsList title="Advanced path" breakdown={advanced}/>
-            </div>
+          <div className="rounded-2xl panel p-3">
+            <MethodStepsList title={`${viewMode==='advanced'?'Advanced':'Beginner'} path`} breakdown={activeBreakdown}/>
           </div>
         </div>
       );
     }
 
-    function MethodBreakdownSection({date}){
-      const [open,setOpen]=React.useState(false);
+    function MethodBreakdownSection({date, open:controlledOpen, onOpenChange}){
+      const isControlled = typeof controlledOpen === 'boolean' && typeof onOpenChange === 'function';
+      const [internalOpen,setInternalOpen]=React.useState(false);
       const key=date?`${date.y}-${date.m}-${date.d}`:"";
-      React.useEffect(()=>{ setOpen(false); },[key]);
+      React.useEffect(()=>{ if(!isControlled) setInternalOpen(false); },[key, isControlled]);
       if(!date) return null;
+      const open = isControlled ? controlledOpen : internalOpen;
+      const toggle = ()=>{
+        if(isControlled){
+          onOpenChange(!open);
+        }else{
+          setInternalOpen(v=>!v);
+        }
+      };
       return (
         <div className="mt-5">
           <button
             type="button"
-            onClick={()=>setOpen(v=>!v)}
+            onClick={toggle}
             className="w-full md:w-auto px-4 py-2 rounded-xl bg-purple-700 hover:bg-purple-600 text-sm font-medium"
           >
             {open?"Hide calculations":"Show calculations"}
@@ -1710,7 +1776,7 @@
       const [calcDate,setCalcDate]=React.useState(null);
       function isLeapY(y){ y = y>0?y:1-Math.abs(y); return y%400===0 || (y%4===0 && y%100!==0); }
       function dimY(y,m){ return m===2 ? (isLeapY(y)?29:28) : [4,6,9,11].includes(m)?30:31; }
-      function wdayY(y,m,d){ function jdn(y,m,d){ const a=Math.floor((14-m)/12),y2=y+4800-a,m2=m-3+12*a; return d+Math.floor((153*m2+2)/5)+365*y2+Math.floor(y2/4)-Math.floor(y2/100)+Math.floor(y2/400)-32045; } const toA = y=>y>0?y:1-Math.abs(y); return (jdn(toA(y),m,d)+1)%7; }
+      function wdayY(y,m,d){ function jdn(y,m,d){ const a=Math.floor((14-m)/12),y2=y+4800-a,m2=m-3+12*a; return d+Math.floor((153*m2+2)/5)+365*y2+Math.floor(y2/4)-Math.floor(y2/100)+Math.floor(y2/400)-32045; } const toA = y=>y>0?y:1-Math.abs(y); return ((jdn(toA(y),m,d)+1)%7+7)%7; }
       const MONTH=["January","February","March","April","May","June","July","August","September","October","November","December"];
       const DAY=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
       const fmtYear = y => y>0?String(y):`${Math.abs(y)} BC`;
