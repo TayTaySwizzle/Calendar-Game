@@ -9,11 +9,11 @@
   <meta name="apple-mobile-web-app-title" content="Calendar Game">
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    :root{--bg1:#0b0714;--bg2:#140b22}
+    :root{--bg1:#0b0714;--bg2:#140b22;--bubble-radius:1.25rem;--bubble-radius-inner:calc(var(--bubble-radius) - 0.35rem)}
     body{background:linear-gradient(180deg,var(--bg1),var(--bg2))}
-    .card{background:rgba(26,15,43,.85);border:1px solid rgba(120,53,175,.45)}
-    .panel{background:rgba(88,28,135,.25);border:1px solid rgba(120,53,175,.45)}
-    .thin{border:1px solid rgba(120,53,175,.35)}
+    .card{background:rgba(26,15,43,.85);border:1px solid rgba(120,53,175,.45);border-radius:var(--bubble-radius)!important}
+    .panel{background:rgba(88,28,135,.25);border:1px solid rgba(120,53,175,.45);border-radius:var(--bubble-radius)!important}
+    .thin{border:1px solid rgba(120,53,175,.35);border-radius:var(--bubble-radius-inner)!important}
     button,input,select{-webkit-tap-highlight-color:transparent}
     button{touch-action:manipulation}
     @keyframes flashPulse{0%{background:var(--bg0)}
@@ -256,7 +256,7 @@
       const [locked,setLocked]=useState(false);                // lock options after reveal
       const [revealed,setRevealed]=useState(false);            // did reveal on this date?
       const [countedWrong,setCountedWrong]=useState(false);    // has wrong been counted?
-      const [calcOpen,setCalcOpen]=useState(false);            // is the calculation panel open?
+      const [calcOpenByMode,setCalcOpenByMode]=useState(()=>({}));            // is the calculation panel open per mode?
 
       /* snapshots when avg-time disabled (per era) */
       const [savedClassicByEra,setSavedClassicByEra]=useState({AD:null,BC:null,BOTH:null});
@@ -296,6 +296,7 @@
       const [lookupHistory,setLookupHistory]=useState([]);
 
       const pendingDedSwitchRef=useRef(null);
+      const calcTargetKeyRef=useRef({});
 
       const inputRef=useRef(null), [input,setInput]=useState("");
       useEffect(()=>{
@@ -1076,6 +1077,7 @@
 
       const baseBtn="w-full rounded-2xl border px-4 py-3 text-base md:text-sm transition shadow-sm select-none";
       const idleBtn="border-purple-800/60 bg-purple-900/30 hover:bg-purple-900/60";
+      const calcOpen = !!calcOpenByMode[mode];
       const optionsDisabled = ((isTimer(mode) && !active) || locked || calcOpen);
 
       const eraControl = (
@@ -1127,7 +1129,7 @@
         if(mode==="sudden"){
           return (
             <div className="flex items-center gap-2 w-full">
-              <span className="text-xs text-purple-300/80">Per Q:</span>
+              <span className="text-xs text-purple-300/80 whitespace-nowrap">Per Q:</span>
               <input type="range" min="3" max="20" step="1" value={qSec}
                 onChange={e=>{const v=+e.target.value; setQSec(v); if(!active) setQRemain(v);}}
                 className="accent-purple-500 w-full max-w-[8rem]"/>
@@ -1261,9 +1263,19 @@
         }
         return date;
       },[mode,date?.y,date?.m,date?.d, ded?.y, ded?.m, ded?.d]);
-      const calcKey = calcTarget ? `${calcTarget.y}-${calcTarget.m}-${calcTarget.d}-${mode}` : `${mode}-none`;
+      const calcTargetKey = calcTarget ? `${calcTarget.y}-${calcTarget.m}-${calcTarget.d}` : 'none';
 
-      useEffect(()=>{ setCalcOpen(false); },[calcKey]);
+      useEffect(()=>{
+        const prevKey = calcTargetKeyRef.current[mode];
+        if(prevKey === calcTargetKey) return;
+        calcTargetKeyRef.current = {...calcTargetKeyRef.current, [mode]:calcTargetKey};
+        setCalcOpenByMode(prev=>{
+          if(!prev[mode]) return prev;
+          const next={...prev};
+          next[mode]=false;
+          return next;
+        });
+      },[mode,calcTargetKey]);
 
       /* should reset stats create a new date? */
       function shouldNewOnReset(){
@@ -1302,10 +1314,33 @@
       };
 
       const handleCalculationOpenChange = (next)=>{
-        if(next){
+        let shouldApplyPenalty=false;
+        setCalcOpenByMode(prev=>{
+          const prevOpen=!!prev[mode];
+          if(next && !prevOpen){
+            shouldApplyPenalty=true;
+            return {...prev,[mode]:true};
+          }
+          if(!next && prevOpen){
+            const updated={...prev};
+            updated[mode]=false;
+            return updated;
+          }
+          if(prevOpen===next){
+            return prev;
+          }
+          return {...prev,[mode]:next};
+        });
+        if(shouldApplyPenalty){
           applyCalculationPenalty();
+          if(typeof window!=='undefined' && typeof document!=='undefined' && typeof requestAnimationFrame==='function'){
+            requestAnimationFrame(()=>{
+              const target=document.scrollingElement||document.documentElement||document.body;
+              const scrollHeight=target?target.scrollHeight:0;
+              window.scrollTo({top:scrollHeight,behavior:'smooth'});
+            });
+          }
         }
-        setCalcOpen(next);
       };
 
       /* Avg toggle click handler (disable/enable) */
@@ -1521,7 +1556,15 @@
             {/* ======= LOOKUP ======= */}
             {mode==="lookup" && <LookupCard history={lookupHistory} onAddHistory={pushLookupHistory} onClearHistory={clearLookupHistory} />}
 
-            {mode!=="method" && mode!=="lookup" && <MethodBreakdownSection date={calcTarget} open={calcOpen} onOpenChange={handleCalculationOpenChange}/>}
+            {mode!=="method" && mode!=="lookup" && (
+              <MethodBreakdownSection
+                date={calcTarget}
+                open={calcOpen}
+                onOpenChange={handleCalculationOpenChange}
+                onNew={doNew}
+                newDisabled={timerBusy}
+              />
+            )}
           </div>
         </div>
       );
@@ -1685,7 +1728,7 @@
       );
     }
 
-    function MethodExplanation({date}){
+    function MethodExplanation({date,onNew,newDisabled}){
       const memoKey = date ? `${date.y}-${date.m}-${date.d}` : "";
       const breakdowns = React.useMemo(()=> date ? buildMethodBreakdowns(date) : null,[memoKey]);
       const [viewMode,setViewMode]=React.useState('advanced');
@@ -1703,31 +1746,46 @@
       const cdValue = ((date.y%100)+100)%100;
       return (
         <div className="space-y-4">
-          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-            <div className="text-sm text-purple-100/80">
+          <div
+            className="grid gap-3 md:flex md:items-start md:justify-between"
+            style={{gridTemplateColumns:'minmax(0,1fr) auto'}}
+          >
+            <div className="text-sm text-purple-100/80 space-y-1">
               <div><span className="font-semibold">Date:</span> {fmt(date.y,date.m,date.d)}</div>
               <div><span className="font-semibold">Weekday:</span> {weekdayLabel}</div>
               <div><span className="font-semibold">Month code:</span> {METHOD_MONTH_CODES[date.m]}</div>
               <div><span className="font-semibold">cd:</span> {cdValue<10?`0${cdValue}`:cdValue}</div>
             </div>
-            <div className="flex items-center gap-2 text-sm">
-              <span className="text-xs uppercase tracking-wide text-purple-200/70">Show:</span>
-              <div className="flex overflow-hidden rounded-lg border border-purple-700/60">
-                <button
-                  type="button"
-                  onClick={()=>setViewMode('advanced')}
-                  className={`px-3 py-1.5 text-xs font-semibold ${viewMode==='advanced'?'bg-purple-600 text-white':'bg-purple-900/40 text-purple-100/80 hover:bg-purple-900/70'}`}
-                >
-                  Advanced
-                </button>
-                <button
-                  type="button"
-                  onClick={()=>setViewMode('beginner')}
-                  className={`px-3 py-1.5 text-xs font-semibold border-l border-purple-700/60 ${viewMode==='beginner'?'bg-purple-600 text-white':'bg-purple-900/40 text-purple-100/80 hover:bg-purple-900/70'}`}
-                >
-                  Beginner
-                </button>
+            <div className="flex flex-col items-end gap-2 text-sm">
+              <div className="flex items-center gap-2">
+                <span className="text-xs uppercase tracking-wide text-purple-200/70">Show:</span>
+                <div className="flex overflow-hidden rounded-lg border border-purple-700/60">
+                  <button
+                    type="button"
+                    onClick={()=>setViewMode('advanced')}
+                    className={`px-3 py-1.5 text-xs font-semibold ${viewMode==='advanced'?'bg-purple-600 text-white':'bg-purple-900/40 text-purple-100/80 hover:bg-purple-900/70'}`}
+                  >
+                    Advanced
+                  </button>
+                  <button
+                    type="button"
+                    onClick={()=>setViewMode('beginner')}
+                    className={`px-3 py-1.5 text-xs font-semibold border-l border-purple-700/60 ${viewMode==='beginner'?'bg-purple-600 text-white':'bg-purple-900/40 text-purple-100/80 hover:bg-purple-900/70'}`}
+                  >
+                    Beginner
+                  </button>
+                </div>
               </div>
+              {typeof onNew==='function' && (
+                <button
+                  type="button"
+                  onClick={()=>onNew()}
+                  disabled={!!newDisabled}
+                  className={`px-3 py-1.5 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm text-purple-100 hover:bg-purple-900/70 ${newDisabled?'opacity-60 pointer-events-none':''}`}
+                >
+                  New
+                </button>
+              )}
             </div>
           </div>
           <div className="rounded-2xl panel p-3">
@@ -1737,7 +1795,7 @@
       );
     }
 
-    function MethodBreakdownSection({date, open:controlledOpen, onOpenChange}){
+    function MethodBreakdownSection({date, open:controlledOpen, onOpenChange, onNew, newDisabled}){
       const isControlled = typeof controlledOpen === 'boolean' && typeof onOpenChange === 'function';
       const [internalOpen,setInternalOpen]=React.useState(false);
       const key=date?`${date.y}-${date.m}-${date.d}`:"";
@@ -1748,7 +1806,17 @@
         if(isControlled){
           onOpenChange(!open);
         }else{
-          setInternalOpen(v=>!v);
+          setInternalOpen(v=>{
+            const next=!v;
+            if(next && typeof window!=='undefined' && typeof document!=='undefined' && typeof requestAnimationFrame==='function'){
+              requestAnimationFrame(()=>{
+                const target=document.scrollingElement||document.documentElement||document.body;
+                const scrollHeight=target?target.scrollHeight:0;
+                window.scrollTo({top:scrollHeight,behavior:'smooth'});
+              });
+            }
+            return next;
+          });
         }
       };
       return (
@@ -1762,7 +1830,7 @@
           </button>
           {open && (
             <div className="mt-3 rounded-2xl panel p-4">
-              <MethodExplanation date={date}/>
+              <MethodExplanation date={date} onNew={onNew} newDisabled={newDisabled}/>
             </div>
           )}
         </div>
