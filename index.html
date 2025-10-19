@@ -257,6 +257,8 @@
       const [revealed,setRevealed]=useState(false);            // did reveal on this date?
       const [countedWrong,setCountedWrong]=useState(false);    // has wrong been counted?
       const [calcOpen,setCalcOpen]=useState(false);            // is the calculation panel open?
+      const calcOpenStatesRef=useRef(new Map());
+      const skipScrollOnOpenRef=useRef(false);
 
       /* snapshots when avg-time disabled (per era) */
       const [savedClassicByEra,setSavedClassicByEra]=useState({AD:null,BC:null,BOTH:null});
@@ -608,6 +610,16 @@
         pushAndNext();
       };
 
+      function runDeductionRound(){
+        setDedStack(s=> ded ? [...s, ded] : s);
+        spawnDed();
+        setMsg("");
+        setRevealed(false);
+        setLocked(false);
+        setGuesses([]);
+        setCountedWrong(false);
+      }
+
       function pushAndNext(){
         if(mode==="classic"||mode==="flash"||mode==="blitz"||mode==="sudden"){
           setStack(s=>[...s,{...date}]);
@@ -615,7 +627,7 @@
           setDate(nd);
           setGuesses([]); setRevealed(false); setLocked(false); setCountedWrong(false); setMsg("");
         }
-        if(mode==="deduction"){ setDedStack(s=> ded ? [...s, ded] : s); spawnDed(); setMsg(""); setRevealed(false); setLocked(false); setGuesses([]); setCountedWrong(false); }
+        if(mode==="deduction"){ runDeductionRound(); }
       }
 
       const pushLookupHistory = (entry)=>{
@@ -1127,7 +1139,7 @@
         if(mode==="sudden"){
           return (
             <div className="flex items-center gap-2 w-full">
-              <span className="text-xs text-purple-300/80">Per Q:</span>
+              <span className="text-xs text-purple-300/80 whitespace-nowrap">Per Q:</span>
               <input type="range" min="3" max="20" step="1" value={qSec}
                 onChange={e=>{const v=+e.target.value; setQSec(v); if(!active) setQRemain(v);}}
                 className="accent-purple-500 w-full max-w-[8rem]"/>
@@ -1261,9 +1273,34 @@
         }
         return date;
       },[mode,date?.y,date?.m,date?.d, ded?.y, ded?.m, ded?.d]);
-      const calcKey = calcTarget ? `${calcTarget.y}-${calcTarget.m}-${calcTarget.d}-${mode}` : `${mode}-none`;
+      const calcTargetKey = calcTarget ? `${calcTarget.y}-${calcTarget.m}-${calcTarget.d}` : 'none';
 
-      useEffect(()=>{ setCalcOpen(false); },[calcKey]);
+      useEffect(()=>{
+        const saved = calcOpenStatesRef.current.has(mode)
+          ? !!calcOpenStatesRef.current.get(mode)
+          : false;
+        skipScrollOnOpenRef.current = true;
+        setCalcOpen(saved);
+      },[mode]);
+
+      useEffect(()=>{
+        skipScrollOnOpenRef.current = true;
+        setCalcOpen(false);
+        calcOpenStatesRef.current.set(mode,false);
+      },[calcTargetKey, mode]);
+
+      useEffect(()=>{
+        if(calcOpen){
+          if(skipScrollOnOpenRef.current){
+            skipScrollOnOpenRef.current=false;
+          }else{
+            window.scrollTo({top:document.documentElement.scrollHeight,behavior:'smooth'});
+          }
+        }
+        if(!calcOpen){
+          skipScrollOnOpenRef.current=false;
+        }
+      },[calcOpen]);
 
       /* should reset stats create a new date? */
       function shouldNewOnReset(){
@@ -1306,6 +1343,15 @@
           applyCalculationPenalty();
         }
         setCalcOpen(next);
+        calcOpenStatesRef.current.set(mode,next);
+      };
+
+      const handleMethodNewRequest = ()=>{
+        if(mode==="deduction"){
+          runDeductionRound();
+        }else{
+          doNew();
+        }
       };
 
       /* Avg toggle click handler (disable/enable) */
@@ -1364,7 +1410,7 @@
                 </div>
                 <div className="col-span-1 md:col-span-2 flex justify-end">
                   <button type="button"
-                    className="text-sm px-3 py-1.5 rounded-lg bg-purple-700 hover:bg-purple-600 w-full md:w-auto h-full flex items-center justify-center"
+                    className="text-sm px-3 py-1.5 rounded-xl bg-purple-700 hover:bg-purple-600 w-full md:w-auto h-full flex items-center justify-center"
                     onClick={handleResetStats}>Reset stats</button>
                 </div>
                 <div className="col-span-1 md:col-span-2 flex items-center">
@@ -1469,7 +1515,7 @@
                 <div className="mt-3 flex flex-wrap gap-2 justify-center">
                   {["year","month","day"].map(t=>(
                     <button key={t} type="button" onClick={()=>changeDedType(t)}
-                      className={`px-3 py-1.5 rounded-lg text-sm border ${dedType===t?'bg-purple-600 border-purple-500':'bg-purple-900/40 border-purple-800/60 hover:bg-purple-900/70'}`}>
+                      className={`px-3 py-1.5 rounded-xl text-sm border ${dedType===t?'bg-purple-600 border-purple-500':'bg-purple-900/40 border-purple-800/60 hover:bg-purple-900/70'}`}>
                       {t[0].toUpperCase()+t.slice(1)}
                     </button>
                   ))}
@@ -1504,7 +1550,7 @@
 
                 <div className="mt-4 rounded-2xl panel p-3">
                   <div className="flex flex-wrap gap-2">
-                    <button type="button" className="px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm" onClick={()=>{ setDedStack(s=> ded ? [...s,ded] : s); spawnDed(); setMsg(""); setLocked(false); setRevealed(false); setGuesses([]); setCountedWrong(false); }}>New</button>
+                    <button type="button" className="px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm" onClick={()=>runDeductionRound()}>New</button>
                     <button type="button" className={`px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm ${(locked||calcOpen)?'opacity-60 pointer-events-none':''}`} onClick={()=>reveal()}>Reveal</button>
                     <button type="button" className="px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm" onClick={()=>goBack()}>Back</button>
                   </div>
@@ -1521,7 +1567,7 @@
             {/* ======= LOOKUP ======= */}
             {mode==="lookup" && <LookupCard history={lookupHistory} onAddHistory={pushLookupHistory} onClearHistory={clearLookupHistory} />}
 
-            {mode!=="method" && mode!=="lookup" && <MethodBreakdownSection date={calcTarget} open={calcOpen} onOpenChange={handleCalculationOpenChange}/>}
+            {mode!=="method" && mode!=="lookup" && <MethodBreakdownSection date={calcTarget} open={calcOpen} onOpenChange={handleCalculationOpenChange} onRequestNew={handleMethodNewRequest}/>}
           </div>
         </div>
       );
@@ -1685,7 +1731,7 @@
       );
     }
 
-    function MethodExplanation({date}){
+    function MethodExplanation({date, onRequestNew}){
       const memoKey = date ? `${date.y}-${date.m}-${date.d}` : "";
       const breakdowns = React.useMemo(()=> date ? buildMethodBreakdowns(date) : null,[memoKey]);
       const [viewMode,setViewMode]=React.useState('advanced');
@@ -1703,31 +1749,42 @@
       const cdValue = ((date.y%100)+100)%100;
       return (
         <div className="space-y-4">
-          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-            <div className="text-sm text-purple-100/80">
+          <div className="grid items-start gap-3 md:gap-4" style={{gridTemplateColumns:'minmax(0,1fr) auto'}}>
+            <div className="text-sm text-purple-100/80 min-w-0">
               <div><span className="font-semibold">Date:</span> {fmt(date.y,date.m,date.d)}</div>
               <div><span className="font-semibold">Weekday:</span> {weekdayLabel}</div>
               <div><span className="font-semibold">Month code:</span> {METHOD_MONTH_CODES[date.m]}</div>
               <div><span className="font-semibold">cd:</span> {cdValue<10?`0${cdValue}`:cdValue}</div>
             </div>
-            <div className="flex items-center gap-2 text-sm">
-              <span className="text-xs uppercase tracking-wide text-purple-200/70">Show:</span>
-              <div className="flex overflow-hidden rounded-lg border border-purple-700/60">
-                <button
-                  type="button"
-                  onClick={()=>setViewMode('advanced')}
-                  className={`px-3 py-1.5 text-xs font-semibold ${viewMode==='advanced'?'bg-purple-600 text-white':'bg-purple-900/40 text-purple-100/80 hover:bg-purple-900/70'}`}
-                >
-                  Advanced
-                </button>
-                <button
-                  type="button"
-                  onClick={()=>setViewMode('beginner')}
-                  className={`px-3 py-1.5 text-xs font-semibold border-l border-purple-700/60 ${viewMode==='beginner'?'bg-purple-600 text-white':'bg-purple-900/40 text-purple-100/80 hover:bg-purple-900/70'}`}
-                >
-                  Beginner
-                </button>
+            <div className="flex flex-col items-end gap-2 text-sm">
+              <div className="flex items-center gap-2">
+                <span className="text-xs uppercase tracking-wide text-purple-200/70">Show:</span>
+                <div className="flex overflow-hidden rounded-xl border border-purple-700/60">
+                  <button
+                    type="button"
+                    onClick={()=>setViewMode('advanced')}
+                    className={`px-3 py-1.5 text-xs font-semibold ${viewMode==='advanced'?'bg-purple-600 text-white':'bg-purple-900/40 text-purple-100/80 hover:bg-purple-900/70'}`}
+                  >
+                    Advanced
+                  </button>
+                  <button
+                    type="button"
+                    onClick={()=>setViewMode('beginner')}
+                    className={`px-3 py-1.5 text-xs font-semibold border-l border-purple-700/60 ${viewMode==='beginner'?'bg-purple-600 text-white':'bg-purple-900/40 text-purple-100/80 hover:bg-purple-900/70'}`}
+                  >
+                    Beginner
+                  </button>
+                </div>
               </div>
+              {typeof onRequestNew === 'function' && (
+                <button
+                  type="button"
+                  onClick={onRequestNew}
+                  className="px-3 py-1.5 rounded-xl border border-purple-700/60 bg-purple-900/50 text-xs font-medium hover:bg-purple-900/70"
+                >
+                  New
+                </button>
+              )}
             </div>
           </div>
           <div className="rounded-2xl panel p-3">
@@ -1737,7 +1794,7 @@
       );
     }
 
-    function MethodBreakdownSection({date, open:controlledOpen, onOpenChange}){
+    function MethodBreakdownSection({date, open:controlledOpen, onOpenChange, onRequestNew}){
       const isControlled = typeof controlledOpen === 'boolean' && typeof onOpenChange === 'function';
       const [internalOpen,setInternalOpen]=React.useState(false);
       const key=date?`${date.y}-${date.m}-${date.d}`:"";
@@ -1762,7 +1819,7 @@
           </button>
           {open && (
             <div className="mt-3 rounded-2xl panel p-4">
-              <MethodExplanation date={date}/>
+              <MethodExplanation date={date} onRequestNew={onRequestNew}/>
             </div>
           )}
         </div>
