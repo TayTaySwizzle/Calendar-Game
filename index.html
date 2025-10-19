@@ -60,6 +60,27 @@
     const MONTH_ABBR=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
     const DAY=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
     const DOOMSDAY_MONTH={common:[4,0,0,3,5,1,3,6,2,4,0,2],leap:[3,6,0,3,5,1,3,6,2,4,0,2]};
+
+    /* ---------- Manual method helpers ---------- */
+    const METHOD_MONTH_CODES={1:6,2:2,3:2,4:5,5:0,6:3,7:5,8:1,9:4,10:6,11:2,12:4};
+    const METHOD_CENTURY_CODES={0:0,1:5,2:3,3:1};
+    const METHOD_AB_MOD4_CODES=[
+      {label:"Beginner",codes:[["0",0],["1",1],["2",2],["3",3]]},
+      {label:"Advanced",note:"Add these to the beginner list when you don't want to reduce first. Each entry still collapses to the beginner codes after taking mod 4.",codes:[["4",0],["5",1],["6",2],["7",3],["8",0],["9",1]]}
+    ];
+    const METHOD_KEY_YEAR_CODES={
+      beginner:[
+        [0,0],[12,1],[24,2],[36,3],[48,4],[60,5],[72,6],[84,0],[96,1]
+      ],
+      advanced:[
+        [0,0],[4,5],[8,3],[12,1],[16,6],[20,4],[24,2],[28,0],[32,5],[36,3],[40,1],[44,6],[48,4],[52,2],[56,0],[60,5],[64,3],[68,1],[72,6],[76,4],[80,2],[84,0],[88,5],[92,3],[96,1]
+      ]
+    };
+
+    const METHOD_KEY_YEAR_TABLES=[
+      {label:"Beginner",codes:METHOD_KEY_YEAR_CODES.beginner},
+      {label:"Advanced",note:"Add these to the beginner list so you can jump directly to more cd years.",codes:METHOD_KEY_YEAR_CODES.advanced.filter(([year])=>!METHOD_KEY_YEAR_CODES.beginner.some(([b])=>b===year))}
+    ];
     const YEAR_OPTION_DEFAULT=9;
     const DAY_OPTION_COUNT=7;
     const MONTH_OPTION_COUNT=7;
@@ -73,6 +94,109 @@
     const rint=(a,b)=>Math.floor(Math.random()*(b-a+1))+a;
     function randomDate(minY,maxY){ for(;;){ let y=rint(minY,maxY); if(y===0) continue; let m=rint(1,12), d=rint(1,dim(y,m)); if(d<=dim(y,m)) return {y,m,d}; } }
     const blankDedTypeStore = ()=>({year:null,month:null,day:null});
+
+    function methodCenturyCode(y){
+      const century=Math.floor(y/100);
+      const remainder=((century%4)+4)%4;
+      return {century,remainder,code:METHOD_CENTURY_CODES[remainder]??0};
+    }
+
+    function methodKeyYearInfo(cd,mode="beginner"){ // mode: 'beginner' | 'advanced'
+      const table=(mode==="advanced"?METHOD_KEY_YEAR_CODES.advanced:METHOD_KEY_YEAR_CODES.beginner);
+      let chosen=table[0];
+      for(const entry of table){ if(entry[0]<=cd) chosen=entry; if(entry[0]>cd) break; }
+      const exact=chosen[0]===cd;
+      return {key:chosen[0],code:chosen[1],exact};
+    }
+
+    function computeMethodBreakdown({y,m,d},mode="beginner"){ // returns steps + result
+      if(!Number.isFinite(y) || y<=0) return {supported:false,error:"The written method covers AD years only."};
+      const steps=[];
+      const monthCode = METHOD_MONTH_CODES[m] ?? null;
+      if(monthCode==null) return {supported:false,error:"Invalid month for the method."};
+      let running=((monthCode%7)+7)%7;
+      steps.push({
+        title:"Month code",
+        detail:`Start with the month code for ${MONTH[m-1]}: ${monthCode}.`,
+        total:running
+      });
+
+      const dayMod=((d%7)+7)%7;
+      running=(running+dayMod)%7;
+      steps.push({
+        title:"Add the day",
+        detail:`Add the day modulo 7: ${d} mod 7 = ${dayMod}. Running total: ${running}.`,
+        total:running
+      });
+
+      const centuryInfo=methodCenturyCode(y);
+      running=(running+centuryInfo.code)%7;
+      steps.push({
+        title:"ab mod 4 code",
+        detail:`The century is ${centuryInfo.century}. ${centuryInfo.century} mod 4 = ${centuryInfo.remainder}. Using the ab mod 4 codes, that maps to ${centuryInfo.code}. Running total: ${running}.`,
+        total:running
+      });
+
+      const cd=y%100;
+      const keyInfo=methodKeyYearInfo(cd,mode);
+      running=(running+keyInfo.code)%7;
+      steps.push({
+        title:"Key cd year code",
+        detail: keyInfo.exact
+          ? `${cd.toString().padStart(2,'0')} is a key cd year with code ${keyInfo.code}. Running total: ${running}.`
+          : `${cd.toString().padStart(2,'0')} is not on the list, so use the closest key cd year ≤ it: ${keyInfo.key.toString().padStart(2,'0')} with code ${keyInfo.code}. Running total: ${running}.`,
+        total:running,
+        meta:{keyInfo}
+      });
+
+      const diff=cd-keyInfo.key;
+      if(diff>0){
+        const quotient=Math.floor(diff/4);
+        const contribution=(diff+quotient)%7;
+        running=(running+contribution)%7;
+        steps.push({
+          title:"Add the difference",
+          detail:`Add the difference ${diff} and ⌊${diff} / 4⌋ = ${quotient}. (${diff} + ${quotient}) mod 7 = ${contribution}. Running total: ${running}.`,
+          total:running
+        });
+      }else{
+        steps.push({
+          title:"Add the difference",
+          detail:"The key cd year matches the year, so there is no difference to add.",
+          total:running
+        });
+      }
+
+      const leap=isLeap(y) && (m===1 || m===2);
+      if(leap){
+        running=(running+6)%7; // subtract 1
+        steps.push({
+          title:"Leap year adjustment",
+          detail:`${fmtYear(y)} is a leap year and the month is ${MONTH[m-1]}, so subtract 1. Running total: ${running}.`,
+          total:running
+        });
+      }else{
+        steps.push({
+          title:"Leap year adjustment",
+          detail:"No subtraction is needed (not a January/February leap-year date).",
+          total:running
+        });
+      }
+
+      steps.push({
+        title:"Final weekday",
+        detail:`${MONTH[m-1]} ${d}, ${y} lands on ${DAY[running]}.`,
+        total:running
+      });
+
+      return {supported:true,steps,total:running,weekday:DAY[running],cd,monthCode,dayMod,centuryInfo,keyInfo,diff,leap};
+    }
+
+    function buildMethodBreakdowns(date){
+      const beginner=computeMethodBreakdown(date,"beginner");
+      const advanced=computeMethodBreakdown(date,"advanced");
+      return {beginner,advanced};
+    }
 
     const isTouch=typeof window!=="undefined" && ("ontouchstart" in window || navigator.maxTouchPoints>0 || matchMedia("(pointer:coarse)").matches);
     const isTimer = m => m==="blitz"||m==="sudden"||m==="flash";
@@ -1129,6 +1253,13 @@
       const flashTimeLabel = formatSecondsLabel(flashSeconds);
       const flashPercent = (active && phase==='show' && flashDeadlineRef.current && flashMs>0) ? Math.max(0, Math.min(100,(flashRemainMs/flashMs)*100)) : 100;
       const timerBusy = isTimer(mode) && active;
+      const calcTarget = React.useMemo(()=>{
+        if(mode==="lookup") return null;
+        if(mode==="deduction"){
+          return ded ? {y:ded.y,m:ded.m,d:ded.d} : null;
+        }
+        return date;
+      },[mode,date?.y,date?.m,date?.d, ded?.y, ded?.m, ded?.d]);
 
       /* should reset stats create a new date? */
       function shouldNewOnReset(){
@@ -1236,7 +1367,7 @@
             )}
 
             {/* Method page (blank for now) */}
-            {mode==="method" && <div className="min-h-[40vh]"></div>}
+            {mode==="method" && <MethodPage/>}
 
             {/* Headline */}
             {mode!=="lookup" && mode!=="deduction" && mode!=="method" && (
@@ -1353,7 +1484,221 @@
 
             {/* ======= LOOKUP ======= */}
             {mode==="lookup" && <LookupCard history={lookupHistory} onAddHistory={pushLookupHistory} onClearHistory={clearLookupHistory} />}
+
+            {mode!=="method" && mode!=="lookup" && <MethodBreakdownSection date={calcTarget}/>}
           </div>
+        </div>
+      );
+    }
+
+    function MethodPage(){
+      const exampleDate=React.useMemo(()=>({y:1992,m:2,d:26}),[]);
+      const exampleBreakdowns=React.useMemo(()=>buildMethodBreakdowns(exampleDate),[exampleDate]);
+      return (
+        <div className="space-y-6 text-sm text-purple-100/85">
+          <div>
+            <h2 className="text-xl font-semibold text-purple-50">My Day of the Week Method</h2>
+            <p className="mt-2 text-purple-200/80">Note: Assumes the proleptic Gregorian calendar for all AD dates.</p>
+          </div>
+
+          <div className="grid gap-5 md:grid-cols-2">
+            <div className="rounded-2xl panel p-4 space-y-3">
+              <h3 className="text-sm font-semibold text-purple-100/90 uppercase tracking-wide">Definitions</h3>
+              <ul className="space-y-1 text-[13px] text-purple-100/80">
+                <li>Sunday = 0</li>
+                <li>Monday = 1</li>
+                <li>Tuesday = 2</li>
+                <li>Wednesday = 3</li>
+                <li>Thursday = 4</li>
+                <li>Friday = 5</li>
+                <li>Saturday = 6</li>
+              </ul>
+              <p className="text-[13px] text-purple-200/70">
+                Let the year equal <i>abcd</i>, where <i>a</i>, <i>b</i>, and <i>c</i> are the last three digits and <i>d</i> is every preceding digit. For very large years only the last three digits are needed.
+              </p>
+            </div>
+            <div className="rounded-2xl panel p-4 space-y-3">
+              <h3 className="text-sm font-semibold text-purple-100/90 uppercase tracking-wide">Math tools</h3>
+              <div>
+                <p className="text-[13px] text-purple-200/80"><strong>Mod explained:</strong> <i>n mod m</i> is the remainder after dividing <i>n</i> by <i>m</i>.</p>
+              </div>
+              <div>
+                <p className="text-[13px] text-purple-200/80"><strong>Determining mod 4 for two digits <i>nm</i>:</strong></p>
+                <ul className="mt-1 text-[13px] text-purple-200/70 space-y-1">
+                  <li>If <i>n</i> is even: <i>nm mod 4 = m mod 4</i>.</li>
+                  <li>If <i>n</i> is odd: <i>nm mod 4 = (m - n) mod 4</i>.</li>
+                </ul>
+              </div>
+              <div>
+                <p className="text-[13px] text-purple-200/80"><strong>Integer division:</strong> ⌊<i>n / m</i>⌋ drops the remainder. Equivalently, ⌊<i>n / m</i>⌋ = (n − (n mod m)) / m.</p>
+              </div>
+              <div>
+                <p className="text-[13px] text-purple-200/80"><strong>Leap years:</strong> A year is a leap year if <i>cd mod 4 = 0</i>, unless <i>cd mod 100 = 0</i> and <i>cd mod 400 ≠ 0</i>; in that case it is not a leap year.</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-2xl panel p-4 space-y-4">
+            <h3 className="text-sm font-semibold text-purple-100/90 uppercase tracking-wide">Counting using fingers</h3>
+            <p className="text-[13px] text-purple-200/80">Use a mod 7 system by touching your thumb to seven points on the pointer and middle finger of your right hand:</p>
+            <ul className="grid gap-1 text-[13px] text-purple-100/80 md:grid-cols-2">
+              <li>0 – outside of the pointer finger&apos;s bottom segment</li>
+              <li>1 – bottom segment of the pointer finger</li>
+              <li>2 – middle segment of the pointer finger</li>
+              <li>3 – top segment of the pointer finger</li>
+              <li>4 – bottom segment of the middle finger</li>
+              <li>5 – middle segment of the middle finger</li>
+              <li>6 – top segment of the middle finger</li>
+            </ul>
+            <p className="text-[13px] text-purple-200/80">Speed tips when adding: turn every 6 into −1 and every 5 into −2. Break 13 into −3 + 10 by using positions 4–6, and turn adding 4 into −3 using positions 3–6. Counting this way keeps every intermediate total between 0 and 6 so it maps straight to the weekday on your hand.</p>
+          </div>
+
+          <div className="grid gap-5 md:grid-cols-2">
+            <div className="rounded-2xl panel p-4">
+              <h3 className="text-sm font-semibold text-purple-100/90 uppercase tracking-wide">Month codes</h3>
+              <div className="grid grid-cols-2 gap-y-1 text-[13px] text-purple-100/80 mt-2">
+                {Object.entries(METHOD_MONTH_CODES).map(([monthIndex,code])=>(
+                  <div key={monthIndex} className="flex justify-between"><span>{MONTH[monthIndex-1]}</span><span className="font-semibold">{code}</span></div>
+                ))}
+              </div>
+            </div>
+            <div className="rounded-2xl panel p-4 space-y-3">
+              <h3 className="text-sm font-semibold text-purple-100/90 uppercase tracking-wide">ab mod 4 codes</h3>
+              {METHOD_AB_MOD4_CODES.map(section=>(
+                <div key={section.label}>
+                  <div className="font-semibold text-[13px] text-purple-100/90">{section.label}</div>
+                  <div className="grid grid-cols-2 gap-y-1 text-[13px] text-purple-100/80 mt-1">
+                    {section.codes.map(([value,code])=>(
+                      <div key={value} className="flex justify-between"><span>{value} →</span><span className="font-semibold">{code}</span></div>
+                    ))}
+                  </div>
+                  {section.note && <p className="mt-1 text-[12px] text-purple-200/70">{section.note}</p>}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-2xl panel p-4 space-y-3">
+            <h3 className="text-sm font-semibold text-purple-100/90 uppercase tracking-wide">Key cd years and codes</h3>
+            {METHOD_KEY_YEAR_TABLES.map(section=>(
+              <div key={section.label} className="space-y-2">
+                <div className="font-semibold text-[13px] text-purple-100/90">{section.label}</div>
+                <div className="grid grid-cols-3 sm:grid-cols-4 gap-y-1 text-[13px] text-purple-100/80">
+                  {section.codes.map(([year,code])=>(
+                    <div key={`${section.label}-${year}`} className="flex justify-between"><span>{year.toString().padStart(2,'0')} →</span><span className="font-semibold">{code}</span></div>
+                  ))}
+                </div>
+                {section.note && <p className="text-[12px] text-purple-200/70">{section.note}</p>}
+              </div>
+            ))}
+          </div>
+
+          <div className="rounded-2xl panel p-4 space-y-3">
+            <h3 className="text-sm font-semibold text-purple-100/90 uppercase tracking-wide">Method</h3>
+            <ol className="space-y-2 text-[13px] text-purple-100/80 list-decimal list-inside">
+              <li>Start with the month code.</li>
+              <li>Add the day, reducing by the nearest multiple of 7 as you go.</li>
+              <li>Add the ab mod 4 code.</li>
+              <li>Add the key cd year code. If your cd year is not on the list, use the closest key cd year that is not greater than it.</li>
+              <li>Add the difference between the cd year and its key year, then add ⌊difference / 4⌋. Keep everything mod 7.</li>
+              <li>If the date is in January or February of a leap year, subtract 1.</li>
+              <li>The final value (0–6) corresponds to the weekday in the definitions above.</li>
+            </ol>
+          </div>
+
+          <div className="rounded-2xl panel p-4 space-y-4">
+            <h3 className="text-sm font-semibold text-purple-100/90 uppercase tracking-wide">Example: February 26, 1992</h3>
+            <p className="text-[13px] text-purple-200/80">1992 is an AD leap year. Below is the step-by-step computation using both the beginner list and the advanced list.</p>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="rounded-xl thin p-3">
+                <h4 className="text-sm font-semibold text-purple-100/90">Beginner</h4>
+                <MethodStepsList breakdown={exampleBreakdowns.beginner}/>
+              </div>
+              <div className="rounded-xl thin p-3">
+                <h4 className="text-sm font-semibold text-purple-100/90">Advanced</h4>
+                <MethodStepsList breakdown={exampleBreakdowns.advanced}/>
+              </div>
+            </div>
+            <p className="text-[13px] text-purple-200/80">Both paths end at 3, which is Wednesday.</p>
+          </div>
+        </div>
+      );
+    }
+
+    function MethodStepsList({title,breakdown}){
+      if(!breakdown?.supported){
+        return (
+          <div className="p-3 rounded-xl panel text-sm text-purple-100/90">
+            {breakdown?.error || "This date is not supported by the manual method."}
+          </div>
+        );
+      }
+      const listMargin = title ? "mt-2" : "mt-1";
+      return (
+        <div>
+          {title && <h4 className="text-sm font-semibold text-purple-100/90">{title}</h4>}
+          <ol className={`${listMargin} space-y-2 text-sm text-purple-100/80 list-decimal list-inside`}>
+            {breakdown.steps.map((step,idx)=>(
+              <li key={idx}>
+                <div className="font-medium text-purple-100">{step.title}</div>
+                <div className="text-[13px] text-purple-200/80 leading-relaxed">{step.detail}</div>
+              </li>
+            ))}
+          </ol>
+        </div>
+      );
+    }
+
+    function MethodExplanation({date}){
+      const memoKey = date ? `${date.y}-${date.m}-${date.d}` : "";
+      const breakdowns = React.useMemo(()=> date ? buildMethodBreakdowns(date) : null,[memoKey]);
+      if(!date){
+        return <div className="text-sm text-purple-200/80">Pick a date first.</div>;
+      }
+      const beginner=breakdowns?.beginner;
+      if(!beginner?.supported){
+        return <div className="text-sm text-purple-100/80">{beginner?.error || "The manual method only applies to AD dates."}</div>;
+      }
+      const advanced=breakdowns.advanced;
+      return (
+        <div className="space-y-4">
+          <div className="text-sm text-purple-100/80">
+            <div><span className="font-semibold">Date:</span> {fmt(date.y,date.m,date.d)}</div>
+            <div><span className="font-semibold">Weekday:</span> {DAY[beginner.total]}</div>
+            <div><span className="font-semibold">Month code:</span> {METHOD_MONTH_CODES[date.m]}</div>
+            <div><span className="font-semibold">cd:</span> {date.y%100<10?`0${date.y%100}`:date.y%100}</div>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="rounded-2xl panel p-3">
+              <MethodStepsList title="Beginner path" breakdown={beginner}/>
+            </div>
+            <div className="rounded-2xl panel p-3">
+              <MethodStepsList title="Advanced path" breakdown={advanced}/>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function MethodBreakdownSection({date}){
+      const [open,setOpen]=React.useState(false);
+      const key=date?`${date.y}-${date.m}-${date.d}`:"";
+      React.useEffect(()=>{ setOpen(false); },[key]);
+      if(!date) return null;
+      return (
+        <div className="mt-5">
+          <button
+            type="button"
+            onClick={()=>setOpen(v=>!v)}
+            className="w-full md:w-auto px-4 py-2 rounded-xl bg-purple-700 hover:bg-purple-600 text-sm font-medium"
+          >
+            {open?"Hide calculations":"Show calculations"}
+          </button>
+          {open && (
+            <div className="mt-3 rounded-2xl panel p-4">
+              <MethodExplanation date={date}/>
+            </div>
+          )}
         </div>
       );
     }
@@ -1362,6 +1707,7 @@
     function LookupCard({history=[], onAddHistory, onClearHistory}){
       const [lookupIn,setLookupIn]=React.useState("");
       const [lookupOut,setLookupOut]=React.useState("");
+      const [calcDate,setCalcDate]=React.useState(null);
       function isLeapY(y){ y = y>0?y:1-Math.abs(y); return y%400===0 || (y%4===0 && y%100!==0); }
       function dimY(y,m){ return m===2 ? (isLeapY(y)?29:28) : [4,6,9,11].includes(m)?30:31; }
       function wdayY(y,m,d){ function jdn(y,m,d){ const a=Math.floor((14-m)/12),y2=y+4800-a,m2=m-3+12*a; return d+Math.floor((153*m2+2)/5)+365*y2+Math.floor(y2/4)-Math.floor(y2/100)+Math.floor(y2/400)-32045; } const toA = y=>y>0?y:1-Math.abs(y); return (jdn(toA(y),m,d)+1)%7; }
@@ -1381,22 +1727,27 @@
         const d=DAY[wdayY(yy,mm,dd)];
         const resultText = `${MONTH[mm-1]} ${dd}, ${fmtYear(yy)} is a ${d}.`;
         setLookupOut(resultText);
+        setCalcDate({y:yy,m:mm,d:dd});
         if(onAddHistory){
           const entry={
             id:`${Date.now().toString(36)}-${Math.random().toString(36).slice(2,8)}`,
             query:`${mm}/${dd}/${yy}`,
             label:`${MONTH[mm-1]} ${dd}, ${fmtYear(yy)}`,
             weekday:d,
-            result:resultText
+            result:resultText,
+            y:yy,
+            m:mm,
+            d:dd
           };
           onAddHistory(entry);
         }
       }
-      function clearLookup(){ setLookupIn(""); if(document.activeElement) document.activeElement.blur(); setLookupOut(""); }
+      function clearLookup(){ setLookupIn(""); if(document.activeElement) document.activeElement.blur(); setLookupOut(""); setCalcDate(null); }
       const entries = Array.isArray(history)?history:[];
       const handleHistorySelect = (entry)=>{
         setLookupIn(entry?.query||"");
         setLookupOut(entry?.result||"");
+        if(entry && typeof entry.y==='number'){ setCalcDate({y:entry.y,m:entry.m,d:entry.d}); }
         if(document.activeElement) document.activeElement.blur();
       };
       const handleClearHistory = ()=>{ if(onClearHistory) onClearHistory(); };
@@ -1432,6 +1783,9 @@
                 ))}
               </ul>
             </div>
+          )}
+          {calcDate && (
+            <MethodBreakdownSection date={calcDate}/>
           )}
         </div>
       );
