@@ -257,7 +257,12 @@
       const [revealed,setRevealed]=useState(false);            // did reveal on this date?
       const [countedWrong,setCountedWrong]=useState(false);    // has wrong been counted?
       const [calcOpen,setCalcOpen]=useState(false);            // is the calculation panel open?
+      const [calcPenaltyActive,setCalcPenaltyActive]=useState(false);
       const calcOpenStatesRef=useRef(new Map());
+      const calcPenaltyStatesRef=useRef(new Map());
+      const calcScrollAnchorRef=useRef(null);
+      const calcScrollTimeoutRef=useRef(null);
+      const calcScrollRafRef=useRef(null);
       const skipScrollOnOpenRef=useRef(false);
 
       /* snapshots when avg-time disabled (per era) */
@@ -292,12 +297,22 @@
       const flashDeadlineRef=useRef(null);
 
       /* deduction */
-      const [dedType,setDedType]=useState("year");
+      const [dedType,setDedType]=useState("day");
       const [ded,setDed]=useState(null);
       const [dedFlash,setDedFlash]=useState(null);
+      const dedTokenRef=useRef(0);
       const [lookupHistory,setLookupHistory]=useState([]);
 
       const pendingDedSwitchRef=useRef(null);
+
+      const assignDed = (next)=>{
+        if(!next){
+          setDed(null);
+          return;
+        }
+        dedTokenRef.current+=1;
+        setDed({...next, token:dedTokenRef.current});
+      };
 
       const inputRef=useRef(null), [input,setInput]=useState("");
       useEffect(()=>{
@@ -518,7 +533,7 @@
           if(!trackDed){
             const currentSnap = snap?.current || storedByType[dedType] || null;
             if(currentSnap && currentSnap.ded){
-              setDed(currentSnap.ded); setGuesses(currentSnap.guesses||[]); setCountedWrong(!!currentSnap.countedWrong);
+              assignDed(currentSnap.ded); setGuesses(currentSnap.guesses||[]); setCountedWrong(!!currentSnap.countedWrong);
               setMsg(currentSnap.msg||""); setLocked(!!currentSnap.locked); setRevealed(!!currentSnap.revealed);
               return;
             }
@@ -680,7 +695,7 @@
       function goBack(){
         if(mode==="deduction"){
           const prev = dedStack[dedStack.length-1]; if(!prev){ setMsg("Nothing to go back to."); return; }
-          setDedStack(s=>s.slice(0,-1)); setDed(prev);
+          setDedStack(s=>s.slice(0,-1)); assignDed(prev);
           const ans = prev.type==="year" ? fmtYear(prev.y) : prev.type==="month" ? MONTH[prev.m-1] : String(prev.d);
           setMsg(`Answer: ${ans}.`);
           setLocked(true); setRevealed(true); setGuesses([]); return;
@@ -796,7 +811,7 @@
               const d=rint(1,D);
               const built=buildOptionsFor(yCandidate,m,d,target);
               if(!built) continue;
-              setDed({type:"year",y:yCandidate,m,d,w:built.w,options:built.options});
+              assignDed({type:"year",y:yCandidate,m,d,w:built.w,options:built.options});
               tStartRef.current = trackDed ? performance.now() : null;
               return true;
             }
@@ -827,7 +842,7 @@
               for(let d=1; d<=D; d++){
                 const built=buildOptionsFor(yCandidate,m,d,target);
                 if(!built) continue;
-                setDed({type:"year",y:yCandidate,m,d,w:built.w,options:built.options});
+                assignDed({type:"year",y:yCandidate,m,d,w:built.w,options:built.options});
                 tStartRef.current = trackDed ? performance.now() : null;
                 return;
               }
@@ -838,7 +853,7 @@
           const fallbackMonth=1;
           const fallbackDay=1;
           const fallbackW=wday(safeYear,fallbackMonth,fallbackDay);
-          setDed({type:"year",y:safeYear,m:fallbackMonth,d:fallbackDay,w:fallbackW,options:[safeYear]});
+          assignDed({type:"year",y:safeYear,m:fallbackMonth,d:fallbackDay,w:fallbackW,options:[safeYear]});
           tStartRef.current = trackDed ? performance.now() : null;
           return;
         }
@@ -884,7 +899,7 @@
             if(yearCandidate===0) continue;
             const built=buildMonthForYear(yearCandidate,true);
             if(built){
-              setDed({type:"month",...built});
+              assignDed({type:"month",...built});
               tStartRef.current = trackDed ? performance.now() : null;
               return;
             }
@@ -893,7 +908,7 @@
             if(yearCandidate===0) continue;
             const built=buildMonthForYear(yearCandidate,false);
             if(built){
-              setDed({type:"month",...built});
+              assignDed({type:"month",...built});
               tStartRef.current = trackDed ? performance.now() : null;
               return;
             }
@@ -902,7 +917,7 @@
           const safeYear=fallbackYear===0?1:fallbackYear;
           const built=buildMonthForYear(safeYear,false);
           if(built){
-            setDed({type:"month",...built});
+            assignDed({type:"month",...built});
           }else{
             let fallback=null;
             for(let d=1; d<=31 && !fallback; d++){
@@ -931,7 +946,7 @@
               }
             }
             if(fallback){
-              setDed({type:"month",...fallback});
+              assignDed({type:"month",...fallback});
             }else{
               const table=isLeap(safeYear)?DOOMSDAY_MONTH.leap:DOOMSDAY_MONTH.common;
               const months=[1];
@@ -943,7 +958,7 @@
               }
               const d=1;
               const w=wday(safeYear,1,d);
-              setDed({type:"month",y:safeYear,d,w,m:1,options:months});
+              assignDed({type:"month",y:safeYear,d,w,m:1,options:months});
             }
           }
           tStartRef.current = trackDed ? performance.now() : null;
@@ -971,7 +986,7 @@
           if(end>D){ end=D; start=Math.max(1,end-span+1); }
           const options=[];
           for(let val=start; val<=end; val++) options.push(val);
-          setDed({type:"day",y:yCandidate,m,w,d,options});
+          assignDed({type:"day",y:yCandidate,m,w,d,options});
           tStartRef.current = trackDed ? performance.now() : null;
           return;
         }
@@ -1001,7 +1016,12 @@
         setDedType(nextType);
       }
 
-      function flashDed(kind,value,ok){ setDedFlash({kind,value,ok}); setTimeout(()=>setDedFlash(null),450); }
+      function flashDed(kind,value,ok){
+        if(!ded) return;
+        const token=ded.token;
+        setDedFlash({kind,value,ok,token});
+        setTimeout(()=>setDedFlash(prev=> (prev && prev.token===token ? null : prev)),450);
+      }
       function submitDedAnswer(val){
         if(!ded || locked) return;
         const setCorrectThenNext = ()=>{
@@ -1051,7 +1071,7 @@
 
       /* mode changes */
       useEffect(()=>{ arm(); setGuesses([]); setStack([]); setDedStack([]); setMsg(""); setLocked(false); setRevealed(false);
-        if(mode==="deduction"){ setPhase('dash'); pendingDedSwitchRef.current=null; setSavedDedByType(blankDedTypeStore()); setDed(null); }
+        if(mode==="deduction"){ setPhase('dash'); pendingDedSwitchRef.current=null; setSavedDedByType(blankDedTypeStore()); assignDed(null); }
       },[mode]);
 
       useEffect(()=>{
@@ -1062,7 +1082,7 @@
         if(!trackDed){
           const snap=pending?.snap || savedDedByType[dedType] || null;
           if(snap && snap.ded){
-            setDed(snap.ded);
+            assignDed(snap.ded);
             setGuesses(snap.guesses||[]);
             setCountedWrong(!!snap.countedWrong);
             setMsg(snap.msg||"");
@@ -1079,6 +1099,8 @@
         spawnDed();
       },[dedType, mode, trackDed, savedDedByType]);
 
+      useEffect(()=>{ setDedFlash(null); },[ded?.token]);
+
       /* slider handlers — each era updates its own store only */
       const showDash = isTimer(mode) && !active;
       const showDots = (mode==="flash" && active && phase==='hide');
@@ -1088,7 +1110,13 @@
 
       const baseBtn="w-full rounded-2xl border px-4 py-3 text-base md:text-sm transition shadow-sm select-none";
       const idleBtn="border-purple-800/60 bg-purple-900/30 hover:bg-purple-900/60";
-      const optionsDisabled = ((isTimer(mode) && !active) || locked || calcOpen);
+      const dedOptionBtn=`${baseBtn} py-2 text-sm`;
+      const dedHighlightClass=(kind,value)=>{
+        if(!dedFlash || !ded || dedFlash.token!==ded.token) return idleBtn;
+        if(dedFlash.kind!==kind || dedFlash.value!==value) return idleBtn;
+        return `${dedFlash.ok?'flash-good':'flash-bad'} border-transparent`;
+      };
+      const optionsDisabled = ((isTimer(mode) && !active) || locked || calcPenaltyActive);
 
       const eraControl = (
         <div className="flex rounded-xl overflow-hidden border border-purple-800/60 w-full">
@@ -1269,37 +1297,83 @@
       const calcTarget = React.useMemo(()=>{
         if(mode==="lookup") return null;
         if(mode==="deduction"){
-          return ded ? {y:ded.y,m:ded.m,d:ded.d} : null;
+          return ded ? {y:ded.y,m:ded.m,d:ded.d, token:ded.token} : null;
         }
         return date;
-      },[mode,date?.y,date?.m,date?.d, ded?.y, ded?.m, ded?.d]);
-      const calcTargetKey = calcTarget ? `${calcTarget.y}-${calcTarget.m}-${calcTarget.d}` : 'none';
+      },[mode,date?.y,date?.m,date?.d, ded?.y, ded?.m, ded?.d, ded?.token]);
+      const calcTargetKey = calcTarget ? `${calcTarget.y}-${calcTarget.m}-${calcTarget.d}-${calcTarget.token??'na'}` : 'none';
+      const prevCalcTargetKeyRef = useRef(calcTargetKey);
+      const prevModeRef = useRef(mode);
 
       useEffect(()=>{
-        const saved = calcOpenStatesRef.current.has(mode)
+        const savedOpen = calcOpenStatesRef.current.has(mode)
           ? !!calcOpenStatesRef.current.get(mode)
           : false;
+        const savedPenalty = calcPenaltyStatesRef.current.has(mode)
+          ? !!calcPenaltyStatesRef.current.get(mode)
+          : false;
         skipScrollOnOpenRef.current = true;
-        setCalcOpen(saved);
+        setCalcOpen(savedOpen);
+        setCalcPenaltyActive(savedPenalty);
+        calcOpenStatesRef.current.set(mode,savedOpen);
+        calcPenaltyStatesRef.current.set(mode,savedPenalty);
       },[mode]);
 
       useEffect(()=>{
-        skipScrollOnOpenRef.current = true;
-        setCalcOpen(false);
-        calcOpenStatesRef.current.set(mode,false);
+        const prevKey=prevCalcTargetKeyRef.current;
+        const prevMode=prevModeRef.current;
+        if(calcTargetKey!==prevKey){
+          if(prevMode===mode){
+            skipScrollOnOpenRef.current=true;
+            setCalcOpen(false);
+            calcOpenStatesRef.current.set(mode,false);
+            setCalcPenaltyActive(false);
+            calcPenaltyStatesRef.current.set(mode,false);
+          }
+          prevCalcTargetKeyRef.current=calcTargetKey;
+        }
+        prevModeRef.current=mode;
       },[calcTargetKey, mode]);
 
       useEffect(()=>{
+        if(calcScrollTimeoutRef.current){
+          clearTimeout(calcScrollTimeoutRef.current);
+          calcScrollTimeoutRef.current=null;
+        }
+        if(calcScrollRafRef.current!=null){
+          cancelAnimationFrame(calcScrollRafRef.current);
+          calcScrollRafRef.current=null;
+        }
         if(calcOpen){
           if(skipScrollOnOpenRef.current){
             skipScrollOnOpenRef.current=false;
           }else{
-            window.scrollTo({top:document.documentElement.scrollHeight,behavior:'smooth'});
+            const scrollOnce=()=>{
+              const anchor=calcScrollAnchorRef.current;
+              if(anchor){
+                anchor.scrollIntoView({behavior:'smooth', block:'end'});
+              }else{
+                window.scrollTo({top:document.documentElement.scrollHeight,behavior:'smooth'});
+              }
+            };
+            calcScrollRafRef.current=requestAnimationFrame(()=>{
+              scrollOnce();
+              calcScrollTimeoutRef.current=setTimeout(scrollOnce,180);
+            });
           }
-        }
-        if(!calcOpen){
+        }else{
           skipScrollOnOpenRef.current=false;
         }
+        return ()=>{
+          if(calcScrollRafRef.current!=null){
+            cancelAnimationFrame(calcScrollRafRef.current);
+            calcScrollRafRef.current=null;
+          }
+          if(calcScrollTimeoutRef.current){
+            clearTimeout(calcScrollTimeoutRef.current);
+            calcScrollTimeoutRef.current=null;
+          }
+        };
       },[calcOpen]);
 
       /* should reset stats create a new date? */
@@ -1336,6 +1410,8 @@
         }
         if(!revealed) setRevealed(true);
         if(!countedWrong) setCountedWrong(true);
+        setCalcPenaltyActive(true);
+        calcPenaltyStatesRef.current.set(mode,true);
       };
 
       const handleCalculationOpenChange = (next)=>{
@@ -1491,7 +1567,7 @@
                       className={`px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm ${timerBusy?'opacity-60 pointer-events-none':''}`}
                       onClick={()=>doNew()}
                     >New</button>
-                    <button type="button" className={`px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm ${(locked||calcOpen)?'opacity-60 pointer-events-none':''}`} onClick={()=>reveal()}>Reveal</button>
+                    <button type="button" className={`px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm ${(locked||calcPenaltyActive)?'opacity-60 pointer-events-none':''}`} onClick={()=>reveal()}>Reveal</button>
                     <button
                       type="button"
                       className={`px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm ${timerBusy?'opacity-60 pointer-events-none':''}`}
@@ -1513,7 +1589,7 @@
             {mode==="deduction" && (
               <>
                 <div className="mt-3 flex flex-wrap gap-2 justify-center">
-                  {["year","month","day"].map(t=>(
+                  {["day","month","year"].map(t=>(
                     <button key={t} type="button" onClick={()=>changeDedType(t)}
                       className={`px-3 py-1.5 rounded-xl text-sm border ${dedType===t?'bg-purple-600 border-purple-500':'bg-purple-900/40 border-purple-800/60 hover:bg-purple-900/70'}`}>
                       {t[0].toUpperCase()+t.slice(1)}
@@ -1521,12 +1597,12 @@
                   ))}
                 </div>
 
-                <div className={`mt-4 ${(locked||calcOpen)?'opacity-60 pointer-events-none':''}`}>
+                <div className={`mt-4 ${(locked||calcPenaltyActive)?'opacity-60 pointer-events-none':''}`}>
                   {ded && ded.type==="year" && (
                     <div className="grid grid-cols-3 gap-2">
                       {ded.options.map(y=>(
                         <button key={y} type="button" onClick={()=>submitDedAnswer(y)}
-                          className={`${baseBtn} ${idleBtn} py-2 text-sm ${dedFlash&&dedFlash.kind==='year'&&dedFlash.value===y ? (dedFlash.ok?'flash-good':'flash-bad')+' border-transparent':''}`}>{fmtYear(y)}</button>
+                          className={`${dedOptionBtn} ${dedHighlightClass('year', y)}`}>{fmtYear(y)}</button>
                       ))}
                     </div>
                   )}
@@ -1534,7 +1610,7 @@
                     <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-7 gap-2">
                       {ded.options.map(mv=>(
                         <button key={mv} type="button" onClick={()=>submitDedAnswer(mv)}
-                          className={`${baseBtn} ${idleBtn} ${dedFlash&&dedFlash.kind==='month'&&dedFlash.value===mv ? (dedFlash.ok?'flash-good':'flash-bad')+' border-transparent':''}`}>{MONTH_ABBR[mv-1]}</button>
+                          className={`${dedOptionBtn} ${dedHighlightClass('month', mv)}`}>{MONTH_ABBR[mv-1]}</button>
                       ))}
                     </div>
                   )}
@@ -1542,7 +1618,7 @@
                     <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-7 gap-2">
                       {ded.options.map(dv=>(
                         <button key={dv} type="button" onClick={()=>submitDedAnswer(dv)}
-                          className={`${baseBtn} ${idleBtn} ${dedFlash&&dedFlash.kind==='day'&&dedFlash.value===dv ? (dedFlash.ok?'flash-good':'flash-bad')+' border-transparent':''}`}>{dv}</button>
+                          className={`${dedOptionBtn} ${dedHighlightClass('day', dv)}`}>{dv}</button>
                       ))}
                     </div>
                   )}
@@ -1551,7 +1627,7 @@
                 <div className="mt-4 rounded-2xl panel p-3">
                   <div className="flex flex-wrap gap-2">
                     <button type="button" className="px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm" onClick={()=>runDeductionRound()}>New</button>
-                    <button type="button" className={`px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm ${(locked||calcOpen)?'opacity-60 pointer-events-none':''}`} onClick={()=>reveal()}>Reveal</button>
+                    <button type="button" className={`px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm ${(locked||calcPenaltyActive)?'opacity-60 pointer-events-none':''}`} onClick={()=>reveal()}>Reveal</button>
                     <button type="button" className="px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm" onClick={()=>goBack()}>Back</button>
                   </div>
                   {(msg || guesses.length>0) && (
@@ -1567,7 +1643,7 @@
             {/* ======= LOOKUP ======= */}
             {mode==="lookup" && <LookupCard history={lookupHistory} onAddHistory={pushLookupHistory} onClearHistory={clearLookupHistory} />}
 
-            {mode!=="method" && mode!=="lookup" && <MethodBreakdownSection date={calcTarget} open={calcOpen} onOpenChange={handleCalculationOpenChange} onRequestNew={handleMethodNewRequest}/>}
+            {mode!=="method" && mode!=="lookup" && <MethodBreakdownSection date={calcTarget} open={calcOpen} onOpenChange={handleCalculationOpenChange} onRequestNew={handleMethodNewRequest} anchorRef={calcScrollAnchorRef}/>}
           </div>
         </div>
       );
@@ -1758,7 +1834,6 @@
             </div>
             <div className="flex flex-col items-end gap-2 text-sm">
               <div className="flex items-center gap-2">
-                <span className="text-xs uppercase tracking-wide text-purple-200/70">Show:</span>
                 <div className="flex overflow-hidden rounded-xl border border-purple-700/60">
                   <button
                     type="button"
@@ -1794,7 +1869,7 @@
       );
     }
 
-    function MethodBreakdownSection({date, open:controlledOpen, onOpenChange, onRequestNew}){
+    function MethodBreakdownSection({date, open:controlledOpen, onOpenChange, onRequestNew, anchorRef}){
       const isControlled = typeof controlledOpen === 'boolean' && typeof onOpenChange === 'function';
       const [internalOpen,setInternalOpen]=React.useState(false);
       const key=date?`${date.y}-${date.m}-${date.d}`:"";
@@ -1809,7 +1884,7 @@
         }
       };
       return (
-        <div className="mt-5">
+        <div className="mt-5" ref={anchorRef || null}>
           <button
             type="button"
             onClick={toggle}
