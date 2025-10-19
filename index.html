@@ -59,6 +59,9 @@
     const MONTH=["January","February","March","April","May","June","July","August","September","October","November","December"];
     const MONTH_ABBR=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
     const DAY=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+    const METHOD_MONTH_CODE={1:6,2:2,3:2,4:5,5:0,6:3,7:5,8:1,9:4,10:6,11:2,12:4};
+    const METHOD_AB_CODE=[1,6,4,2]; // ab mod 4 → code (mod 7)
+    const METHOD_KEY_CODES=[6,0,1,2,3,4,5,6,0]; // multiples of 12 (0…96)
     const DOOMSDAY_MONTH={common:[4,0,0,3,5,1,3,6,2,4,0,2],leap:[3,6,0,3,5,1,3,6,2,4,0,2]};
     const YEAR_OPTION_DEFAULT=9;
     const DAY_OPTION_COUNT=7;
@@ -73,6 +76,93 @@
     const rint=(a,b)=>Math.floor(Math.random()*(b-a+1))+a;
     function randomDate(minY,maxY){ for(;;){ let y=rint(minY,maxY); if(y===0) continue; let m=rint(1,12), d=rint(1,dim(y,m)); if(d<=dim(y,m)) return {y,m,d}; } }
     const blankDedTypeStore = ()=>({year:null,month:null,day:null});
+
+    const mod7 = n => ((n%7)+7)%7;
+
+    function calcMethodSteps(y,m,d){
+      if(typeof y!=='number' || y<=0 || !Number.isFinite(y)){
+        return {error:"This method applies to AD years. Convert BC dates before using it."};
+      }
+      if(m<1||m>12||d<1){
+        return {error:"Enter a valid Gregorian date before running the method."};
+      }
+      const steps=[];
+      let total = mod7(METHOD_MONTH_CODE[m]||0);
+      steps.push({
+        title:"Month code",
+        detail:`Start with the month code for ${MONTH[m-1]}: ${METHOD_MONTH_CODE[m]}.`,
+        added:METHOD_MONTH_CODE[m]||0,
+        total,
+      });
+
+      const step2Raw = total + d;
+      const step2Adjust = step2Raw - mod7(step2Raw);
+      total = mod7(step2Raw);
+      steps.push({
+        title:"Add the day",
+        detail:`Add the day ${d}. ${step2Raw}${step2Adjust?` − ${step2Adjust}`:""} ≡ ${total} (mod 7).`,
+        added:d,
+        total,
+      });
+
+      const cd = y%100;
+      const keySteps = Math.floor(cd/12);
+      const baseCd = keySteps*12;
+      const remainder = cd - baseCd;
+      const remainderMod = mod7(remainder);
+      const chunkRaw = total + remainder;
+      const chunkAdjust = chunkRaw - mod7(chunkRaw);
+      total = mod7(chunkRaw);
+      steps.push({
+        title:"Add cd chunk",
+        detail:`Use the last two digits (${cd}). Subtract the closest multiple of 12 to reach the key year (${baseCd}), then add the remainder ${remainder}. ${chunkRaw}${chunkAdjust?` − ${chunkAdjust}`:""} ≡ ${total} (mod 7).`,
+        added:remainderMod,
+        total,
+      });
+
+      const ab = Math.floor(y/100);
+      const abRem = ab%4;
+      const abCode = METHOD_AB_CODE[abRem];
+      total = mod7(total + abCode);
+      steps.push({
+        title:"ab mod 4 code",
+        detail:`Compute ab mod 4 = ${abRem}. The corresponding code is ${abCode}.`,
+        added:abCode,
+        total,
+      });
+
+      const cdModCode = Math.floor(remainder/4);
+      total = mod7(total + cdModCode);
+      steps.push({
+        title:"cd mod 4 code",
+        detail:`Count how many four-year steps fit into the remainder ${remainder}: ⌊${remainder}/4⌋ = ${cdModCode}.`,
+        added:cdModCode,
+        total,
+      });
+
+      const keyCode = METHOD_KEY_CODES[keySteps] ?? 0;
+      total = mod7(total + keyCode);
+      steps.push({
+        title:"Key cd year code",
+        detail:`Use the closest key cd year ${baseCd} (step ${keySteps}) which has code ${keyCode}.`,
+        added:keyCode,
+        total,
+      });
+
+      const isLeapYear = isLeap(y);
+      let adjustedTotal = total;
+      if(isLeapYear && m<=2){
+        adjustedTotal = mod7(total-1);
+        steps.push({
+          title:"Leap year adjustment",
+          detail:`${y} is a leap year and the date is in January/February, so subtract 1.`,
+          added:-1,
+          total:adjustedTotal,
+        });
+      }
+
+      return {steps, weekdayIndex:adjustedTotal, baseCd, remainder, keySteps, isLeap:isLeapYear};
+    }
 
     const isTouch=typeof window!=="undefined" && ("ontouchstart" in window || navigator.maxTouchPoints>0 || matchMedia("(pointer:coarse)").matches);
     const isTimer = m => m==="blitz"||m==="sudden"||m==="flash";
@@ -169,6 +259,7 @@
       const [ded,setDed]=useState(null);
       const [dedFlash,setDedFlash]=useState(null);
       const [lookupHistory,setLookupHistory]=useState([]);
+      const [showCalc,setShowCalc]=useState(false);
 
       const pendingDedSwitchRef=useRef(null);
 
@@ -183,6 +274,8 @@
           }
         }
       },[date,mode,active]);
+
+      useEffect(()=>{ setShowCalc(false); },[mode,date.y,date.m,date.d,ded?.y,ded?.m,ded?.d]);
 
       /* helpers */
       const updateStats = (mutator)=>{ setStatsByMode(prev=>{ const cur={...(prev[mode]||blankStats())}; mutator(cur); return {...prev,[mode]:cur}; }); };
@@ -1130,6 +1223,9 @@
       const flashPercent = (active && phase==='show' && flashDeadlineRef.current && flashMs>0) ? Math.max(0, Math.min(100,(flashRemainMs/flashMs)*100)) : 100;
       const timerBusy = isTimer(mode) && active;
 
+      const calcSource = mode==="deduction" ? (ded && ded.y ? {y:ded.y,m:ded.m,d:ded.d}:null) : ((mode!=="lookup" && mode!=="method") ? date : null);
+      const calcData = showCalc && calcSource ? calcMethodSteps(calcSource.y,calcSource.m,calcSource.d) : null;
+
       /* should reset stats create a new date? */
       function shouldNewOnReset(){
         const avgEnabled = (mode==="classic"?trackClassic : mode==="deduction"?trackDed : true);
@@ -1235,8 +1331,8 @@
               </div>
             )}
 
-            {/* Method page (blank for now) */}
-            {mode==="method" && <div className="min-h-[40vh]"></div>}
+            {/* Method page */}
+            {mode==="method" && <MethodPage />}
 
             {/* Headline */}
             {mode!=="lookup" && mode!=="deduction" && mode!=="method" && (
@@ -1273,6 +1369,13 @@
                       ? <button type="button" className="px-4 py-2 rounded-xl bg-purple-600 text-white text-sm font-medium" onClick={()=>begin()}>Begin</button>
                       : <button type="button" className="px-4 py-2 rounded-xl bg-rose-600/90 text-white text-sm font-medium" onClick={()=>arm()}>Reset</button>
                     )}
+                    {calcSource && (
+                      <button
+                        type="button"
+                        className="px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm"
+                        onClick={()=>setShowCalc(v=>!v)}
+                      >{showCalc?"Hide calculations":"Show calculations"}</button>
+                    )}
                     <button
                       type="button"
                       className={`px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm ${timerBusy?'opacity-60 pointer-events-none':''}`}
@@ -1284,6 +1387,9 @@
                       className={`px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm ${timerBusy?'opacity-60 pointer-events-none':''}`}
                       onClick={()=>goBack()}
                     >Back</button>
+                    {calcSource && (
+                      <button type="button" className="px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm" onClick(()=>setShowCalc(v=>!v))>{showCalc?"Hide calculations":"Show calculations"}</button>
+                    )}
                   </div>
 
                   {(msg || (guesses.length>0 && mode!=="sudden")) && (
@@ -1293,6 +1399,7 @@
                     </div>
                   )}
                 </div>
+                {calcData && <MethodStepsDisplay data={calcData} />}
               </>
             )}
 
@@ -1340,6 +1447,9 @@
                     <button type="button" className="px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm" onClick={()=>{ setDedStack(s=> ded ? [...s,ded] : s); spawnDed(); setMsg(""); setLocked(false); setRevealed(false); setGuesses([]); setCountedWrong(false); }}>New</button>
                     <button type="button" className={`px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm ${locked?'opacity-60 pointer-events-none':''}`} onClick={()=>reveal()}>Reveal</button>
                     <button type="button" className="px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm" onClick={()=>goBack()}>Back</button>
+                    {calcSource && (
+                      <button type="button" className="px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm" onClick(()=>setShowCalc(v=>!v))>{showCalc?"Hide calculations":"Show calculations"}</button>
+                    )}
                   </div>
                   {(msg || guesses.length>0) && (
                     <div className="mt-3 text-sm">
@@ -1348,6 +1458,7 @@
                     </div>
                   )}
                 </div>
+                {calcData && <MethodStepsDisplay data={calcData} />}
               </>
             )}
 
@@ -1358,10 +1469,132 @@
       );
     }
 
+    function MethodStepsDisplay({data,title}){
+      if(!data) return null;
+      if(data.error){
+        return (
+          <div className="mt-4 rounded-2xl panel p-4 text-sm text-rose-200/90">{data.error}</div>
+        );
+      }
+      const steps = Array.isArray(data.steps)?data.steps:[];
+      return (
+        <div className="mt-4 rounded-2xl panel p-4">
+          {title && <h3 className="text-base font-semibold mb-3">{title}</h3>}
+          <ol className="space-y-3 text-sm list-decimal list-inside">
+            {steps.map((step,idx)=>(
+              <li key={idx} className="leading-relaxed">
+                <div className="font-medium text-purple-100/90">{step.title}</div>
+                <div className="text-purple-100/80">{step.detail}</div>
+                <div className="mt-1 text-xs text-purple-200/70">Running total ≡ <span className="font-semibold">{step.total}</span> (mod 7)</div>
+              </li>
+            ))}
+          </ol>
+          {typeof data.weekdayIndex==='number' && (
+            <div className="mt-4 text-sm font-semibold text-purple-100/90">Final answer: {DAY[data.weekdayIndex]} ({data.weekdayIndex})</div>
+          )}
+        </div>
+      );
+    }
+
+    function MethodPage(){
+      const example = calcMethodSteps(1992,2,26);
+      return (
+        <div className="space-y-6 text-sm text-purple-100/90">
+          <section>
+            <h2 className="text-lg font-semibold text-purple-50">My Day of the Week Method</h2>
+            <p className="mt-2 text-purple-200/80">This system uses the proleptic Gregorian calendar for AD dates only.</p>
+          </section>
+
+          <section>
+            <h3 className="text-base font-semibold text-purple-50">Definitions</h3>
+            <ul className="mt-2 space-y-1 list-disc list-inside">
+              <li>Sunday = 0</li>
+              <li>Monday = 1</li>
+              <li>Tuesday = 2</li>
+              <li>Wednesday = 3</li>
+              <li>Thursday = 4</li>
+              <li>Friday = 5</li>
+              <li>Saturday = 6</li>
+            </ul>
+            <p className="mt-2">Let the year be <em>abcd</em>, where <em>bcd</em> are the last three digits and <em>a</em> contains all preceding digits.</p>
+            <p className="mt-2">Mod notation: <em>n mod m</em> is the remainder after dividing <em>n</em> by <em>m</em>.</p>
+            <p className="mt-2">Leap years: <em>abcd</em> is a leap year if it is divisible by 4 unless it ends in 00 but not 400. If it is divisible by 400, it remains a leap year.</p>
+            <p className="mt-2">Integer division: ⌊<em>n</em>/<em>m</em>⌋ drops the remainder, i.e. ⌊<em>n</em>/<em>m</em>⌋ = (<em>n</em> − (<em>n</em> mod <em>m</em>))/<em>m</em>.</p>
+          </section>
+
+          <section>
+            <h3 className="text-base font-semibold text-purple-50">Finger Counting (mod 7)</h3>
+            <p className="mt-2">Keep track of remainders on your right hand:</p>
+            <ul className="mt-1 space-y-1 list-disc list-inside">
+              <li>0 – outside of the bottom segment of the pointer finger</li>
+              <li>1 – bottom segment of the pointer finger</li>
+              <li>2 – middle segment of the pointer finger</li>
+              <li>3 – top segment of the pointer finger</li>
+              <li>4 – bottom segment of the middle finger</li>
+              <li>5 – middle segment of the middle finger</li>
+              <li>6 – top segment of the middle finger</li>
+            </ul>
+            <p className="mt-2">Convert 6 to −1 and 5 to −2 when it is faster, and break large jumps into friendly pieces while staying in the 0–6 range.</p>
+          </section>
+
+          <section>
+            <h3 className="text-base font-semibold text-purple-50">Reference Codes</h3>
+            <div className="mt-2 grid grid-cols-2 sm:grid-cols-3 gap-2 text-sm">
+              {Object.entries(METHOD_MONTH_CODE).map(([month,code])=>(
+                <div key={month} className="panel thin px-3 py-2 rounded-lg flex items-center justify-between">
+                  <span>{MONTH[month-1]}</span>
+                  <span className="font-semibold">{code}</span>
+                </div>
+              ))}
+            </div>
+            <div className="mt-4 grid grid-cols-2 gap-2">
+              <div className="panel thin px-3 py-2 rounded-lg">
+                <h4 className="text-sm font-semibold text-purple-50">ab mod 4 codes</h4>
+                <ul className="mt-2 space-y-1 list-disc list-inside text-xs">
+                  <li>remainder 0 → 1</li>
+                  <li>remainder 1 → 6 (−1)</li>
+                  <li>remainder 2 → 4</li>
+                  <li>remainder 3 → 2</li>
+                </ul>
+              </div>
+              <div className="panel thin px-3 py-2 rounded-lg">
+                <h4 className="text-sm font-semibold text-purple-50">Key cd year codes</h4>
+                <ul className="mt-2 space-y-1 list-disc list-inside text-xs">
+                  {[0,12,24,36,48,60,72,84,96].map((cd,idx)=>(
+                    <li key={cd}>{cd.toString().padStart(2,'0')} → {METHOD_KEY_CODES[idx]}</li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </section>
+
+          <section>
+            <h3 className="text-base font-semibold text-purple-50">Method</h3>
+            <ol className="mt-2 space-y-2 list-decimal list-inside">
+              <li>Start with the month code.</li>
+              <li>Add the day of the month, subtracting multiples of 7 to stay between 0 and 6.</li>
+              <li>Use the last two digits (<em>cd</em>). Subtract the nearest key year (a multiple of 12) and add the remainder.</li>
+              <li>Add the <em>ab</em> mod 4 code.</li>
+              <li>Add the <em>cd</em> mod 4 code: ⌊remainder/4⌋ counts four-year steps.</li>
+              <li>Add the key <em>cd</em> year code for the closest multiple of 12.</li>
+              <li>If the date is in January or February of a leap year, subtract 1.</li>
+            </ol>
+          </section>
+
+          <section>
+            <h3 className="text-base font-semibold text-purple-50">Example: February 26, 1992</h3>
+            <MethodStepsDisplay data={example} />
+          </section>
+        </div>
+      );
+    }
+
     /* --------- Lookup component --------- */
     function LookupCard({history=[], onAddHistory, onClearHistory}){
       const [lookupIn,setLookupIn]=React.useState("");
       const [lookupOut,setLookupOut]=React.useState("");
+      const [lookupCalc,setLookupCalc]=React.useState(null);
+      const [showCalc,setShowCalc]=React.useState(false);
       function isLeapY(y){ y = y>0?y:1-Math.abs(y); return y%400===0 || (y%4===0 && y%100!==0); }
       function dimY(y,m){ return m===2 ? (isLeapY(y)?29:28) : [4,6,9,11].includes(m)?30:31; }
       function wdayY(y,m,d){ function jdn(y,m,d){ const a=Math.floor((14-m)/12),y2=y+4800-a,m2=m-3+12*a; return d+Math.floor((153*m2+2)/5)+365*y2+Math.floor(y2/4)-Math.floor(y2/100)+Math.floor(y2/400)-32045; } const toA = y=>y>0?y:1-Math.abs(y); return (jdn(toA(y),m,d)+1)%7; }
@@ -1371,16 +1604,23 @@
       function runLookup(){
         const s=lookupIn.trim();
         const m = /^(-?\d{1,2})\/(\d{1,2})\/(-?\d{1,5})$/.exec(s);
-        if(!m){ setLookupOut("Enter date in month/day/year format, e.g., 7/4/1776. Years allowed −10000…10000 (no year 0)."); return; }
+        if(!m){ setLookupOut("Enter date in month/day/year format, e.g., 7/4/1776. Years allowed −10000…10000 (no year 0)."); setLookupCalc(null); setShowCalc(false); return; }
         let mm=+m[1], dd=+m[2], yy=+m[3];
-        if(yy===0){ setLookupOut("There is no year 0. Use −1 for 1 BC."); return; }
-        if(yy<-10000 || yy>10000){ setLookupOut("Year must be between −10000 and 10000."); return; }
-        if(mm<1||mm>12){ setLookupOut("Month must be 1–12."); return; }
+        if(yy===0){ setLookupOut("There is no year 0. Use −1 for 1 BC."); setLookupCalc(null); setShowCalc(false); return; }
+        if(yy<-10000 || yy>10000){ setLookupOut("Year must be between −10000 and 10000."); setLookupCalc(null); setShowCalc(false); return; }
+        if(mm<1||mm>12){ setLookupOut("Month must be 1–12."); setLookupCalc(null); setShowCalc(false); return; }
         const maxd=dimY(yy,mm);
-        if(dd<1||dd>maxd){ setLookupOut(`Day must be 1–${maxd} for ${MONTH[mm-1]}.`); return; }
+        if(dd<1||dd>maxd){ setLookupOut(`Day must be 1–${maxd} for ${MONTH[mm-1]}.`); setLookupCalc(null); setShowCalc(false); return; }
         const d=DAY[wdayY(yy,mm,dd)];
         const resultText = `${MONTH[mm-1]} ${dd}, ${fmtYear(yy)} is a ${d}.`;
         setLookupOut(resultText);
+        if(yy>0){
+          setLookupCalc(calcMethodSteps(yy,mm,dd));
+          setShowCalc(true);
+        }else{
+          setLookupCalc({error:"This method covers AD dates. Convert BC years before using it."});
+          setShowCalc(true);
+        }
         if(onAddHistory){
           const entry={
             id:`${Date.now().toString(36)}-${Math.random().toString(36).slice(2,8)}`,
@@ -1392,7 +1632,7 @@
           onAddHistory(entry);
         }
       }
-      function clearLookup(){ setLookupIn(""); if(document.activeElement) document.activeElement.blur(); setLookupOut(""); }
+      function clearLookup(){ setLookupIn(""); if(document.activeElement) document.activeElement.blur(); setLookupOut(""); setLookupCalc(null); setShowCalc(false); }
       const entries = Array.isArray(history)?history:[];
       const handleHistorySelect = (entry)=>{
         setLookupIn(entry?.query||"");
@@ -1408,12 +1648,20 @@
             <button type="button" onClick={()=>runLookup()} className="px-4 py-2 rounded-xl bg-purple-600 text-white text-sm font-medium">Lookup</button>
             <button type="button" onClick={()=>clearLookup()} className="px-4 py-2 rounded-xl bg-zinc-700 text-white text-sm font-medium">Clear</button>
           </div>
-          {lookupOut && <div className="mt-3 text-sm">{lookupOut}</div>}
+          {lookupOut && (
+            <div className="mt-3 text-sm space-y-2">
+              <div>{lookupOut}</div>
+              {lookupCalc && (
+                <button type="button" className="px-3 py-1.5 rounded-lg border border-purple-700/60 bg-purple-900/50 text-xs" onClick={()=>setShowCalc(v=>!v)}>{showCalc?"Hide calculations":"Show calculations"}</button>
+              )}
+            </div>
+          )}
           <ul className="mt-4 text-xs text-purple-100/90 space-y-2 list-disc list-inside">
             <li>Format: <b>month/day/year</b> (e.g., <b>7/4/1776</b>).</li>
             <li>BC years: use a leading minus (e.g., <b>-1</b> = <b>1 BC</b>). No year 0.</li>
             <li>Valid range: <b>−10000…10000</b>. Days must be valid for the month.</li>
           </ul>
+          {showCalc && lookupCalc && <MethodStepsDisplay data={lookupCalc} />}
           {entries.length>0 && (
             <div className="mt-5 pt-4 border-t border-purple-500/40">
               <div className="flex items-center justify-between text-[11px] uppercase tracking-wide text-purple-200/70">
