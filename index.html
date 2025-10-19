@@ -25,6 +25,7 @@
     .bar{height:6px;border-radius:6px;overflow:hidden;background:rgba(120,53,175,.25);border:1px solid rgba(120,53,175,.45)}
     .bar>span{display:block;height:100%;background:linear-gradient(90deg,#a855f7,#7c3aed)}
     .expander{transition:max-height .25s ease-in-out;overflow:hidden;will-change:max-height}
+    .method-sticky{position:sticky;top:0;z-index:40;background:linear-gradient(180deg,rgba(11,7,20,.96),rgba(20,11,34,.92));backdrop-filter:blur(12px);border-bottom:1px solid rgba(120,53,175,.35)}
   </style>
 </head>
 <body class="text-purple-50">
@@ -88,7 +89,10 @@
     const isLeap = y => { y=toAstro(y); return y%400===0 || (y%4===0 && y%100!==0); };
     const dim = (y,m)=> m===2 ? (isLeap(y)?29:28) : [4,6,9,11].includes(m)?30:31;
     function jdnGregorian(y,m,d){ const a=Math.floor((14-m)/12),y2=y+4800-a,m2=m-3+12*a; return d+Math.floor((153*m2+2)/5)+365*y2+Math.floor(y2/4)-Math.floor(y2/100)+Math.floor(y2/400)-32045; }
-    const wday=(y,m,d)=> (jdnGregorian(toAstro(y),m,d)+1)%7;
+    const wday=(y,m,d)=>{
+      const raw=(jdnGregorian(toAstro(y),m,d)+1)%7;
+      return (raw+7)%7;
+    };
     const fmtYear = y => y>0?String(y):`${Math.abs(y)} BC`;
     const fmt=(y,m,d)=> `${MONTH[m-1]} ${d}, ${fmtYear(y)}`;
     const rint=(a,b)=>Math.floor(Math.random()*(b-a+1))+a;
@@ -125,7 +129,7 @@
       running=(running+dayMod)%7;
       steps.push({
         title:"Add the day",
-        detail:`Add the day modulo 7: ${d} mod 7 = ${dayMod}. Running total: ${running}.`,
+        detail:`Add the day mod 7: ${d} mod 7 = ${dayMod}. Running total: ${running}.`,
         total:running
       });
 
@@ -1126,7 +1130,7 @@
         if(mode==="sudden"){
           return (
             <div className="flex items-center gap-2 w-full">
-              <span className="text-xs text-purple-300/80">Per Q:</span>
+              <span className="text-xs text-purple-300/80 whitespace-nowrap">Per Q:</span>
               <input type="range" min="3" max="20" step="1" value={qSec}
                 onChange={e=>{const v=+e.target.value; setQSec(v); if(!active) setQRemain(v);}}
                 className="accent-purple-500 w-full max-w-[8rem]"/>
@@ -1274,6 +1278,12 @@
         if(needNew) doNew({skipInactiveMessage:true});
       };
 
+      const handleCalcOpenChange = (nextOpen)=>{
+        if(nextOpen && !locked){
+          reveal();
+        }
+      };
+
       /* Avg toggle click handler (disable/enable) */
       function toggleAvg(disable){
         if(mode!=="classic" && mode!=="deduction") return;
@@ -1290,26 +1300,28 @@
       return (
         <div className="mx-auto px-4 py-5 w-full max-w-[480px] md:max-w-3xl lg:max-w-4xl">
           {/* Header */}
-          <div className="flex items-center justify-between gap-4">
-            <h1 className="text-xl md:text-2xl font-semibold leading-none">Calendar Game</h1>
-            <div className="relative">
-              <select
-                ref={modeSelectRef}
-                value={mode}
-                onChange={e=>{ __hideErr(); const nextMode=e.target.value; setMode(nextMode); e.target.blur(); modeSelectRef.current?.blur(); }}
-                className="panel rounded-xl px-2.5 py-2 pr-9 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 appearance-none"
-              >
+          <div className={mode==="method"?"method-sticky py-3 md:py-4":""}>
+            <div className="flex items-center justify-between gap-4">
+              <h1 className="text-xl md:text-2xl font-semibold leading-none">Calendar Game</h1>
+              <div className="relative">
+                <select
+                  ref={modeSelectRef}
+                  value={mode}
+                  onChange={e=>{ __hideErr(); const nextMode=e.target.value; setMode(nextMode); e.target.blur(); modeSelectRef.current?.blur(); }}
+                  className="panel rounded-xl px-2.5 py-2 pr-9 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 appearance-none"
+                >
                 <option value="classic">Classic</option>
+                <option value="deduction">Deduction</option>
                 <option value="blitz">Blitz</option>
                 <option value="sudden">Sudden Death</option>
                 <option value="flash">Flash</option>
-                <option value="deduction">Deduction</option>
                 <option value="lookup">Lookup</option>
                 <option value="method">Method</option>
               </select>
               <div className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 flex flex-col items-center leading-none text-[7px] text-white/90">
                 <span>▲</span><span>▼</span>
               </div>
+            </div>
             </div>
           </div>
 
@@ -1328,7 +1340,7 @@
                 </div>
                 <div className="col-span-1 md:col-span-2 flex justify-end">
                   <button type="button"
-                    className="text-xs px-3 py-1.5 rounded-lg bg-purple-700 hover:bg-purple-600 w-full md:w-auto h-full flex items-center justify-center"
+                    className="text-sm px-3 py-1.5 rounded-lg bg-purple-700 hover:bg-purple-600 w-full md:w-auto h-full flex items-center justify-center"
                     onClick={handleResetStats}>Reset stats</button>
                 </div>
                 <div className="col-span-1 md:col-span-2 flex items-center">
@@ -1485,7 +1497,7 @@
             {/* ======= LOOKUP ======= */}
             {mode==="lookup" && <LookupCard history={lookupHistory} onAddHistory={pushLookupHistory} onClearHistory={clearLookupHistory} />}
 
-            {mode!=="method" && mode!=="lookup" && <MethodBreakdownSection date={calcTarget}/>}
+            {mode!=="method" && mode!=="lookup" && <MethodBreakdownSection date={calcTarget} onOpenChange={handleCalcOpenChange}/>}
           </div>
         </div>
       );
@@ -1652,6 +1664,8 @@
     function MethodExplanation({date}){
       const memoKey = date ? `${date.y}-${date.m}-${date.d}` : "";
       const breakdowns = React.useMemo(()=> date ? buildMethodBreakdowns(date) : null,[memoKey]);
+      const [methodView,setMethodView]=React.useState('advanced');
+      React.useEffect(()=>{ setMethodView('advanced'); },[memoKey]);
       if(!date){
         return <div className="text-sm text-purple-200/80">Pick a date first.</div>;
       }
@@ -1660,36 +1674,59 @@
         return <div className="text-sm text-purple-100/80">{beginner?.error || "The manual method only applies to AD dates."}</div>;
       }
       const advanced=breakdowns.advanced;
+      const activeBreakdown = methodView==='advanced' ? advanced : beginner;
+      const activeTitle = methodView==='advanced' ? 'Advanced path' : 'Beginner path';
+      const weekdayName = DAY[beginner.total];
       return (
         <div className="space-y-4">
-          <div className="text-sm text-purple-100/80">
-            <div><span className="font-semibold">Date:</span> {fmt(date.y,date.m,date.d)}</div>
-            <div><span className="font-semibold">Weekday:</span> {DAY[beginner.total]}</div>
-            <div><span className="font-semibold">Month code:</span> {METHOD_MONTH_CODES[date.m]}</div>
-            <div><span className="font-semibold">cd:</span> {date.y%100<10?`0${date.y%100}`:date.y%100}</div>
+          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+            <div className="text-sm text-purple-100/80 space-y-1">
+              <div><span className="font-semibold">Date:</span> {fmt(date.y,date.m,date.d)}</div>
+              <div><span className="font-semibold">Weekday:</span> {weekdayName}</div>
+              <div><span className="font-semibold">Month code:</span> {METHOD_MONTH_CODES[date.m]}</div>
+              <div><span className="font-semibold">cd:</span> {date.y%100<10?`0${date.y%100}`:date.y%100}</div>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs uppercase tracking-wide text-purple-200/70">Method</span>
+              <div className="flex overflow-hidden rounded-lg border border-purple-700/60">
+                {[{key:'advanced',label:'Advanced'},{key:'beginner',label:'Beginner'}].map(option=>(
+                  <button
+                    key={option.key}
+                    type="button"
+                    onClick={()=>setMethodView(option.key)}
+                    className={`px-3 py-1.5 text-xs font-medium transition-colors ${methodView===option.key?"bg-purple-600 text-white":"bg-purple-900/40 text-purple-200/80 hover:bg-purple-900/70"}`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="rounded-2xl panel p-3">
-              <MethodStepsList title="Beginner path" breakdown={beginner}/>
-            </div>
-            <div className="rounded-2xl panel p-3">
-              <MethodStepsList title="Advanced path" breakdown={advanced}/>
-            </div>
+          <div className="rounded-2xl panel p-3">
+            <MethodStepsList title={activeTitle} breakdown={activeBreakdown}/>
           </div>
         </div>
       );
     }
 
-    function MethodBreakdownSection({date}){
+    function MethodBreakdownSection({date,onOpenChange}){
       const [open,setOpen]=React.useState(false);
       const key=date?`${date.y}-${date.m}-${date.d}`:"";
-      React.useEffect(()=>{ setOpen(false); },[key]);
+      React.useEffect(()=>{ setOpen(false); onOpenChange?.(false); },[key,onOpenChange]);
+      React.useEffect(()=>{ if(!date){ onOpenChange?.(false); } },[date,onOpenChange]);
       if(!date) return null;
+      const handleToggle=()=>{
+        setOpen(v=>{
+          const next=!v;
+          onOpenChange?.(next);
+          return next;
+        });
+      };
       return (
         <div className="mt-5">
           <button
             type="button"
-            onClick={()=>setOpen(v=>!v)}
+            onClick={handleToggle}
             className="w-full md:w-auto px-4 py-2 rounded-xl bg-purple-700 hover:bg-purple-600 text-sm font-medium"
           >
             {open?"Hide calculations":"Show calculations"}
@@ -1710,7 +1747,12 @@
       const [calcDate,setCalcDate]=React.useState(null);
       function isLeapY(y){ y = y>0?y:1-Math.abs(y); return y%400===0 || (y%4===0 && y%100!==0); }
       function dimY(y,m){ return m===2 ? (isLeapY(y)?29:28) : [4,6,9,11].includes(m)?30:31; }
-      function wdayY(y,m,d){ function jdn(y,m,d){ const a=Math.floor((14-m)/12),y2=y+4800-a,m2=m-3+12*a; return d+Math.floor((153*m2+2)/5)+365*y2+Math.floor(y2/4)-Math.floor(y2/100)+Math.floor(y2/400)-32045; } const toA = y=>y>0?y:1-Math.abs(y); return (jdn(toA(y),m,d)+1)%7; }
+      function wdayY(y,m,d){
+        function jdn(y,m,d){ const a=Math.floor((14-m)/12),y2=y+4800-a,m2=m-3+12*a; return d+Math.floor((153*m2+2)/5)+365*y2+Math.floor(y2/4)-Math.floor(y2/100)+Math.floor(y2/400)-32045; }
+        const toA = y=>y>0?y:1-Math.abs(y);
+        const raw=(jdn(toA(y),m,d)+1)%7;
+        return (raw+7)%7;
+      }
       const MONTH=["January","February","March","April","May","June","July","August","September","October","November","December"];
       const DAY=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
       const fmtYear = y => y>0?String(y):`${Math.abs(y)} BC`;
