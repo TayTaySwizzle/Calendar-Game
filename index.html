@@ -292,9 +292,14 @@
       const flashDeadlineRef=useRef(null);
 
       /* deduction */
-      const [dedType,setDedType]=useState("year");
+      const [dedType,setDedType]=useState("day");
       const [ded,setDed]=useState(null);
       const [dedFlash,setDedFlash]=useState(null);
+      const dedIdRef=useRef(0);
+      const setNewDed = (payload)=>{
+        dedIdRef.current += 1;
+        setDed({id:dedIdRef.current, ...payload});
+      };
       const [lookupHistory,setLookupHistory]=useState([]);
 
       const pendingDedSwitchRef=useRef(null);
@@ -518,6 +523,7 @@
           if(!trackDed){
             const currentSnap = snap?.current || storedByType[dedType] || null;
             if(currentSnap && currentSnap.ded){
+              dedIdRef.current = Math.max(dedIdRef.current, currentSnap.ded?.id || 0);
               setDed(currentSnap.ded); setGuesses(currentSnap.guesses||[]); setCountedWrong(!!currentSnap.countedWrong);
               setMsg(currentSnap.msg||""); setLocked(!!currentSnap.locked); setRevealed(!!currentSnap.revealed);
               return;
@@ -680,7 +686,9 @@
       function goBack(){
         if(mode==="deduction"){
           const prev = dedStack[dedStack.length-1]; if(!prev){ setMsg("Nothing to go back to."); return; }
-          setDedStack(s=>s.slice(0,-1)); setDed(prev);
+          setDedStack(s=>s.slice(0,-1));
+          dedIdRef.current = Math.max(dedIdRef.current, prev?.id || 0);
+          setDed(prev);
           const ans = prev.type==="year" ? fmtYear(prev.y) : prev.type==="month" ? MONTH[prev.m-1] : String(prev.d);
           setMsg(`Answer: ${ans}.`);
           setLocked(true); setRevealed(true); setGuesses([]); return;
@@ -796,7 +804,7 @@
               const d=rint(1,D);
               const built=buildOptionsFor(yCandidate,m,d,target);
               if(!built) continue;
-              setDed({type:"year",y:yCandidate,m,d,w:built.w,options:built.options});
+              setNewDed({type:"year",y:yCandidate,m,d,w:built.w,options:built.options});
               tStartRef.current = trackDed ? performance.now() : null;
               return true;
             }
@@ -827,7 +835,7 @@
               for(let d=1; d<=D; d++){
                 const built=buildOptionsFor(yCandidate,m,d,target);
                 if(!built) continue;
-                setDed({type:"year",y:yCandidate,m,d,w:built.w,options:built.options});
+                setNewDed({type:"year",y:yCandidate,m,d,w:built.w,options:built.options});
                 tStartRef.current = trackDed ? performance.now() : null;
                 return;
               }
@@ -838,7 +846,7 @@
           const fallbackMonth=1;
           const fallbackDay=1;
           const fallbackW=wday(safeYear,fallbackMonth,fallbackDay);
-          setDed({type:"year",y:safeYear,m:fallbackMonth,d:fallbackDay,w:fallbackW,options:[safeYear]});
+          setNewDed({type:"year",y:safeYear,m:fallbackMonth,d:fallbackDay,w:fallbackW,options:[safeYear]});
           tStartRef.current = trackDed ? performance.now() : null;
           return;
         }
@@ -884,7 +892,7 @@
             if(yearCandidate===0) continue;
             const built=buildMonthForYear(yearCandidate,true);
             if(built){
-              setDed({type:"month",...built});
+              setNewDed({type:"month",...built});
               tStartRef.current = trackDed ? performance.now() : null;
               return;
             }
@@ -893,7 +901,7 @@
             if(yearCandidate===0) continue;
             const built=buildMonthForYear(yearCandidate,false);
             if(built){
-              setDed({type:"month",...built});
+              setNewDed({type:"month",...built});
               tStartRef.current = trackDed ? performance.now() : null;
               return;
             }
@@ -902,7 +910,7 @@
           const safeYear=fallbackYear===0?1:fallbackYear;
           const built=buildMonthForYear(safeYear,false);
           if(built){
-            setDed({type:"month",...built});
+            setNewDed({type:"month",...built});
           }else{
             let fallback=null;
             for(let d=1; d<=31 && !fallback; d++){
@@ -931,7 +939,7 @@
               }
             }
             if(fallback){
-              setDed({type:"month",...fallback});
+              setNewDed({type:"month",...fallback});
             }else{
               const table=isLeap(safeYear)?DOOMSDAY_MONTH.leap:DOOMSDAY_MONTH.common;
               const months=[1];
@@ -943,7 +951,7 @@
               }
               const d=1;
               const w=wday(safeYear,1,d);
-              setDed({type:"month",y:safeYear,d,w,m:1,options:months});
+              setNewDed({type:"month",y:safeYear,d,w,m:1,options:months});
             }
           }
           tStartRef.current = trackDed ? performance.now() : null;
@@ -971,7 +979,7 @@
           if(end>D){ end=D; start=Math.max(1,end-span+1); }
           const options=[];
           for(let val=start; val<=end; val++) options.push(val);
-          setDed({type:"day",y:yCandidate,m,w,d,options});
+          setNewDed({type:"day",y:yCandidate,m,w,d,options});
           tStartRef.current = trackDed ? performance.now() : null;
           return;
         }
@@ -1001,9 +1009,25 @@
         setDedType(nextType);
       }
 
-      function flashDed(kind,value,ok){ setDedFlash({kind,value,ok}); setTimeout(()=>setDedFlash(null),450); }
-      function submitDedAnswer(val){
+      function flashDed(kind,index,ok){
+        if(!ded) return;
+        const roundId = ded.id ?? 0;
+        const flashState = {kind,index,ok,roundId};
+        setDedFlash(flashState);
+        setTimeout(()=>{
+          setDedFlash(prev=>{
+            if(prev && prev.roundId===roundId && prev.kind===kind && prev.index===index){
+              return null;
+            }
+            return prev;
+          });
+        },450);
+      }
+      function submitDedAnswer(val, optionIndex){
         if(!ded || locked) return;
+        const idx = (typeof optionIndex === 'number' && optionIndex>=0)
+          ? optionIndex
+          : (Array.isArray(ded.options) ? ded.options.findIndex(opt=>opt===val) : -1);
         const setCorrectThenNext = ()=>{
           setDedStack(s=> ded ? [...s, ded] : s);
           spawnDed();
@@ -1015,7 +1039,7 @@
         };
         const showWrong = (label)=>{ setGuesses(g=> g.includes(label)?g:[...g,label]); setCountedWrong(true); };
         if(ded.type==="year"){
-          const ok = (+val)===ded.y; flashDed('year', +val, ok);
+          const ok = (+val)===ded.y; if(idx>=0) flashDed('year', idx, ok);
           if(ok){
             if(!statsOff && !countedWrong && trackDed && tStartRef.current){ const dt=(performance.now()-tStartRef.current)/1000; updateStats(cur=>{cur.timeSum+=dt; cur.timeCnt+=1;}); }
             if(!statsOff && !countedWrong){ updateStats(cur=>{ cur.played+=1; cur.good+=1; cur.streak+=1; if(cur.streak>cur.best) cur.best=cur.streak; }); }
@@ -1026,7 +1050,7 @@
           }
         }
         if(ded.type==="month"){
-          const ok = (+val)===ded.m; flashDed('month', +val, ok);
+          const ok = (+val)===ded.m; if(idx>=0) flashDed('month', idx, ok);
           if(ok){
             if(!statsOff && !countedWrong && trackDed && tStartRef.current){ const dt=(performance.now()-tStartRef.current)/1000; updateStats(cur=>{cur.timeSum+=dt; cur.timeCnt+=1;}); }
             if(!statsOff && !countedWrong){ updateStats(cur=>{ cur.played+=1; cur.good+=1; cur.streak+=1; if(cur.streak>cur.best) cur.best=cur.streak; }); }
@@ -1037,7 +1061,7 @@
           }
         }
         if(ded.type==="day"){
-          const ok = (+val)===ded.d; flashDed('day', +val, ok);
+          const ok = (+val)===ded.d; if(idx>=0) flashDed('day', idx, ok);
           if(ok){
             if(!statsOff && !countedWrong && trackDed && tStartRef.current){ const dt=(performance.now()-tStartRef.current)/1000; updateStats(cur=>{cur.timeSum+=dt; cur.timeCnt+=1;}); }
             if(!statsOff && !countedWrong){ updateStats(cur=>{ cur.played+=1; cur.good+=1; cur.streak+=1; if(cur.streak>cur.best) cur.best=cur.streak; }); }
@@ -1062,6 +1086,7 @@
         if(!trackDed){
           const snap=pending?.snap || savedDedByType[dedType] || null;
           if(snap && snap.ded){
+            dedIdRef.current = Math.max(dedIdRef.current, snap.ded?.id || 0);
             setDed(snap.ded);
             setGuesses(snap.guesses||[]);
             setCountedWrong(!!snap.countedWrong);
@@ -1274,6 +1299,8 @@
         return date;
       },[mode,date?.y,date?.m,date?.d, ded?.y, ded?.m, ded?.d]);
       const calcTargetKey = calcTarget ? `${calcTarget.y}-${calcTarget.m}-${calcTarget.d}` : 'none';
+      const prevModeRef=useRef(mode);
+      const prevCalcTargetKeyRef=useRef(calcTargetKey);
 
       useEffect(()=>{
         const saved = calcOpenStatesRef.current.has(mode)
@@ -1284,9 +1311,15 @@
       },[mode]);
 
       useEffect(()=>{
-        skipScrollOnOpenRef.current = true;
-        setCalcOpen(false);
-        calcOpenStatesRef.current.set(mode,false);
+        const prevMode = prevModeRef.current;
+        const prevKey = prevCalcTargetKeyRef.current;
+        prevModeRef.current = mode;
+        prevCalcTargetKeyRef.current = calcTargetKey;
+        if(prevMode===mode && calcTargetKey!==prevKey){
+          skipScrollOnOpenRef.current = true;
+          setCalcOpen(false);
+          calcOpenStatesRef.current.set(mode,false);
+        }
       },[calcTargetKey, mode]);
 
       useEffect(()=>{
@@ -1294,7 +1327,14 @@
           if(skipScrollOnOpenRef.current){
             skipScrollOnOpenRef.current=false;
           }else{
-            window.scrollTo({top:document.documentElement.scrollHeight,behavior:'smooth'});
+            const scrollFn = ()=>{
+              window.scrollTo({top:document.documentElement.scrollHeight,behavior:'smooth'});
+            };
+            if(typeof window.requestAnimationFrame==='function'){
+              window.requestAnimationFrame(scrollFn);
+            }else{
+              setTimeout(scrollFn,0);
+            }
           }
         }
         if(!calcOpen){
@@ -1336,6 +1376,7 @@
         }
         if(!revealed) setRevealed(true);
         if(!countedWrong) setCountedWrong(true);
+        if(!locked) setLocked(true);
       };
 
       const handleCalculationOpenChange = (next)=>{
@@ -1513,7 +1554,7 @@
             {mode==="deduction" && (
               <>
                 <div className="mt-3 flex flex-wrap gap-2 justify-center">
-                  {["year","month","day"].map(t=>(
+                  {["day","month","year"].map(t=>(
                     <button key={t} type="button" onClick={()=>changeDedType(t)}
                       className={`px-3 py-1.5 rounded-xl text-sm border ${dedType===t?'bg-purple-600 border-purple-500':'bg-purple-900/40 border-purple-800/60 hover:bg-purple-900/70'}`}>
                       {t[0].toUpperCase()+t.slice(1)}
@@ -1524,25 +1565,25 @@
                 <div className={`mt-4 ${(locked||calcOpen)?'opacity-60 pointer-events-none':''}`}>
                   {ded && ded.type==="year" && (
                     <div className="grid grid-cols-3 gap-2">
-                      {ded.options.map(y=>(
-                        <button key={y} type="button" onClick={()=>submitDedAnswer(y)}
-                          className={`${baseBtn} ${idleBtn} py-2 text-sm ${dedFlash&&dedFlash.kind==='year'&&dedFlash.value===y ? (dedFlash.ok?'flash-good':'flash-bad')+' border-transparent':''}`}>{fmtYear(y)}</button>
+                      {ded.options.map((y,idx)=>(
+                        <button key={`${y}-${idx}`} type="button" onClick={()=>submitDedAnswer(y, idx)}
+                          className={`${baseBtn} ${idleBtn} py-2 text-sm ${ded && dedFlash && dedFlash.roundId===ded.id && dedFlash.kind==='year'&&dedFlash.index===idx ? (dedFlash.ok?'flash-good':'flash-bad')+' border-transparent':''}`}>{fmtYear(y)}</button>
                       ))}
                     </div>
                   )}
                   {ded && ded.type==="month" && (
                     <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-7 gap-2">
-                      {ded.options.map(mv=>(
-                        <button key={mv} type="button" onClick={()=>submitDedAnswer(mv)}
-                          className={`${baseBtn} ${idleBtn} ${dedFlash&&dedFlash.kind==='month'&&dedFlash.value===mv ? (dedFlash.ok?'flash-good':'flash-bad')+' border-transparent':''}`}>{MONTH_ABBR[mv-1]}</button>
+                      {ded.options.map((mv,idx)=>(
+                        <button key={`${mv}-${idx}`} type="button" onClick={()=>submitDedAnswer(mv, idx)}
+                          className={`${baseBtn} ${idleBtn} py-2 text-sm ${ded && dedFlash && dedFlash.roundId===ded.id && dedFlash.kind==='month'&&dedFlash.index===idx ? (dedFlash.ok?'flash-good':'flash-bad')+' border-transparent':''}`}>{MONTH_ABBR[mv-1]}</button>
                       ))}
                     </div>
                   )}
                   {ded && ded.type==="day" && (
                     <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-7 gap-2">
-                      {ded.options.map(dv=>(
-                        <button key={dv} type="button" onClick={()=>submitDedAnswer(dv)}
-                          className={`${baseBtn} ${idleBtn} ${dedFlash&&dedFlash.kind==='day'&&dedFlash.value===dv ? (dedFlash.ok?'flash-good':'flash-bad')+' border-transparent':''}`}>{dv}</button>
+                      {ded.options.map((dv,idx)=>(
+                        <button key={`${dv}-${idx}`} type="button" onClick={()=>submitDedAnswer(dv, idx)}
+                          className={`${baseBtn} ${idleBtn} py-2 text-sm ${ded && dedFlash && dedFlash.roundId===ded.id && dedFlash.kind==='day'&&dedFlash.index===idx ? (dedFlash.ok?'flash-good':'flash-bad')+' border-transparent':''}`}>{dv}</button>
                       ))}
                     </div>
                   )}
@@ -1758,7 +1799,6 @@
             </div>
             <div className="flex flex-col items-end gap-2 text-sm">
               <div className="flex items-center gap-2">
-                <span className="text-xs uppercase tracking-wide text-purple-200/70">Show:</span>
                 <div className="flex overflow-hidden rounded-xl border border-purple-700/60">
                   <button
                     type="button"
