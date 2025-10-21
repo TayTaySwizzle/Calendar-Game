@@ -291,6 +291,7 @@
       const [qSec,setQSec]=useState(7), [qRemain,setQRemain]=useState(7);
       const qDeadlineRef=useRef(null), qPausedAtRef=useRef(null), qPausedAccRef=useRef(0);
       const [active,setActive]=useState(false);
+      const [showDateInactive,setShowDateInactive]=useState(false);
 
       /* flash mode */
       const [flashMs,setFlashMs]=useState(1200);
@@ -454,12 +455,23 @@
       }
 
       function handleMinInputChange(str){
-        setMinInput(str);
-        const trimmed=str.trim();
-        if(trimmed==='') return;
-        if(!/^\d+$/.test(trimmed)) return;
+        if(str==='' || /^\d*$/.test(str.trim())){
+          setMinInput(str);
+        }
+      }
+
+      function handleMaxInputChange(str){
+        if(str==='' || /^\d*$/.test(str.trim())){
+          setMaxInput(str);
+        }
+      }
+
+      function commitMinInput(){
+        const trimmed=minInput.trim();
+        if(trimmed===''){ resetMinInputDisplay(); return; }
+        if(!/^\d+$/.test(trimmed)){ resetMinInputDisplay(); return; }
         const parsed=Number.parseInt(trimmed,10);
-        if(Number.isNaN(parsed)) return;
+        if(Number.isNaN(parsed)){ resetMinInputDisplay(); return; }
         const signHint = era==='BC' ? -1 : era==='BOTH' ? (minY<0?-1:1) : 1;
         const val=sanitizeMinInputValue(parsed, signHint);
         if(era==='BOTH' && val>maxY){
@@ -467,15 +479,15 @@
           setMaxInput(displayInputValue(val,'BOTH'));
         }
         applyMinValue(val);
+        setMinInput(displayInputValue(val, era==='BOTH'?'BOTH':era));
       }
 
-      function handleMaxInputChange(str){
-        setMaxInput(str);
-        const trimmed=str.trim();
-        if(trimmed==='') return;
-        if(!/^\d+$/.test(trimmed)) return;
+      function commitMaxInput(){
+        const trimmed=maxInput.trim();
+        if(trimmed===''){ resetMaxInputDisplay(); return; }
+        if(!/^\d+$/.test(trimmed)){ resetMaxInputDisplay(); return; }
         const parsed=Number.parseInt(trimmed,10);
-        if(Number.isNaN(parsed)) return;
+        if(Number.isNaN(parsed)){ resetMaxInputDisplay(); return; }
         const signHint = era==='BC' ? -1 : era==='BOTH' ? (maxY<0?-1:1) : 1;
         const val=sanitizeMaxInputValue(parsed, signHint);
         if(era==='BOTH' && val<minY){
@@ -483,6 +495,7 @@
           setMinInput(displayInputValue(val,'BOTH'));
         }
         applyMaxValue(val);
+        setMaxInput(displayInputValue(val, era==='BOTH'?'BOTH':era));
       }
 
       function toggleMinSign(){
@@ -526,6 +539,7 @@
       const refreshForRange = React.useCallback(()=>{
         __hideErr();
         setActive(false);
+        setShowDateInactive(false);
         setMsg("");
         setGuesses([]);
         setFlash(null);
@@ -587,6 +601,7 @@
         }
 
         setEra(newEra);
+        setShowDateInactive(false);
         // Load that era's stored range (independent per era)
         let mn, mx;
         if(newEra==='AD'){ mn = adRange.min; mx = adRange.max; }
@@ -662,7 +677,7 @@
             const t=(now - blitzStartRef.current - blitzPausedAccRef.current)/1000;
             const r=Math.max(0, blitzSec - t);
             setBlitzRemain(r);
-            if(r<=.001){ setBlitzRunning(false); setActive(false); setMsg("Time!"); }
+            if(r<=.001){ setBlitzRunning(false); setActive(false); setShowDateInactive(true); setMsg("Time!"); }
           }
           if(mode==="sudden" && qDeadlineRef.current){
             const r=Math.max(0, (qDeadlineRef.current + qPausedAccRef.current - now)/1000);
@@ -670,7 +685,7 @@
             if(r<=.001){
               qDeadlineRef.current=null;
               updateStats(cur=>{ cur.played+=1; cur.streak=0; });
-              setMsg(`Time! Answer: ${DAY[correct]}. Game over.`); setActive(false);
+              setMsg(`Time! Answer: ${DAY[correct]}. Game over.`); setActive(false); setShowDateInactive(true);
             }
           }
           if(mode==="flash" && active && phase==='show' && flashDeadlineRef.current){
@@ -694,10 +709,12 @@
         qDeadlineRef.current=null; qPausedAtRef.current=null; qPausedAccRef.current=0; setQRemain(qSec);
         flashDeadlineRef.current=null; setFlashRemainMs(flashMs);
         tStartRef.current=null;
+        setShowDateInactive(false);
       };
 
       const begin=()=>{
         __hideErr();
+        setShowDateInactive(false);
         setActive(true); setMsg(""); setLocked(false); setRevealed(false); setCountedWrong(false);
         if(mode==="blitz"){ blitzStartRef.current=performance.now(); blitzPausedAccRef.current=0; blitzPausedAtRef.current=null; setBlitzRunning(true); setBlitzRemain(blitzSec); }
         if(mode==="sudden"){ const now=performance.now(); qDeadlineRef.current=now + qSec*1000; qPausedAccRef.current=0; qPausedAtRef.current=null; setQRemain(qSec); }
@@ -773,10 +790,11 @@
         if(!statsOff && !countedWrong){ updateStats(cur=>{ cur.played+=1; cur.streak=0; }); }
         setCountedWrong(true);
         if(isTimer(mode)){
+          setShowDateInactive(true);
           setActive(false);
           if(mode==="blitz"){ setBlitzRunning(false); blitzStartRef.current=null; blitzPausedAtRef.current=null; blitzPausedAccRef.current=0; }
           if(mode==="sudden"){ qDeadlineRef.current=null; qPausedAtRef.current=null; qPausedAccRef.current=0; }
-          if(mode==="flash"){ clearTimeout(flashTimerRef.current); setPhase('dash'); flashDeadlineRef.current=null; setFlashRemainMs(flashMs); }
+          if(mode==="flash"){ clearTimeout(flashTimerRef.current); flashTimerRef.current=null; setPhase('dash'); flashDeadlineRef.current=null; }
         }
         setMsg(`Answer: ${DAY[correct]}.`); setLocked(true); setRevealed(true);
       }
@@ -794,6 +812,7 @@
         setStack(s=>s.slice(0,-1)); setDate(prev);
         setMsg(`Answer: ${DAY[wday(prev.y,prev.m,prev.d)]}.`);
         setGuesses([]); setLocked(true); setRevealed(true);
+        if(isTimer(mode)) setShowDateInactive(true);
       }
 
       function submitDoW(idx){
@@ -812,7 +831,33 @@
           if(mode!=="sudden"){ setGuesses(g=> g.includes(DAY[idx])?g:[...g,DAY[idx]] ); }
           if(!statsOff && !countedWrong){ updateStats(cur=>{ cur.played+=1; cur.streak=0; }); }
           setCountedWrong(true);
-          if(mode==="sudden"){ setMsg(`Answer: ${DAY[correct]}. Game over.`); setActive(false); }
+          if(isTimer(mode)){
+            setShowDateInactive(true);
+            if(mode==="blitz"){
+              setActive(false);
+              setBlitzRunning(false);
+              blitzStartRef.current=null;
+              blitzPausedAtRef.current=null;
+              blitzPausedAccRef.current=0;
+            }
+            if(mode==="sudden"){
+              setActive(false);
+              qDeadlineRef.current=null;
+              qPausedAtRef.current=null;
+              qPausedAccRef.current=0;
+              setMsg(`Answer: ${DAY[correct]}. Game over.`);
+            }
+            if(mode==="flash"){
+              setActive(false);
+              clearTimeout(flashTimerRef.current);
+              flashTimerRef.current=null;
+              flashDeadlineRef.current=null;
+              setPhase('dash');
+            }
+          }else if(mode==="sudden"){
+            setMsg(`Answer: ${DAY[correct]}. Game over.`);
+            setActive(false);
+          }
           setFlash({type:'bad', idx}); setTimeout(()=>setFlash(null),450);
         }
       }
@@ -1188,7 +1233,7 @@
       },[dedType, mode, trackDed, savedDedByType]);
 
       /* slider handlers — each era updates its own store only */
-      const showDash = isTimer(mode) && !active;
+      const showDash = isTimer(mode) && !active && !showDateInactive;
       const showDots = (mode==="flash" && active && phase==='hide');
 
       const dedHeadline = ded ? (ded.type==="year" ? `${MONTH[ded.m-1]} ${ded.d}` : ded.type==="month" ? `${ded.d}, ${fmtYear(ded.y)}` : `${MONTH[ded.m-1]}, ${fmtYear(ded.y)}`) : "—";
@@ -1256,6 +1301,8 @@
         </label>
       );
 
+      const timerSliderLocked = isTimer(mode) && active;
+
       const timerSettingControl = (()=>{
         if(mode==="blitz"){
           return (
@@ -1263,7 +1310,8 @@
               <span className="text-xs text-purple-300/80">Duration:</span>
               <input type="range" min="15" max="180" step="5" value={blitzSec}
                 onChange={e=>{const v=+e.target.value; setBlitzSec(v); if(!active) setBlitzRemain(v);}}
-                className="accent-purple-500 w-full max-w-[8rem]"/>
+                disabled={timerSliderLocked}
+                className="accent-purple-500 w-full max-w-[8rem] disabled:opacity-50 disabled:cursor-not-allowed"/>
               <span className="tabular-nums text-xs w-12 text-right">{blitzSec}s</span>
             </div>
           );
@@ -1274,7 +1322,8 @@
               <span className="text-xs text-purple-300/80 whitespace-nowrap">Per Q:</span>
               <input type="range" min="3" max="20" step="1" value={qSec}
                 onChange={e=>{const v=+e.target.value; setQSec(v); if(!active) setQRemain(v);}}
-                className="accent-purple-500 w-full max-w-[8rem]"/>
+                disabled={timerSliderLocked}
+                className="accent-purple-500 w-full max-w-[8rem] disabled:opacity-50 disabled:cursor-not-allowed"/>
               <span className="tabular-nums text-xs w-12 text-right">{qSec}s</span>
             </div>
           );
@@ -1283,8 +1332,9 @@
           return (
             <div className="flex items-center gap-2 w-full">
               <input type="range" min="100" max="3000" step="50" value={flashMs}
-                onChange={e=>setFlashMs(+e.target.value)}
-                className="accent-purple-500 w-full max-w-[9rem]"/>
+                onChange={e=>{const v=+e.target.value; setFlashMs(v); if(!active) setFlashRemainMs(v);}}
+                disabled={timerSliderLocked}
+                className="accent-purple-500 w-full max-w-[9rem] disabled:opacity-50 disabled:cursor-not-allowed"/>
               <span className="tabular-nums text-xs w-14 text-right">{flashMs}ms</span>
             </div>
           );
@@ -1340,8 +1390,8 @@
                       pattern="[0-9]*"
                       value={minInput}
                       onChange={e=>handleMinInputChange(e.target.value)}
-                      onBlur={resetMinInputDisplay}
-                      onKeyDown={blockMinusKey}
+                      onBlur={()=>commitMinInput()}
+                      onKeyDown={e=>{ if(e.key==='Enter'){ e.preventDefault(); commitMinInput(); e.currentTarget.blur(); return; } blockMinusKey(e); }}
                       onBeforeInput={blockMinusBeforeInput}
                       className="w-full panel rounded-xl px-3 py-2 pr-11 focus:outline-none focus:ring-2 focus:ring-purple-400 tabular-nums"
                     />
@@ -1367,8 +1417,8 @@
                       pattern="[0-9]*"
                       value={maxInput}
                       onChange={e=>handleMaxInputChange(e.target.value)}
-                      onBlur={resetMaxInputDisplay}
-                      onKeyDown={blockMinusKey}
+                      onBlur={()=>commitMaxInput()}
+                      onKeyDown={e=>{ if(e.key==='Enter'){ e.preventDefault(); commitMaxInput(); e.currentTarget.blur(); return; } blockMinusKey(e); }}
                       onBeforeInput={blockMinusBeforeInput}
                       className="w-full panel rounded-xl px-3 py-2 pr-11 focus:outline-none focus:ring-2 focus:ring-purple-400 tabular-nums"
                     />
@@ -1391,13 +1441,13 @@
       );
 
       const showSuddenBar = mode==="sudden";
-      const suddenSeconds = (active && qDeadlineRef.current) ? qRemain : (qRemain<=0.05 ? 0 : qSec);
+      const suddenSeconds = qRemain;
       const suddenTimeLabel = formatSecondsLabel(suddenSeconds);
-      const suddenPercent = (active && qDeadlineRef.current && qSec>0) ? Math.max(0, Math.min(100,(qRemain/qSec)*100)) : 100;
+      const suddenPercent = qSec>0 ? Math.max(0, Math.min(100,(qRemain/qSec)*100)) : 100;
       const showFlashBar = mode==="flash";
-      const flashSeconds = (active && phase==='show') ? (flashRemainMs/1000) : ((flashRemainMs/1000)<=0.05 ? 0 : (flashMs/1000));
+      const flashSeconds = flashRemainMs/1000;
       const flashTimeLabel = formatSecondsLabel(flashSeconds);
-      const flashPercent = (active && phase==='show' && flashDeadlineRef.current && flashMs>0) ? Math.max(0, Math.min(100,(flashRemainMs/flashMs)*100)) : 100;
+      const flashPercent = flashMs>0 ? Math.max(0, Math.min(100,(flashRemainMs/flashMs)*100)) : 100;
       const timerBusy = isTimer(mode) && active;
       const calcTarget = React.useMemo(()=>{
         if(mode==="lookup") return null;
@@ -2059,38 +2109,40 @@
       };
       const handleClearHistory = ()=>{ if(onClearHistory) onClearHistory(); };
       return (
-        <div className="mt-1 rounded-2xl panel p-4">
-          <div className="flex items-stretch gap-2">
-            <input value={lookupIn} onChange={e=>setLookupIn(e.target.value)} placeholder="e.g., 7/4/1776"
-                  className="panel rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-400 flex-1 min-w-0"/>
-            <button type="button" onClick={()=>runLookup()} className="px-4 py-2 rounded-xl bg-purple-600 text-white text-sm font-medium">Lookup</button>
-            <button type="button" onClick={()=>clearLookup()} className="px-4 py-2 rounded-xl bg-zinc-700 text-white text-sm font-medium">Clear</button>
-          </div>
-          {lookupOut && <div className="mt-3 text-sm">{lookupOut}</div>}
-          <ul className="mt-4 text-xs text-purple-100/90 space-y-2 list-disc list-inside">
-            <li>Format: <b>month/day/year</b> (e.g., <b>7/4/1776</b>).</li>
-            <li>BC years: use a leading minus (e.g., <b>-1</b> = <b>1 BC</b>). No year 0.</li>
-            <li>Valid range: <b>−10000…10000</b>. Days must be valid for the month.</li>
-          </ul>
-          {entries.length>0 && (
-            <div className="mt-5 pt-4 border-t border-purple-500/40">
-              <div className="flex items-center justify-between text-[11px] uppercase tracking-wide text-purple-200/70">
-                <span>History</span>
-                <button type="button" onClick={()=>handleClearHistory()} className="text-purple-200/70 font-medium">Clear history</button>
-              </div>
-              <ul className="mt-3 space-y-2">
-                {entries.map(entry=>(
-                  <li key={entry.id}>
-                    <button type="button" onClick={()=>handleHistorySelect(entry)}
-                            className="w-full text-left px-3 py-2 rounded-xl panel flex items-center justify-between gap-3 text-xs">
-                      <span className="block text-[13px] font-medium text-purple-100/90">{entry.label}</span>
-                      <span className="text-[12px] font-semibold text-purple-200/80">{entry.weekday}</span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
+        <div className="mt-1 space-y-4">
+          <div className="rounded-2xl panel p-4">
+            <div className="flex items-stretch gap-2">
+              <input value={lookupIn} onChange={e=>setLookupIn(e.target.value)} placeholder="e.g., 7/4/1776"
+                    className="rounded-xl px-3 py-2 bg-purple-900/40 border border-purple-700/60 focus:outline-none focus:ring-2 focus:ring-purple-400 flex-1 min-w-0 text-purple-50 placeholder:text-purple-200/60"/>
+              <button type="button" onClick={()=>runLookup()} className="px-4 py-2 rounded-xl bg-purple-600 text-white text-sm font-medium">Lookup</button>
+              <button type="button" onClick={()=>clearLookup()} className="px-4 py-2 rounded-xl bg-zinc-700 text-white text-sm font-medium">Clear</button>
             </div>
-          )}
+            {lookupOut && <div className="mt-3 text-sm">{lookupOut}</div>}
+            <ul className="mt-4 text-xs text-purple-100/90 space-y-2 list-disc list-inside">
+              <li>Format: <b>month/day/year</b> (e.g., <b>7/4/1776</b>).</li>
+              <li>BC years: use a leading minus (e.g., <b>-1</b> = <b>1 BC</b>). No year 0.</li>
+              <li>Valid range: <b>−10000…10000</b>. Days must be valid for the month.</li>
+            </ul>
+            {entries.length>0 && (
+              <div className="mt-5 pt-4 border-t border-purple-500/40">
+                <div className="flex items-center justify-between text-[11px] uppercase tracking-wide text-purple-200/70">
+                  <span>History</span>
+                  <button type="button" onClick={()=>handleClearHistory()} className="text-purple-200/70 font-medium">Clear history</button>
+                </div>
+                <ul className="mt-3 space-y-2">
+                  {entries.map(entry=>(
+                    <li key={entry.id}>
+                      <button type="button" onClick={()=>handleHistorySelect(entry)}
+                              className="w-full text-left px-3 py-2 rounded-xl thin bg-purple-900/40 hover:bg-purple-900/70 flex items-center justify-between gap-3 text-xs transition-colors">
+                        <span className="block text-[13px] font-medium text-purple-100/90">{entry.label}</span>
+                        <span className="text-[12px] font-semibold text-purple-200/80">{entry.weekday}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
           {calcDate && (
             <MethodBreakdownSection date={calcDate}/>
           )}
