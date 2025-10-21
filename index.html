@@ -246,6 +246,8 @@
       const [maxInput,setMaxInput]=useState('10000');
       const minInputId=useId();
       const maxInputId=useId();
+      const minInputRef=useRef(null);
+      const maxInputRef=useRef(null);
 
       const [date,setDate]=useState(()=>randomDate(1,10000));
       const [stack,setStack]=useState([]), [dedStack,setDedStack]=useState([]);
@@ -263,6 +265,7 @@
       const skipScrollOnOpenRef=useRef(false);
       const calcScrollRafRef=useRef(null);
       const calcScrollTimeoutRef=useRef(null);
+      const rangeRefreshPendingRef=useRef(false);
 
       /* snapshots when avg-time disabled (per era) */
       const [savedClassicByEra,setSavedClassicByEra]=useState({AD:null,BC:null,BOTH:null});
@@ -271,8 +274,9 @@
 
       /* per-mode stats */
       const blankStats=()=>({played:0,good:0,streak:0,best:0,timeSum:0,timeCnt:0});
-      const [statsByMode,setStatsByMode]=useState({classic:blankStats(), blitz:blankStats(), sudden:blankStats(), flash:blankStats(), deduction:blankStats()});
-      const S = statsByMode[mode] || blankStats();
+      const blankStatsByEra=()=>({AD:blankStats(), BC:blankStats(), BOTH:blankStats()});
+      const [statsByMode,setStatsByMode]=useState({classic:blankStatsByEra(), blitz:blankStatsByEra(), sudden:blankStatsByEra(), flash:blankStatsByEra(), deduction:blankStatsByEra()});
+      const S = (statsByMode[mode]?.[era]) || blankStats();
 
       const [statsOff,setStatsOff]=useState(false);
       const [trackClassic,setTrackClassic]=useState(false);    // avg time enabled? (classic)
@@ -317,17 +321,47 @@
       },[date,mode,active]);
 
       /* helpers */
-      const updateStats = (mutator)=>{ setStatsByMode(prev=>{ const cur={...(prev[mode]||blankStats())}; mutator(cur); return {...prev,[mode]:cur}; }); };
-      const resetStatsCurrent=()=>{ setStatsByMode(prev=>({...prev,[mode]:blankStats()})); };
+      const updateStats = (mutator)=>{
+        setStatsByMode(prev=>{
+          const modeStats = {...(prev[mode]||blankStatsByEra())};
+          const eraStats = {...(modeStats[era]||blankStats())};
+          mutator(eraStats);
+          return {...prev, [mode]:{...modeStats, [era]:eraStats}};
+        });
+      };
+      const resetStatsCurrent=()=>{
+        setStatsByMode(prev=>{
+          const modeStats = {...(prev[mode]||blankStatsByEra())};
+          return {...prev, [mode]:{...modeStats, [era]:blankStats()}};
+        });
+      };
       const setCalcPenalty=(value)=>{ setCalcPenaltyActive(value); calcPenaltyStatesRef.current.set(mode,value); };
 
       /* avg-time toggle reset of sums when enabling */
       const prevTrackClassic=useRef(trackClassic);
-      useEffect(()=>{ if(prevTrackClassic.current===false && trackClassic===true){ setStatsByMode(p=>({...p, classic:{...(p.classic||blankStats()), timeSum:0, timeCnt:0}})); tStartRef.current=performance.now(); } prevTrackClassic.current=trackClassic; },[trackClassic]);
+      useEffect(()=>{
+        if(prevTrackClassic.current===false && trackClassic===true){
+          setStatsByMode(p=>{
+            const modeStats = {...(p.classic||blankStatsByEra())};
+            const eraStats = {...(modeStats[era]||blankStats())};
+            eraStats.timeSum=0;
+            eraStats.timeCnt=0;
+            return {...p, classic:{...modeStats, [era]:eraStats}};
+          });
+          tStartRef.current=performance.now();
+        }
+        prevTrackClassic.current=trackClassic;
+      },[trackClassic, era]);
       const prevTrackDed=useRef(trackDed);
       useEffect(()=>{
         if(prevTrackDed.current===false && trackDed===true){
-          setStatsByMode(p=>({...p, deduction:{...(p.deduction||blankStats()), timeSum:0, timeCnt:0}}));
+          setStatsByMode(p=>{
+            const modeStats = {...(p.deduction||blankStatsByEra())};
+            const eraStats = {...(modeStats[era]||blankStats())};
+            eraStats.timeSum=0;
+            eraStats.timeCnt=0;
+            return {...p, deduction:{...modeStats, [era]:eraStats}};
+          });
           tStartRef.current=performance.now();
           setSavedDedByType(blankDedTypeStore());
         }else if(prevTrackDed.current===true && trackDed===false){
@@ -357,18 +391,26 @@
         return String(y);
       };
 
+      const scheduleRangeRefresh = ()=>{ rangeRefreshPendingRef.current=true; };
+
       function applyMinValue(val){
         if(era==='AD'){ setAdRange(r=>({...r,min:val})); }
         else if(era==='BC'){ setBcRange(r=>({...r,min:val})); }
         else { setBothRange(r=>({...r,min:val})); }
-        setMinY(val);
+        if(val!==minY){
+          setMinY(val);
+          scheduleRangeRefresh();
+        }
       }
 
       function applyMaxValue(val){
         if(era==='AD'){ setAdRange(r=>({...r,max:val})); }
         else if(era==='BC'){ setBcRange(r=>({...r,max:val})); }
         else { setBothRange(r=>({...r,max:val})); }
-        setMaxY(val);
+        if(val!==maxY){
+          setMaxY(val);
+          scheduleRangeRefresh();
+        }
       }
 
       function sanitizeMinInputValue(raw, signHint=null){
@@ -425,7 +467,6 @@
           setMaxInput(displayInputValue(val,'BOTH'));
         }
         applyMinValue(val);
-        setMinInput(displayInputValue(val));
       }
 
       function handleMaxInputChange(str){
@@ -442,7 +483,6 @@
           setMinInput(displayInputValue(val,'BOTH'));
         }
         applyMaxValue(val);
-        setMaxInput(displayInputValue(val));
       }
 
       function toggleMinSign(){
@@ -474,8 +514,59 @@
       const resetMinInputDisplay = ()=> setMinInput(displayInputValue(minY));
       const resetMaxInputDisplay = ()=> setMaxInput(displayInputValue(maxY));
 
-      useEffect(()=>{ setMinInput(displayInputValue(minY)); },[minY,era]);
-      useEffect(()=>{ setMaxInput(displayInputValue(maxY)); },[maxY,era]);
+      useEffect(()=>{
+        if(document.activeElement===minInputRef.current) return;
+        setMinInput(displayInputValue(minY));
+      },[minY,era]);
+      useEffect(()=>{
+        if(document.activeElement===maxInputRef.current) return;
+        setMaxInput(displayInputValue(maxY));
+      },[maxY,era]);
+
+      const refreshForRange = React.useCallback(()=>{
+        __hideErr();
+        setActive(false);
+        setMsg("");
+        setGuesses([]);
+        setFlash(null);
+        setLocked(false);
+        setRevealed(false);
+        setCountedWrong(false);
+        setCalcPenalty(false);
+        setCalcOpen(false);
+        calcOpenStatesRef.current.set(mode,false);
+        setStack([]);
+        setDedStack([]);
+        setInput("");
+        calcPenaltyStatesRef.current.set(mode,false);
+        setBlitzRemain(blitzSec);
+        setBlitzRunning(false);
+        blitzStartRef.current=null;
+        blitzPausedAtRef.current=null;
+        blitzPausedAccRef.current=0;
+        qDeadlineRef.current=null;
+        qPausedAtRef.current=null;
+        qPausedAccRef.current=0;
+        setQRemain(qSec);
+        clearTimeout(flashTimerRef.current);
+        flashTimerRef.current=null;
+        setPhase('dash');
+        flashDeadlineRef.current=null;
+        setFlashRemainMs(flashMs);
+        tStartRef.current=null;
+        const nextDate=randomDate(minY,maxY);
+        setDate(nextDate);
+        spawnDedWithRange(minY,maxY);
+        setSavedClassicByEra(prev=>({...prev,[era]:null}));
+        setSavedDedByEra(prev=>({...prev,[era]:null}));
+        setSavedDedByType(blankDedTypeStore());
+      },[mode,blitzSec,qSec,flashMs,minY,maxY,era]);
+
+      useEffect(()=>{
+        if(!rangeRefreshPendingRef.current) return;
+        rangeRefreshPendingRef.current=false;
+        refreshForRange();
+      },[minY,maxY,refreshForRange]);
 
       /* Era apply — with snapshots when avg-time disabled (Classic & Deduction) */
       function applyEra(newEra){
@@ -1106,6 +1197,30 @@
       const baseBtn="w-full rounded-2xl border px-4 py-3 text-base md:text-sm transition shadow-sm select-none";
       const idleBtn="border-purple-800/60 bg-purple-900/30 hover:bg-purple-900/60";
       const optionsDisabled = ((isTimer(mode) && !active) || locked || calcOpen || calcPenaltyActive);
+      const centerLastOptionClasses = (index,total)=>{
+        if(total<=0 || index!==total-1) return '';
+        const classes=new Set();
+        const remainderBase = total%3;
+        const remainderSm = total%4;
+        const remainderMd = total%7;
+        if(remainderBase===1){
+          classes.add('col-start-2');
+          if(remainderSm!==1) classes.add('sm:col-start-auto');
+        }
+        if(remainderSm===1){
+          classes.add('sm:col-span-2');
+          classes.add('sm:col-start-2');
+          classes.add('md:col-span-1');
+        }else if(remainderBase===1){
+          classes.add('sm:col-start-auto');
+        }
+        if(remainderMd===1){
+          classes.add('md:col-start-4');
+        }else if(remainderSm===1 || remainderBase===1){
+          classes.add('md:col-start-auto');
+        }
+        return Array.from(classes).join(' ');
+      };
 
       const eraControl = (
         <div className="flex rounded-xl overflow-hidden border border-purple-800/60 w-full">
@@ -1207,7 +1322,7 @@
         <div className="mt-3 rounded-2xl card p-3">
           <button type="button" onClick={()=>setRangeOpen(o=>!o)} aria-expanded={rangeOpen}
                   className="w-full text-left text-sm text-purple-200/90 flex items-center justify-between">
-            <span>Year range <span className="tabular-nums ml-1">{fmtRangeYear(minY)} → {fmtRangeYear(maxY)}</span></span>
+            <span>Year range: <span className="tabular-nums ml-1">{fmtRangeYear(minY)} → {fmtRangeYear(maxY)}</span></span>
             <span className={`text-white/90 text-[7px] leading-none transition-transform ease-in-out ${rangeOpen?'rotate-180':''}`}
                   style={{transitionDuration:'350ms'}}>▼</span>
           </button>
@@ -1218,6 +1333,7 @@
                   <label htmlFor={minInputId} className="block text-xs text-purple-200/80 mb-1">Start year</label>
                   <div className="relative">
                     <input
+                      ref={minInputRef}
                       id={minInputId}
                       type="text"
                       inputMode="numeric"
@@ -1244,6 +1360,7 @@
                   <label htmlFor={maxInputId} className="block text-xs text-purple-200/80 mb-1">End year</label>
                   <div className="relative">
                     <input
+                      ref={maxInputRef}
                       id={maxInputId}
                       type="text"
                       inputMode="numeric"
@@ -1365,18 +1482,22 @@
           if(!statsOff){
             updateStats(cur=>{ cur.played+=1; cur.streak=0; });
           }
-          if(mode==="deduction" && ded){
-            const ans = ded.type==="year" ? fmtYear(ded.y) : ded.type==="month" ? MONTH[ded.m-1] : String(ded.d);
-            setMsg(`Answer: ${ans}.`);
-          }else if(mode!=="deduction"){
-            setMsg(`Answer: ${DAY[correct]}.`);
-          }
-          if(isTimer(mode)){
-            setActive(false);
-            if(mode==="blitz"){ setBlitzRunning(false); blitzStartRef.current=null; blitzPausedAtRef.current=null; blitzPausedAccRef.current=0; }
-            if(mode==="sudden"){ qDeadlineRef.current=null; qPausedAtRef.current=null; qPausedAccRef.current=0; }
-            if(mode==="flash"){ clearTimeout(flashTimerRef.current); setPhase('dash'); flashDeadlineRef.current=null; setFlashRemainMs(flashMs); }
-          }
+        }
+        let answerMsg=null;
+        if(mode==="deduction" && ded){
+          const ans = ded.type==="year" ? fmtYear(ded.y) : ded.type==="month" ? MONTH[ded.m-1] : String(ded.d);
+          answerMsg=`Answer: ${ans}.`;
+        }else if(mode!=="deduction"){
+          answerMsg=`Answer: ${DAY[correct]}.`;
+        }
+        if(answerMsg){
+          setMsg(answerMsg);
+        }
+        if(isTimer(mode)){
+          setActive(false);
+          if(mode==="blitz"){ setBlitzRunning(false); blitzStartRef.current=null; blitzPausedAtRef.current=null; blitzPausedAccRef.current=0; }
+          if(mode==="sudden"){ qDeadlineRef.current=null; qPausedAtRef.current=null; qPausedAccRef.current=0; }
+          if(mode==="flash"){ clearTimeout(flashTimerRef.current); setPhase('dash'); flashDeadlineRef.current=null; setFlashRemainMs(flashMs); }
         }
         if(!revealed) setRevealed(true);
         if(!countedWrong) setCountedWrong(true);
@@ -1516,11 +1637,16 @@
             {["classic","blitz","sudden","flash"].includes(mode) && (
               <>
                 <div className={`mt-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3 ${optionsDisabled?'opacity-60 pointer-events-none':''}`}>
-                  {DAY.map((n,i)=>(
-                    <button key={n} type="button"
-                      onClick={()=>{ submitDoW(i); setInput(""); if(isTouch) document.activeElement?.blur(); }}
-                      className={`${baseBtn} ${flash && flash.idx===i ? (flash.type==='good'?'flash-good':'flash-bad')+' border-transparent' : idleBtn}`}>{n}</button>
-                  ))}
+                  {DAY.map((n,i)=>{
+                    const saturdayPosition = i===DAY.length-1
+                      ? 'col-span-2 sm:col-span-1 sm:col-start-2 md:col-span-2 md:col-start-2 lg:col-span-1 lg:col-start-auto xl:col-span-1 xl:col-start-auto 2xl:col-span-1 2xl:col-start-auto'
+                      : '';
+                    return (
+                      <button key={n} type="button"
+                        onClick={()=>{ submitDoW(i); setInput(""); if(isTouch) document.activeElement?.blur(); }}
+                        className={`${baseBtn} ${flash && flash.idx===i ? (flash.type==='good'?'flash-good':'flash-bad')+' border-transparent' : idleBtn} ${saturdayPosition}`}>{n}</button>
+                    );
+                  })}
                 </div>
 
                 {/* Action bubble */}
@@ -1545,8 +1671,12 @@
 
                   {(msg || (guesses.length>0 && mode!=="sudden")) && (
                     <div className="mt-3 text-purple-100/90 text-sm">
-                      {msg && <div>{msg}</div>}
-                      {(mode!=="sudden" && guesses.length>0) && (<div className="mt-2 flex flex-wrap gap-1 items-center"><span className="text-purple-300/80 text-xs mr-1">Guesses so far:</span>{guesses.map(g=><span key={g} className="chip">{g}</span>)}</div>)}
+                      {(mode!=="sudden" && guesses.length>0) && (
+                        <div className="flex flex-wrap gap-1 items-center"><span className="text-purple-300/80 text-xs mr-1">Guesses:</span>{guesses.map(g=><span key={g} className="chip">{g}</span>)}</div>
+                      )}
+                      {msg && (
+                        <div className={`${(mode!=="sudden" && guesses.length>0)?'mt-2':''}`}>{msg}</div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -1568,40 +1698,53 @@
                 <div className={`mt-4 ${(locked||calcOpen||calcPenaltyActive)?'opacity-60 pointer-events-none':''}`}>
                   {ded && ded.type==="year" && (
                     <div className="grid grid-cols-3 gap-2">
-                      {ded.options.map((y,idx)=>(
-                        <button key={y} type="button" onClick={()=>submitDedAnswer(y, idx)}
-                          className={`${baseBtn} ${idleBtn} py-2 text-sm ${dedFlash&&dedFlash.kind==='year'&&dedFlash.index===idx ? (dedFlash.ok?'flash-good':'flash-bad')+' border-transparent':''}`}>{fmtYear(y)}</button>
-                      ))}
+                      {ded.options.map((y,idx)=>{
+                        const centeredClasses=centerLastOptionClasses(idx,ded.options.length);
+                        return (
+                          <button key={y} type="button" onClick={()=>submitDedAnswer(y, idx)}
+                            className={`${baseBtn} ${idleBtn} py-2 text-sm ${dedFlash&&dedFlash.kind==='year'&&dedFlash.index===idx ? (dedFlash.ok?'flash-good':'flash-bad')+' border-transparent':''} ${centeredClasses}`}>{fmtYear(y)}</button>
+                        );
+                      })}
                     </div>
                   )}
                   {ded && ded.type==="month" && (
                     <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-7 gap-2">
-                      {ded.options.map((mv,idx)=>(
-                        <button key={mv} type="button" onClick={()=>submitDedAnswer(mv, idx)}
-                          className={`${baseBtn} ${idleBtn} py-2 text-sm ${dedFlash&&dedFlash.kind==='month'&&dedFlash.index===idx ? (dedFlash.ok?'flash-good':'flash-bad')+' border-transparent':''}`}>{MONTH_ABBR[mv-1]}</button>
-                      ))}
+                      {ded.options.map((mv,idx)=>{
+                        const centeredClasses=centerLastOptionClasses(idx,ded.options.length);
+                        return (
+                          <button key={mv} type="button" onClick={()=>submitDedAnswer(mv, idx)}
+                            className={`${baseBtn} ${idleBtn} py-2 text-sm ${dedFlash&&dedFlash.kind==='month'&&dedFlash.index===idx ? (dedFlash.ok?'flash-good':'flash-bad')+' border-transparent':''} ${centeredClasses}`}>{MONTH_ABBR[mv-1]}</button>
+                        );
+                      })}
                     </div>
                   )}
                   {ded && ded.type==="day" && (
                     <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-7 gap-2">
-                      {ded.options.map((dv,idx)=>(
-                        <button key={dv} type="button" onClick={()=>submitDedAnswer(dv, idx)}
-                          className={`${baseBtn} ${idleBtn} py-2 text-sm ${dedFlash&&dedFlash.kind==='day'&&dedFlash.index===idx ? (dedFlash.ok?'flash-good':'flash-bad')+' border-transparent':''}`}>{dv}</button>
-                      ))}
+                      {ded.options.map((dv,idx)=>{
+                        const centeredClasses=centerLastOptionClasses(idx,ded.options.length);
+                        return (
+                          <button key={dv} type="button" onClick={()=>submitDedAnswer(dv, idx)}
+                            className={`${baseBtn} ${idleBtn} py-2 text-sm ${dedFlash&&dedFlash.kind==='day'&&dedFlash.index===idx ? (dedFlash.ok?'flash-good':'flash-bad')+' border-transparent':''} ${centeredClasses}`}>{dv}</button>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
 
                 <div className="mt-4 rounded-2xl panel p-3">
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-wrap gap-2 justify-center">
                     <button type="button" className="px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm" onClick={()=>runDeductionRound()}>New</button>
                     <button type="button" className={`px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm ${(locked||calcOpen||calcPenaltyActive)?'opacity-60 pointer-events-none':''}`} onClick={()=>reveal()}>Reveal</button>
                     <button type="button" className="px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm" onClick={()=>goBack()}>Back</button>
                   </div>
                   {(msg || guesses.length>0) && (
                     <div className="mt-3 text-sm">
-                      {msg && <div>{msg}</div>}
-                      {guesses.length>0 && (<div className="mt-2 flex flex-wrap gap-1 items-center"><span className="text-purple-300/80 text-xs mr-1">Guesses so far:</span>{guesses.map(g=><span key={g} className="chip">{g}</span>)}</div>)}
+                      {guesses.length>0 && (
+                        <div className="flex flex-wrap gap-1 items-center"><span className="text-purple-300/80 text-xs mr-1">Guesses:</span>{guesses.map(g=><span key={g} className="chip">{g}</span>)}</div>
+                      )}
+                      {msg && (
+                        <div className={`${guesses.length>0?'mt-2':''}`}>{msg}</div>
+                      )}
                     </div>
                   )}
                 </div>
