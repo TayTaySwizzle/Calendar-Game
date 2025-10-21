@@ -206,11 +206,6 @@
       if(value<=0.05) return "0s";
       return `${value.toFixed(1)}s`;
     };
-    const blockMinusKey = (event)=>{
-      if(event.key==="-" || event.key==="Subtract" || event.key==="Minus"){
-        event.preventDefault();
-      }
-    };
     const blockMinusBeforeInput = (event)=>{
       if(event.data && event.data.includes("-")){
         event.preventDefault();
@@ -271,8 +266,15 @@
 
       /* per-mode stats */
       const blankStats=()=>({played:0,good:0,streak:0,best:0,timeSum:0,timeCnt:0});
-      const [statsByMode,setStatsByMode]=useState({classic:blankStats(), blitz:blankStats(), sudden:blankStats(), flash:blankStats(), deduction:blankStats()});
-      const S = statsByMode[mode] || blankStats();
+      const blankModeStats=()=>({AD:blankStats(), BOTH:blankStats(), BC:blankStats()});
+      const [statsByMode,setStatsByMode]=useState(()=>({
+        classic:blankModeStats(),
+        blitz:blankModeStats(),
+        sudden:blankModeStats(),
+        flash:blankModeStats(),
+        deduction:blankModeStats()
+      }));
+      const S = (statsByMode[mode]?.[era]) || blankStats();
 
       const [statsOff,setStatsOff]=useState(false);
       const [trackClassic,setTrackClassic]=useState(false);    // avg time enabled? (classic)
@@ -317,17 +319,59 @@
       },[date,mode,active]);
 
       /* helpers */
-      const updateStats = (mutator)=>{ setStatsByMode(prev=>{ const cur={...(prev[mode]||blankStats())}; mutator(cur); return {...prev,[mode]:cur}; }); };
-      const resetStatsCurrent=()=>{ setStatsByMode(prev=>({...prev,[mode]:blankStats()})); };
+      const updateStats = (mutator)=>{
+        setStatsByMode(prev=>{
+          const byMode={...prev};
+          const modeStats={...(byMode[mode]||blankModeStats())};
+          const cur={...(modeStats[era]||blankStats())};
+          mutator(cur);
+          modeStats[era]=cur;
+          byMode[mode]=modeStats;
+          return byMode;
+        });
+      };
+      const resetStatsCurrent=()=>{
+        setStatsByMode(prev=>{
+          const byMode={...prev};
+          const modeStats={...(byMode[mode]||blankModeStats())};
+          modeStats[era]=blankStats();
+          byMode[mode]=modeStats;
+          return byMode;
+        });
+      };
       const setCalcPenalty=(value)=>{ setCalcPenaltyActive(value); calcPenaltyStatesRef.current.set(mode,value); };
 
       /* avg-time toggle reset of sums when enabling */
       const prevTrackClassic=useRef(trackClassic);
-      useEffect(()=>{ if(prevTrackClassic.current===false && trackClassic===true){ setStatsByMode(p=>({...p, classic:{...(p.classic||blankStats()), timeSum:0, timeCnt:0}})); tStartRef.current=performance.now(); } prevTrackClassic.current=trackClassic; },[trackClassic]);
+      useEffect(()=>{
+        if(prevTrackClassic.current===false && trackClassic===true){
+          setStatsByMode(p=>{
+            const byMode={...p};
+            const modeStats={...(byMode.classic||blankModeStats())};
+            const cur={...(modeStats[era]||blankStats())};
+            cur.timeSum=0;
+            cur.timeCnt=0;
+            modeStats[era]=cur;
+            byMode.classic=modeStats;
+            return byMode;
+          });
+          tStartRef.current=performance.now();
+        }
+        prevTrackClassic.current=trackClassic;
+      },[trackClassic,era]);
       const prevTrackDed=useRef(trackDed);
       useEffect(()=>{
         if(prevTrackDed.current===false && trackDed===true){
-          setStatsByMode(p=>({...p, deduction:{...(p.deduction||blankStats()), timeSum:0, timeCnt:0}}));
+          setStatsByMode(p=>{
+            const byMode={...p};
+            const modeStats={...(byMode.deduction||blankModeStats())};
+            const cur={...(modeStats[era]||blankStats())};
+            cur.timeSum=0;
+            cur.timeCnt=0;
+            modeStats[era]=cur;
+            byMode.deduction=modeStats;
+            return byMode;
+          });
           tStartRef.current=performance.now();
           setSavedDedByType(blankDedTypeStore());
         }else if(prevTrackDed.current===true && trackDed===false){
@@ -347,7 +391,7 @@
           });
         }
         prevTrackDed.current=trackDed;
-      },[trackDed]);
+      },[trackDed,era]);
 
       /* ===== Range helpers ===== */
       const fmtRangeYear = (y)=> y>0?`${y} AD`:`${Math.abs(y)} BC`;
@@ -356,20 +400,6 @@
         if(scopeEra==='BC' || scopeEra==='BOTH') return String(Math.abs(y));
         return String(y);
       };
-
-      function applyMinValue(val){
-        if(era==='AD'){ setAdRange(r=>({...r,min:val})); }
-        else if(era==='BC'){ setBcRange(r=>({...r,min:val})); }
-        else { setBothRange(r=>({...r,min:val})); }
-        setMinY(val);
-      }
-
-      function applyMaxValue(val){
-        if(era==='AD'){ setAdRange(r=>({...r,max:val})); }
-        else if(era==='BC'){ setBcRange(r=>({...r,max:val})); }
-        else { setBothRange(r=>({...r,max:val})); }
-        setMaxY(val);
-      }
 
       function sanitizeMinInputValue(raw, signHint=null){
         if(!Number.isFinite(raw)) return minY;
@@ -411,68 +441,145 @@
         return val;
       }
 
+      function regenerateAfterRangeChange(newMin,newMax){
+        setMsg("");
+        setGuesses([]);
+        setLocked(false);
+        setRevealed(false);
+        setCountedWrong(false);
+        setCalcPenalty(false);
+        setCalcOpen(false);
+        calcOpenStatesRef.current.set(mode,false);
+        if(mode==="classic" && !trackClassic){
+          setSavedClassicByEra(prev=>({...prev,[era]:null}));
+        }
+        if(mode==="deduction"){
+          setDedFlash(null);
+          setDedStack([]);
+          if(!trackDed){
+            setSavedDedByEra(prev=>({...prev,[era]:null}));
+            setSavedDedByType(blankDedTypeStore());
+          }
+          spawnDedWithRange(newMin,newMax);
+        }else{
+          setStack([]);
+          setFlash(null);
+          setDate(randomDate(newMin,newMax));
+        }
+      }
+
+      function commitRangeChange(nextMin,nextMax,prevMin,prevMax){
+        if(era==='AD'){ setAdRange({min:nextMin,max:nextMax}); }
+        else if(era==='BC'){ setBcRange({min:nextMin,max:nextMax}); }
+        else { setBothRange({min:nextMin,max:nextMax}); }
+        setMinY(nextMin);
+        setMaxY(nextMax);
+        if(nextMin!==prevMin || nextMax!==prevMax){
+          regenerateAfterRangeChange(nextMin,nextMax);
+        }
+      }
+
       function handleMinInputChange(str){
         setMinInput(str);
-        const trimmed=str.trim();
-        if(trimmed==='') return;
-        if(!/^\d+$/.test(trimmed)) return;
-        const parsed=Number.parseInt(trimmed,10);
-        if(Number.isNaN(parsed)) return;
-        const signHint = era==='BC' ? -1 : era==='BOTH' ? (minY<0?-1:1) : 1;
-        const val=sanitizeMinInputValue(parsed, signHint);
-        if(era==='BOTH' && val>maxY){
-          applyMaxValue(val);
-          setMaxInput(displayInputValue(val,'BOTH'));
-        }
-        applyMinValue(val);
-        setMinInput(displayInputValue(val));
       }
 
       function handleMaxInputChange(str){
         setMaxInput(str);
-        const trimmed=str.trim();
-        if(trimmed==='') return;
-        if(!/^\d+$/.test(trimmed)) return;
+      }
+
+      function commitMinInput(){
+        const trimmed=minInput.trim();
+        if(trimmed===''){ setMinInput(displayInputValue(minY)); return; }
+        if(!/^\d+$/.test(trimmed)){ setMinInput(displayInputValue(minY)); return; }
         const parsed=Number.parseInt(trimmed,10);
-        if(Number.isNaN(parsed)) return;
-        const signHint = era==='BC' ? -1 : era==='BOTH' ? (maxY<0?-1:1) : 1;
-        const val=sanitizeMaxInputValue(parsed, signHint);
-        if(era==='BOTH' && val<minY){
-          applyMinValue(val);
-          setMinInput(displayInputValue(val,'BOTH'));
+        if(Number.isNaN(parsed)){ setMinInput(displayInputValue(minY)); return; }
+        const prevMin=minY;
+        const prevMax=maxY;
+        const signHint = era==='BC' ? -1 : era==='BOTH' ? (minY<0?-1:1) : 1;
+        let nextMin=sanitizeMinInputValue(parsed, signHint);
+        let nextMax=prevMax;
+        if(era==='BOTH' && nextMin>nextMax){
+          nextMax=nextMin;
         }
-        applyMaxValue(val);
-        setMaxInput(displayInputValue(val));
+        commitRangeChange(nextMin,nextMax,prevMin,prevMax);
+        setMinInput(displayInputValue(nextMin));
+        if(nextMax!==prevMax){
+          setMaxInput(displayInputValue(nextMax));
+        }
+      }
+
+      function commitMaxInput(){
+        const trimmed=maxInput.trim();
+        if(trimmed===''){ setMaxInput(displayInputValue(maxY)); return; }
+        if(!/^\d+$/.test(trimmed)){ setMaxInput(displayInputValue(maxY)); return; }
+        const parsed=Number.parseInt(trimmed,10);
+        if(Number.isNaN(parsed)){ setMaxInput(displayInputValue(maxY)); return; }
+        const prevMin=minY;
+        const prevMax=maxY;
+        const signHint = era==='BC' ? -1 : era==='BOTH' ? (maxY<0?-1:1) : 1;
+        let nextMax=sanitizeMaxInputValue(parsed, signHint);
+        let nextMin=prevMin;
+        if(era==='BOTH' && nextMax<nextMin){
+          nextMin=nextMax;
+        }
+        commitRangeChange(nextMin,nextMax,prevMin,prevMax);
+        setMaxInput(displayInputValue(nextMax));
+        if(nextMin!==prevMin){
+          setMinInput(displayInputValue(nextMin));
+        }
+      }
+
+      function handleYearInputKeyDown(event, kind){
+        if(event.key==='-' || event.key==='Subtract' || event.key==='Minus'){
+          event.preventDefault();
+          return;
+        }
+        if(event.key==='Enter'){
+          event.preventDefault();
+          if(kind==='min'){
+            commitMinInput();
+          }else{
+            commitMaxInput();
+          }
+          event.currentTarget?.blur();
+        }
       }
 
       function toggleMinSign(){
         if(era!=='BOTH') return;
+        const prevMin=minY;
+        const prevMax=maxY;
         const magnitude=Math.max(1, Math.min(10000, Math.abs(minY)||1));
         const nextSign = minY<0?1:-1;
-        let val = nextSign<0 ? -magnitude : magnitude;
-        if(val>maxY){
-          applyMaxValue(val);
-          setMaxInput(displayInputValue(val,'BOTH'));
+        let nextMin = nextSign<0 ? -magnitude : magnitude;
+        let nextMax = prevMax;
+        if(nextMin>nextMax){
+          nextMax=nextMin;
         }
-        applyMinValue(val);
-        setMinInput(displayInputValue(val,'BOTH'));
+        commitRangeChange(nextMin,nextMax,prevMin,prevMax);
+        setMinInput(displayInputValue(nextMin,'BOTH'));
+        if(nextMax!==prevMax){
+          setMaxInput(displayInputValue(nextMax,'BOTH'));
+        }
       }
 
       function toggleMaxSign(){
         if(era!=='BOTH') return;
+        const prevMin=minY;
+        const prevMax=maxY;
         const magnitude=Math.max(1, Math.min(10000, Math.abs(maxY)||1));
         const nextSign = maxY<0?1:-1;
-        let val = nextSign<0 ? -magnitude : magnitude;
-        if(val<minY){
-          applyMinValue(val);
-          setMinInput(displayInputValue(val,'BOTH'));
+        let nextMax = nextSign<0 ? -magnitude : magnitude;
+        let nextMin = prevMin;
+        if(nextMax<nextMin){
+          nextMin=nextMax;
         }
-        applyMaxValue(val);
-        setMaxInput(displayInputValue(val,'BOTH'));
+        commitRangeChange(nextMin,nextMax,prevMin,prevMax);
+        if(nextMin!==prevMin){
+          setMinInput(displayInputValue(nextMin,'BOTH'));
+        }
+        setMaxInput(displayInputValue(nextMax,'BOTH'));
       }
-
-      const resetMinInputDisplay = ()=> setMinInput(displayInputValue(minY));
-      const resetMaxInputDisplay = ()=> setMaxInput(displayInputValue(maxY));
 
       useEffect(()=>{ setMinInput(displayInputValue(minY)); },[minY,era]);
       useEffect(()=>{ setMaxInput(displayInputValue(maxY)); },[maxY,era]);
@@ -1207,7 +1314,7 @@
         <div className="mt-3 rounded-2xl card p-3">
           <button type="button" onClick={()=>setRangeOpen(o=>!o)} aria-expanded={rangeOpen}
                   className="w-full text-left text-sm text-purple-200/90 flex items-center justify-between">
-            <span>Year range <span className="tabular-nums ml-1">{fmtRangeYear(minY)} → {fmtRangeYear(maxY)}</span></span>
+            <span>Year range: <span className="tabular-nums ml-1">{fmtRangeYear(minY)} → {fmtRangeYear(maxY)}</span></span>
             <span className={`text-white/90 text-[7px] leading-none transition-transform ease-in-out ${rangeOpen?'rotate-180':''}`}
                   style={{transitionDuration:'350ms'}}>▼</span>
           </button>
@@ -1224,8 +1331,8 @@
                       pattern="[0-9]*"
                       value={minInput}
                       onChange={e=>handleMinInputChange(e.target.value)}
-                      onBlur={resetMinInputDisplay}
-                      onKeyDown={blockMinusKey}
+                      onBlur={commitMinInput}
+                      onKeyDown={e=>handleYearInputKeyDown(e,'min')}
                       onBeforeInput={blockMinusBeforeInput}
                       className="w-full panel rounded-xl px-3 py-2 pr-11 focus:outline-none focus:ring-2 focus:ring-purple-400 tabular-nums"
                     />
@@ -1250,8 +1357,8 @@
                       pattern="[0-9]*"
                       value={maxInput}
                       onChange={e=>handleMaxInputChange(e.target.value)}
-                      onBlur={resetMaxInputDisplay}
-                      onKeyDown={blockMinusKey}
+                      onBlur={commitMaxInput}
+                      onKeyDown={e=>handleYearInputKeyDown(e,'max')}
                       onBeforeInput={blockMinusBeforeInput}
                       className="w-full panel rounded-xl px-3 py-2 pr-11 focus:outline-none focus:ring-2 focus:ring-purple-400 tabular-nums"
                     />
@@ -1515,11 +1622,11 @@
             {/* ======= CLASSIC / BLITZ / SUDDEN / FLASH ======= */}
             {["classic","blitz","sudden","flash"].includes(mode) && (
               <>
-                <div className={`mt-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3 ${optionsDisabled?'opacity-60 pointer-events-none':''}`}>
+                <div className={`mt-4 flex flex-wrap justify-center gap-3 ${optionsDisabled?'opacity-60 pointer-events-none':''}`}>
                   {DAY.map((n,i)=>(
                     <button key={n} type="button"
                       onClick={()=>{ submitDoW(i); setInput(""); if(isTouch) document.activeElement?.blur(); }}
-                      className={`${baseBtn} ${flash && flash.idx===i ? (flash.type==='good'?'flash-good':'flash-bad')+' border-transparent' : idleBtn}`}>{n}</button>
+                      className={`${baseBtn} w-auto min-w-[6.5rem] sm:min-w-[7rem] shrink-0 text-center ${flash && flash.idx===i ? (flash.type==='good'?'flash-good':'flash-bad')+' border-transparent' : idleBtn}`}>{n}</button>
                   ))}
                 </div>
 
@@ -1543,10 +1650,15 @@
                     >Back</button>
                   </div>
 
-                  {(msg || (guesses.length>0 && mode!=="sudden")) && (
+                  {(msg || (mode!=="sudden" && guesses.length>0)) && (
                     <div className="mt-3 text-purple-100/90 text-sm">
-                      {msg && <div>{msg}</div>}
-                      {(mode!=="sudden" && guesses.length>0) && (<div className="mt-2 flex flex-wrap gap-1 items-center"><span className="text-purple-300/80 text-xs mr-1">Guesses so far:</span>{guesses.map(g=><span key={g} className="chip">{g}</span>)}</div>)}
+                      {(mode!=="sudden" && guesses.length>0) && (
+                        <div className="flex flex-wrap gap-1 items-center">
+                          <span className="text-purple-300/80 text-xs mr-1">Guesses:</span>
+                          {guesses.map(g=>(<span key={g} className="chip">{g}</span>))}
+                        </div>
+                      )}
+                      {msg && <div className={`${(mode!=="sudden" && guesses.length>0)?'mt-2':''}`}>{msg}</div>}
                     </div>
                   )}
                 </div>
@@ -1567,26 +1679,26 @@
 
                 <div className={`mt-4 ${(locked||calcOpen||calcPenaltyActive)?'opacity-60 pointer-events-none':''}`}>
                   {ded && ded.type==="year" && (
-                    <div className="grid grid-cols-3 gap-2">
+                    <div className="flex flex-wrap justify-center gap-2">
                       {ded.options.map((y,idx)=>(
                         <button key={y} type="button" onClick={()=>submitDedAnswer(y, idx)}
-                          className={`${baseBtn} ${idleBtn} py-2 text-sm ${dedFlash&&dedFlash.kind==='year'&&dedFlash.index===idx ? (dedFlash.ok?'flash-good':'flash-bad')+' border-transparent':''}`}>{fmtYear(y)}</button>
+                          className={`${baseBtn} w-auto min-w-[7.5rem] shrink-0 ${idleBtn} py-2 text-sm ${dedFlash&&dedFlash.kind==='year'&&dedFlash.index===idx ? (dedFlash.ok?'flash-good':'flash-bad')+' border-transparent':''}`}>{fmtYear(y)}</button>
                       ))}
                     </div>
                   )}
                   {ded && ded.type==="month" && (
-                    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-7 gap-2">
+                    <div className="flex flex-wrap justify-center gap-2">
                       {ded.options.map((mv,idx)=>(
                         <button key={mv} type="button" onClick={()=>submitDedAnswer(mv, idx)}
-                          className={`${baseBtn} ${idleBtn} py-2 text-sm ${dedFlash&&dedFlash.kind==='month'&&dedFlash.index===idx ? (dedFlash.ok?'flash-good':'flash-bad')+' border-transparent':''}`}>{MONTH_ABBR[mv-1]}</button>
+                          className={`${baseBtn} w-auto min-w-[4.25rem] shrink-0 ${idleBtn} py-2 text-sm ${dedFlash&&dedFlash.kind==='month'&&dedFlash.index===idx ? (dedFlash.ok?'flash-good':'flash-bad')+' border-transparent':''}`}>{MONTH_ABBR[mv-1]}</button>
                       ))}
                     </div>
                   )}
                   {ded && ded.type==="day" && (
-                    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-7 gap-2">
+                    <div className="flex flex-wrap justify-center gap-2">
                       {ded.options.map((dv,idx)=>(
                         <button key={dv} type="button" onClick={()=>submitDedAnswer(dv, idx)}
-                          className={`${baseBtn} ${idleBtn} py-2 text-sm ${dedFlash&&dedFlash.kind==='day'&&dedFlash.index===idx ? (dedFlash.ok?'flash-good':'flash-bad')+' border-transparent':''}`}>{dv}</button>
+                          className={`${baseBtn} w-auto min-w-[3.25rem] shrink-0 ${idleBtn} py-2 text-sm ${dedFlash&&dedFlash.kind==='day'&&dedFlash.index===idx ? (dedFlash.ok?'flash-good':'flash-bad')+' border-transparent':''}`}>{dv}</button>
                       ))}
                     </div>
                   )}
@@ -1599,9 +1711,14 @@
                     <button type="button" className="px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm" onClick={()=>goBack()}>Back</button>
                   </div>
                   {(msg || guesses.length>0) && (
-                    <div className="mt-3 text-sm">
-                      {msg && <div>{msg}</div>}
-                      {guesses.length>0 && (<div className="mt-2 flex flex-wrap gap-1 items-center"><span className="text-purple-300/80 text-xs mr-1">Guesses so far:</span>{guesses.map(g=><span key={g} className="chip">{g}</span>)}</div>)}
+                    <div className="mt-3 text-sm text-purple-100/90">
+                      {guesses.length>0 && (
+                        <div className="flex flex-wrap gap-1 items-center">
+                          <span className="text-purple-300/80 text-xs mr-1">Guesses:</span>
+                          {guesses.map(g=>(<span key={g} className="chip">{g}</span>))}
+                        </div>
+                      )}
+                      {msg && <div className={`${guesses.length>0?'mt-2':''}`}>{msg}</div>}
                     </div>
                   )}
                 </div>
