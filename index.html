@@ -271,8 +271,9 @@
 
       /* per-mode stats */
       const blankStats=()=>({played:0,good:0,streak:0,best:0,timeSum:0,timeCnt:0});
-      const [statsByMode,setStatsByMode]=useState({classic:blankStats(), blitz:blankStats(), sudden:blankStats(), flash:blankStats(), deduction:blankStats()});
-      const S = statsByMode[mode] || blankStats();
+      const blankEraStats=()=>({AD:blankStats(), BOTH:blankStats(), BC:blankStats()});
+      const [statsByMode,setStatsByMode]=useState({classic:blankEraStats(), blitz:blankEraStats(), sudden:blankEraStats(), flash:blankEraStats(), deduction:blankEraStats()});
+      const S = (statsByMode[mode]?.[era]) || blankStats();
 
       const [statsOff,setStatsOff]=useState(false);
       const [trackClassic,setTrackClassic]=useState(false);    // avg time enabled? (classic)
@@ -317,17 +318,49 @@
       },[date,mode,active]);
 
       /* helpers */
-      const updateStats = (mutator)=>{ setStatsByMode(prev=>{ const cur={...(prev[mode]||blankStats())}; mutator(cur); return {...prev,[mode]:cur}; }); };
-      const resetStatsCurrent=()=>{ setStatsByMode(prev=>({...prev,[mode]:blankStats()})); };
+      const updateStats = (mutator)=>{
+        setStatsByMode(prev=>{
+          const modeStats = {...(prev[mode] || blankEraStats())};
+          const current = {...(modeStats[era] || blankStats())};
+          mutator(current);
+          modeStats[era]=current;
+          return {...prev,[mode]:modeStats};
+        });
+      };
+      const resetStatsCurrent=()=>{
+        setStatsByMode(prev=>{
+          const modeStats = {...(prev[mode] || blankEraStats())};
+          modeStats[era]=blankStats();
+          return {...prev,[mode]:modeStats};
+        });
+      };
       const setCalcPenalty=(value)=>{ setCalcPenaltyActive(value); calcPenaltyStatesRef.current.set(mode,value); };
 
       /* avg-time toggle reset of sums when enabling */
       const prevTrackClassic=useRef(trackClassic);
-      useEffect(()=>{ if(prevTrackClassic.current===false && trackClassic===true){ setStatsByMode(p=>({...p, classic:{...(p.classic||blankStats()), timeSum:0, timeCnt:0}})); tStartRef.current=performance.now(); } prevTrackClassic.current=trackClassic; },[trackClassic]);
+      useEffect(()=>{
+        if(prevTrackClassic.current===false && trackClassic===true){
+          setStatsByMode(p=>{
+            const modeStats = {...(p.classic || blankEraStats())};
+            const current = {...(modeStats[era] || blankStats())};
+            current.timeSum=0; current.timeCnt=0;
+            modeStats[era]=current;
+            return {...p, classic:modeStats};
+          });
+          tStartRef.current=performance.now();
+        }
+        prevTrackClassic.current=trackClassic;
+      },[trackClassic,era]);
       const prevTrackDed=useRef(trackDed);
       useEffect(()=>{
         if(prevTrackDed.current===false && trackDed===true){
-          setStatsByMode(p=>({...p, deduction:{...(p.deduction||blankStats()), timeSum:0, timeCnt:0}}));
+          setStatsByMode(p=>{
+            const modeStats = {...(p.deduction || blankEraStats())};
+            const current = {...(modeStats[era] || blankStats())};
+            current.timeSum=0; current.timeCnt=0;
+            modeStats[era]=current;
+            return {...p, deduction:modeStats};
+          });
           tStartRef.current=performance.now();
           setSavedDedByType(blankDedTypeStore());
         }else if(prevTrackDed.current===true && trackDed===false){
@@ -358,17 +391,21 @@
       };
 
       function applyMinValue(val){
-        if(era==='AD'){ setAdRange(r=>({...r,min:val})); }
-        else if(era==='BC'){ setBcRange(r=>({...r,min:val})); }
-        else { setBothRange(r=>({...r,min:val})); }
-        setMinY(val);
+        const changed = val!==minY;
+        if(era==='AD'){ setAdRange(r=> r.min===val ? r : ({...r,min:val})); }
+        else if(era==='BC'){ setBcRange(r=> r.min===val ? r : ({...r,min:val})); }
+        else { setBothRange(r=> r.min===val ? r : ({...r,min:val})); }
+        if(changed) setMinY(val);
+        return changed;
       }
 
       function applyMaxValue(val){
-        if(era==='AD'){ setAdRange(r=>({...r,max:val})); }
-        else if(era==='BC'){ setBcRange(r=>({...r,max:val})); }
-        else { setBothRange(r=>({...r,max:val})); }
-        setMaxY(val);
+        const changed = val!==maxY;
+        if(era==='AD'){ setAdRange(r=> r.max===val ? r : ({...r,max:val})); }
+        else if(era==='BC'){ setBcRange(r=> r.max===val ? r : ({...r,max:val})); }
+        else { setBothRange(r=> r.max===val ? r : ({...r,max:val})); }
+        if(changed) setMaxY(val);
+        return changed;
       }
 
       function sanitizeMinInputValue(raw, signHint=null){
@@ -413,66 +450,144 @@
 
       function handleMinInputChange(str){
         setMinInput(str);
-        const trimmed=str.trim();
-        if(trimmed==='') return;
-        if(!/^\d+$/.test(trimmed)) return;
-        const parsed=Number.parseInt(trimmed,10);
-        if(Number.isNaN(parsed)) return;
-        const signHint = era==='BC' ? -1 : era==='BOTH' ? (minY<0?-1:1) : 1;
-        const val=sanitizeMinInputValue(parsed, signHint);
-        if(era==='BOTH' && val>maxY){
-          applyMaxValue(val);
-          setMaxInput(displayInputValue(val,'BOTH'));
-        }
-        applyMinValue(val);
-        setMinInput(displayInputValue(val));
       }
 
       function handleMaxInputChange(str){
         setMaxInput(str);
-        const trimmed=str.trim();
-        if(trimmed==='') return;
-        if(!/^\d+$/.test(trimmed)) return;
+      }
+
+      function handleRangeChanged(nextMin,nextMax){
+        if(nextMin>nextMax){ const swap=nextMin; nextMin=nextMax; nextMax=swap; }
+        if(mode==="deduction"){
+          setDedStack([]);
+          if(!trackDed){
+            setSavedDedByType(blankDedTypeStore());
+            setSavedDedByEra(prev=>({
+              ...prev,
+              [era]: {current:null, byType:blankDedTypeStore()}
+            }));
+          }
+          setMsg("");
+          setGuesses([]);
+          setLocked(false);
+          setRevealed(false);
+          setCountedWrong(false);
+          setCalcPenalty(false);
+          spawnDedWithRange(nextMin,nextMax);
+        }else{
+          arm();
+          setCalcPenalty(false);
+          setStack([]);
+          if(mode==="classic" && !trackClassic){
+            setSavedClassicByEra(prev=>({
+              ...prev,
+              [era]: null
+            }));
+          }
+          if(mode==="flash"){ setPhase('dash'); }
+          setDate(randomDate(nextMin,nextMax));
+        }
+      }
+
+      function commitMinInput(){
+        const trimmed=minInput.trim();
+        if(trimmed===''){ setMinInput(displayInputValue(minY)); return; }
+        if(!/^\d+$/.test(trimmed)){ setMinInput(displayInputValue(minY)); return; }
         const parsed=Number.parseInt(trimmed,10);
-        if(Number.isNaN(parsed)) return;
+        if(Number.isNaN(parsed)){ setMinInput(displayInputValue(minY)); return; }
+        const signHint = era==='BC' ? -1 : era==='BOTH' ? (minY<0?-1:1) : 1;
+        const val=sanitizeMinInputValue(parsed, signHint);
+        let nextMin=minY;
+        let nextMax=maxY;
+        let changed=false;
+        if(era==='BOTH' && val>maxY){
+          if(applyMaxValue(val)) changed=true;
+          nextMax=val;
+        }
+        if(applyMinValue(val)) changed=true;
+        nextMin=val;
+        if(!changed){ setMinInput(displayInputValue(minY)); return; }
+        handleRangeChanged(nextMin,nextMax);
+      }
+
+      function commitMaxInput(){
+        const trimmed=maxInput.trim();
+        if(trimmed===''){ setMaxInput(displayInputValue(maxY)); return; }
+        if(!/^\d+$/.test(trimmed)){ setMaxInput(displayInputValue(maxY)); return; }
+        const parsed=Number.parseInt(trimmed,10);
+        if(Number.isNaN(parsed)){ setMaxInput(displayInputValue(maxY)); return; }
         const signHint = era==='BC' ? -1 : era==='BOTH' ? (maxY<0?-1:1) : 1;
         const val=sanitizeMaxInputValue(parsed, signHint);
+        let nextMin=minY;
+        let nextMax=maxY;
+        let changed=false;
         if(era==='BOTH' && val<minY){
-          applyMinValue(val);
-          setMinInput(displayInputValue(val,'BOTH'));
+          if(applyMinValue(val)) changed=true;
+          nextMin=val;
         }
-        applyMaxValue(val);
-        setMaxInput(displayInputValue(val));
+        if(applyMaxValue(val)) changed=true;
+        nextMax=val;
+        if(!changed){ setMaxInput(displayInputValue(maxY)); return; }
+        handleRangeChanged(nextMin,nextMax);
+      }
+
+      function handleMinKeyDown(event){
+        if(event.key==='Enter'){
+          event.preventDefault();
+          commitMinInput();
+          event.currentTarget.blur();
+          return;
+        }
+        blockMinusKey(event);
+      }
+
+      function handleMaxKeyDown(event){
+        if(event.key==='Enter'){
+          event.preventDefault();
+          commitMaxInput();
+          event.currentTarget.blur();
+          return;
+        }
+        blockMinusKey(event);
       }
 
       function toggleMinSign(){
         if(era!=='BOTH') return;
         const magnitude=Math.max(1, Math.min(10000, Math.abs(minY)||1));
         const nextSign = minY<0?1:-1;
-        let val = nextSign<0 ? -magnitude : magnitude;
+        const val = nextSign<0 ? -magnitude : magnitude;
+        let nextMin=minY;
+        let nextMax=maxY;
+        let changed=false;
         if(val>maxY){
-          applyMaxValue(val);
+          if(applyMaxValue(val)) changed=true;
+          nextMax=val;
           setMaxInput(displayInputValue(val,'BOTH'));
         }
-        applyMinValue(val);
+        if(applyMinValue(val)) changed=true;
+        nextMin=val;
         setMinInput(displayInputValue(val,'BOTH'));
+        if(changed) handleRangeChanged(nextMin,nextMax);
       }
 
       function toggleMaxSign(){
         if(era!=='BOTH') return;
         const magnitude=Math.max(1, Math.min(10000, Math.abs(maxY)||1));
         const nextSign = maxY<0?1:-1;
-        let val = nextSign<0 ? -magnitude : magnitude;
+        const val = nextSign<0 ? -magnitude : magnitude;
+        let nextMin=minY;
+        let nextMax=maxY;
+        let changed=false;
         if(val<minY){
-          applyMinValue(val);
+          if(applyMinValue(val)) changed=true;
+          nextMin=val;
           setMinInput(displayInputValue(val,'BOTH'));
         }
-        applyMaxValue(val);
+        if(applyMaxValue(val)) changed=true;
+        nextMax=val;
         setMaxInput(displayInputValue(val,'BOTH'));
+        if(changed) handleRangeChanged(nextMin,nextMax);
       }
-
-      const resetMinInputDisplay = ()=> setMinInput(displayInputValue(minY));
-      const resetMaxInputDisplay = ()=> setMaxInput(displayInputValue(maxY));
 
       useEffect(()=>{ setMinInput(displayInputValue(minY)); },[minY,era]);
       useEffect(()=>{ setMaxInput(displayInputValue(maxY)); },[maxY,era]);
@@ -1207,7 +1322,7 @@
         <div className="mt-3 rounded-2xl card p-3">
           <button type="button" onClick={()=>setRangeOpen(o=>!o)} aria-expanded={rangeOpen}
                   className="w-full text-left text-sm text-purple-200/90 flex items-center justify-between">
-            <span>Year range <span className="tabular-nums ml-1">{fmtRangeYear(minY)} → {fmtRangeYear(maxY)}</span></span>
+            <span>Year range: <span className="tabular-nums ml-1">{fmtRangeYear(minY)} → {fmtRangeYear(maxY)}</span></span>
             <span className={`text-white/90 text-[7px] leading-none transition-transform ease-in-out ${rangeOpen?'rotate-180':''}`}
                   style={{transitionDuration:'350ms'}}>▼</span>
           </button>
@@ -1224,8 +1339,8 @@
                       pattern="[0-9]*"
                       value={minInput}
                       onChange={e=>handleMinInputChange(e.target.value)}
-                      onBlur={resetMinInputDisplay}
-                      onKeyDown={blockMinusKey}
+                      onBlur={commitMinInput}
+                      onKeyDown={handleMinKeyDown}
                       onBeforeInput={blockMinusBeforeInput}
                       className="w-full panel rounded-xl px-3 py-2 pr-11 focus:outline-none focus:ring-2 focus:ring-purple-400 tabular-nums"
                     />
@@ -1250,8 +1365,8 @@
                       pattern="[0-9]*"
                       value={maxInput}
                       onChange={e=>handleMaxInputChange(e.target.value)}
-                      onBlur={resetMaxInputDisplay}
-                      onKeyDown={blockMinusKey}
+                      onBlur={commitMaxInput}
+                      onKeyDown={handleMaxKeyDown}
                       onBeforeInput={blockMinusBeforeInput}
                       className="w-full panel rounded-xl px-3 py-2 pr-11 focus:outline-none focus:ring-2 focus:ring-purple-400 tabular-nums"
                     />
@@ -1516,11 +1631,19 @@
             {["classic","blitz","sudden","flash"].includes(mode) && (
               <>
                 <div className={`mt-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3 ${optionsDisabled?'opacity-60 pointer-events-none':''}`}>
-                  {DAY.map((n,i)=>(
-                    <button key={n} type="button"
-                      onClick={()=>{ submitDoW(i); setInput(""); if(isTouch) document.activeElement?.blur(); }}
-                      className={`${baseBtn} ${flash && flash.idx===i ? (flash.type==='good'?'flash-good':'flash-bad')+' border-transparent' : idleBtn}`}>{n}</button>
-                  ))}
+                  {DAY.map((n,i)=>{
+                    const isSaturday=i===6;
+                    const cellClass = isSaturday
+                      ? 'col-span-2 sm:col-span-3 md:col-span-4 lg:col-span-1 flex justify-center'
+                      : '';
+                    return (
+                      <div key={n} className={cellClass}>
+                        <button type="button"
+                          onClick={()=>{ submitDoW(i); setInput(""); if(isTouch) document.activeElement?.blur(); }}
+                          className={`${baseBtn} ${isSaturday?'w-auto mx-auto px-6':'w-full'} ${flash && flash.idx===i ? (flash.type==='good'?'flash-good':'flash-bad')+' border-transparent' : idleBtn}`}>{n}</button>
+                      </div>
+                    );
+                  })}
                 </div>
 
                 {/* Action bubble */}
@@ -1545,8 +1668,13 @@
 
                   {(msg || (guesses.length>0 && mode!=="sudden")) && (
                     <div className="mt-3 text-purple-100/90 text-sm">
-                      {msg && <div>{msg}</div>}
-                      {(mode!=="sudden" && guesses.length>0) && (<div className="mt-2 flex flex-wrap gap-1 items-center"><span className="text-purple-300/80 text-xs mr-1">Guesses so far:</span>{guesses.map(g=><span key={g} className="chip">{g}</span>)}</div>)}
+                      {(mode!=="sudden" && guesses.length>0) && (
+                        <div className="flex flex-wrap gap-1 items-center">
+                          <span className="text-purple-300/80 text-xs mr-1">Guesses:</span>
+                          {guesses.map(g=><span key={g} className="chip">{g}</span>)}
+                        </div>
+                      )}
+                      {msg && <div className={`${(mode!=="sudden" && guesses.length>0)?'mt-2':''}`}>{msg}</div>}
                     </div>
                   )}
                 </div>
@@ -1568,26 +1696,44 @@
                 <div className={`mt-4 ${(locked||calcOpen||calcPenaltyActive)?'opacity-60 pointer-events-none':''}`}>
                   {ded && ded.type==="year" && (
                     <div className="grid grid-cols-3 gap-2">
-                      {ded.options.map((y,idx)=>(
-                        <button key={y} type="button" onClick={()=>submitDedAnswer(y, idx)}
-                          className={`${baseBtn} ${idleBtn} py-2 text-sm ${dedFlash&&dedFlash.kind==='year'&&dedFlash.index===idx ? (dedFlash.ok?'flash-good':'flash-bad')+' border-transparent':''}`}>{fmtYear(y)}</button>
-                      ))}
+                      {ded.options.map((y,idx)=>{
+                        const isLast=idx===ded.options.length-1;
+                        const cellClass=isLast?'col-span-3 flex justify-center':'';
+                        return (
+                          <div key={y} className={cellClass}>
+                            <button type="button" onClick={()=>submitDedAnswer(y, idx)}
+                              className={`${baseBtn} ${idleBtn} py-2 text-sm ${isLast?'w-auto mx-auto sm:w-full sm:mx-0':'w-full'} ${dedFlash&&dedFlash.kind==='year'&&dedFlash.index===idx ? (dedFlash.ok?'flash-good':'flash-bad')+' border-transparent':''}`}>{fmtYear(y)}</button>
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                   {ded && ded.type==="month" && (
                     <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-7 gap-2">
-                      {ded.options.map((mv,idx)=>(
-                        <button key={mv} type="button" onClick={()=>submitDedAnswer(mv, idx)}
-                          className={`${baseBtn} ${idleBtn} py-2 text-sm ${dedFlash&&dedFlash.kind==='month'&&dedFlash.index===idx ? (dedFlash.ok?'flash-good':'flash-bad')+' border-transparent':''}`}>{MONTH_ABBR[mv-1]}</button>
-                      ))}
+                      {ded.options.map((mv,idx)=>{
+                        const isLast=idx===ded.options.length-1;
+                        const cellClass=isLast?'col-span-3 flex justify-center sm:col-span-1 sm:block':'';
+                        return (
+                          <div key={mv} className={cellClass}>
+                            <button type="button" onClick={()=>submitDedAnswer(mv, idx)}
+                              className={`${baseBtn} ${idleBtn} py-2 text-sm ${isLast?'w-auto mx-auto sm:w-full sm:mx-0':'w-full'} ${dedFlash&&dedFlash.kind==='month'&&dedFlash.index===idx ? (dedFlash.ok?'flash-good':'flash-bad')+' border-transparent':''}`}>{MONTH_ABBR[mv-1]}</button>
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                   {ded && ded.type==="day" && (
                     <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-7 gap-2">
-                      {ded.options.map((dv,idx)=>(
-                        <button key={dv} type="button" onClick={()=>submitDedAnswer(dv, idx)}
-                          className={`${baseBtn} ${idleBtn} py-2 text-sm ${dedFlash&&dedFlash.kind==='day'&&dedFlash.index===idx ? (dedFlash.ok?'flash-good':'flash-bad')+' border-transparent':''}`}>{dv}</button>
-                      ))}
+                      {ded.options.map((dv,idx)=>{
+                        const isLast=idx===ded.options.length-1;
+                        const cellClass=isLast?'col-span-3 flex justify-center sm:col-span-1 sm:block':'';
+                        return (
+                          <div key={dv} className={cellClass}>
+                            <button type="button" onClick={()=>submitDedAnswer(dv, idx)}
+                              className={`${baseBtn} ${idleBtn} py-2 text-sm ${isLast?'w-auto mx-auto sm:w-full sm:mx-0':'w-full'} ${dedFlash&&dedFlash.kind==='day'&&dedFlash.index===idx ? (dedFlash.ok?'flash-good':'flash-bad')+' border-transparent':''}`}>{dv}</button>
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -1600,8 +1746,13 @@
                   </div>
                   {(msg || guesses.length>0) && (
                     <div className="mt-3 text-sm">
-                      {msg && <div>{msg}</div>}
-                      {guesses.length>0 && (<div className="mt-2 flex flex-wrap gap-1 items-center"><span className="text-purple-300/80 text-xs mr-1">Guesses so far:</span>{guesses.map(g=><span key={g} className="chip">{g}</span>)}</div>)}
+                      {guesses.length>0 && (
+                        <div className="flex flex-wrap gap-1 items-center">
+                          <span className="text-purple-300/80 text-xs mr-1">Guesses:</span>
+                          {guesses.map(g=><span key={g} className="chip">{g}</span>)}
+                        </div>
+                      )}
+                      {msg && <div className={`${guesses.length>0?'mt-2':''}`}>{msg}</div>}
                     </div>
                   )}
                 </div>
