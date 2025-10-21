@@ -1377,7 +1377,7 @@
         const inner=rangeContentRef.current;
         if(!inner) return;
         if(rangeOpen){
-          setRangeMaxHeight(`${inner.scrollHeight + 24}px`);
+          setRangeMaxHeight(`${inner.scrollHeight + 16}px`);
         }else{
           setRangeMaxHeight('0px');
         }
@@ -1388,7 +1388,7 @@
         const onResize=()=>{
           const inner=rangeContentRef.current;
           if(inner){
-            setRangeMaxHeight(`${inner.scrollHeight + 24}px`);
+            setRangeMaxHeight(`${inner.scrollHeight + 16}px`);
           }
         };
         window.addEventListener('resize', onResize);
@@ -1460,7 +1460,7 @@
                   </div>
                 </div>
               </div>
-              <p className="text-xs text-purple-300/70">Proleptic Gregorian calendar. Year 0 isn’t available—use 1 BC or 1 AD. Each era remembers its own range.</p>
+              <p className="text-xs text-purple-300/70">Proleptic Gregorian calendar. Year 0 isn’t available.</p>
             </div>
           </div>
         </div>
@@ -1478,6 +1478,9 @@
       const flashPercent = flashMs>0 ? Math.max(0, Math.min(100,(Math.max(0,flashRemainMs)/flashMs)*100)) : 100;
       const shouldShowTimerDate = (!isTimer(mode)) || active || showTimerDate;
       const timerBusy = isTimer(mode) && active;
+      const revealUnavailable = isTimer(mode) && !shouldShowTimerDate;
+      const revealSuppressed = (locked || calcOpen || calcPenaltyActive);
+      const revealDisabled = revealSuppressed || revealUnavailable;
       const calcTarget = React.useMemo(()=>{
         if(mode==="lookup") return null;
         if(mode==="deduction"){
@@ -1741,7 +1744,14 @@
                       className={`px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm ${timerBusy?'opacity-60 pointer-events-none':''}`}
                       onClick={()=>doNew()}
                     >New</button>
-                    <button type="button" className={`px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm ${(locked||calcOpen||calcPenaltyActive)?'opacity-60 pointer-events-none':''}`} onClick={()=>reveal()}>Reveal</button>
+                    <button
+                      type="button"
+                      className={`px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm ${revealSuppressed?'opacity-60 pointer-events-none':''} ${revealUnavailable?'filter blur-[2px] pointer-events-none':''}`}
+                      onClick={()=>{ if(!revealDisabled) reveal(); }}
+                      aria-disabled={revealDisabled}
+                    >
+                      Reveal
+                    </button>
                     <button
                       type="button"
                       className={`px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm ${timerBusy?'opacity-60 pointer-events-none':''}`}
@@ -2094,7 +2104,8 @@
     function LookupCard({history=[], onAddHistory, onClearHistory}){
       const [lookupIn,setLookupIn]=React.useState("");
       const [lookupOut,setLookupOut]=React.useState("");
-      const [calcDate,setCalcDate]=React.useState(null);
+      const [selectedHistoryId,setSelectedHistoryId]=React.useState(null);
+      const [calcPanelOpen,setCalcPanelOpen]=React.useState(false);
       function isLeapY(y){ y = y>0?y:1-Math.abs(y); return y%400===0 || (y%4===0 && y%100!==0); }
       function dimY(y,m){ return m===2 ? (isLeapY(y)?29:28) : [4,6,9,11].includes(m)?30:31; }
       function wdayY(y,m,d){ function jdn(y,m,d){ const a=Math.floor((14-m)/12),y2=y+4800-a,m2=m-3+12*a; return d+Math.floor((153*m2+2)/5)+365*y2+Math.floor(y2/4)-Math.floor(y2/100)+Math.floor(y2/400)-32045; } const toA = y=>y>0?y:1-Math.abs(y); return ((jdn(toA(y),m,d)+1)%7+7)%7; }
@@ -2114,7 +2125,6 @@
         const d=DAY[wdayY(yy,mm,dd)];
         const resultText = `${MONTH[mm-1]} ${dd}, ${fmtYear(yy)} is a ${d}.`;
         setLookupOut(resultText);
-        setCalcDate({y:yy,m:mm,d:dd});
         if(onAddHistory){
           const entry={
             id:`${Date.now().toString(36)}-${Math.random().toString(36).slice(2,8)}`,
@@ -2127,57 +2137,109 @@
             d:dd
           };
           onAddHistory(entry);
+          setSelectedHistoryId(entry.id);
         }
       }
-      function clearLookup(){ setLookupIn(""); if(document.activeElement) document.activeElement.blur(); setLookupOut(""); setCalcDate(null); }
+      function clearLookup(){
+        setLookupIn("");
+        if(document.activeElement) document.activeElement.blur();
+        setLookupOut("");
+        setSelectedHistoryId(null);
+        setCalcPanelOpen(false);
+      }
       const entries = Array.isArray(history)?history:[];
       const handleHistorySelect = (entry)=>{
-        setLookupIn(entry?.query||"");
         setLookupOut(entry?.result||"");
-        if(entry && typeof entry.y==='number'){ setCalcDate({y:entry.y,m:entry.m,d:entry.d}); }
+        setSelectedHistoryId(entry?.id||null);
         if(document.activeElement) document.activeElement.blur();
       };
-      const handleClearHistory = ()=>{ if(onClearHistory) onClearHistory(); };
+      const handleClearHistory = ()=>{
+        if(onClearHistory) onClearHistory();
+        setSelectedHistoryId(null);
+        setCalcPanelOpen(false);
+      };
+      React.useEffect(()=>{
+        if(entries.length===0){
+          setSelectedHistoryId(null);
+          setCalcPanelOpen(false);
+        }
+      },[entries.length]);
+      React.useEffect(()=>{
+        if(selectedHistoryId && !entries.some(e=>e.id===selectedHistoryId)){
+          setSelectedHistoryId(entries[0]?.id ?? null);
+        }
+      },[entries, selectedHistoryId]);
+      const activeHistoryId = selectedHistoryId ?? (entries[0]?.id ?? null);
+      const selectedEntry = activeHistoryId ? entries.find(entry=>entry.id===activeHistoryId) : null;
+      const calcDate = selectedEntry ? {y:selectedEntry.y,m:selectedEntry.m,d:selectedEntry.d} : null;
+      const showCalcDisabled = entries.length===0;
+      const toggleCalculations = ()=>{
+        if(showCalcDisabled) return;
+        setCalcPanelOpen(v=>!v);
+      };
       return (
-        <div className="mt-1">
-          <div className="rounded-2xl panel p-4">
-            <div className="flex items-stretch gap-2">
+        <div className="space-y-5">
+          <div className="space-y-3">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-stretch">
               <input value={lookupIn} onChange={e=>setLookupIn(e.target.value)} placeholder="e.g., 7/4/1776"
                     className="panel rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-400 flex-1 min-w-0"/>
-              <button type="button" onClick={()=>runLookup()} className="px-4 py-2 rounded-xl bg-purple-600 text-white text-sm font-medium">Lookup</button>
-              <button type="button" onClick={()=>clearLookup()} className="px-4 py-2 rounded-xl bg-zinc-700 text-white text-sm font-medium">Clear</button>
+              <div className="flex gap-2 sm:flex-col sm:w-auto">
+                <button type="button" onClick={()=>runLookup()} className="px-4 py-2 rounded-xl bg-purple-600 text-white text-sm font-medium">Lookup</button>
+                <button type="button" onClick={()=>clearLookup()} className="px-4 py-2 rounded-xl bg-zinc-700 text-white text-sm font-medium">Clear</button>
+              </div>
             </div>
-            {lookupOut && <div className="mt-3 text-sm">{lookupOut}</div>}
-            <ul className="mt-4 text-xs text-purple-100/90 space-y-2 list-disc list-inside">
+            {lookupOut && <div className="text-sm">{lookupOut}</div>}
+            <ul className="text-xs text-purple-100/90 space-y-2 list-disc list-inside">
               <li>Format: <b>month/day/year</b> (e.g., <b>7/4/1776</b>).</li>
               <li>BC years: use a leading minus (e.g., <b>-1</b> = <b>1 BC</b>). No year 0.</li>
               <li>Valid range: <b>−10000…10000</b>. Days must be valid for the month.</li>
             </ul>
-            {entries.length>0 && (
-              <div className="mt-5 pt-4 border-t border-purple-500/40">
-                <div className="flex items-center justify-between text-[11px] uppercase tracking-wide text-purple-200/70">
-                  <span>History</span>
-                  <button type="button" onClick={()=>handleClearHistory()} className="text-purple-200/70 font-medium">Clear history</button>
-                </div>
-                <ul className="mt-3 space-y-2">
-                  {entries.map(entry=>(
+          </div>
+          <div className="rounded-2xl panel p-4">
+            <div className="flex items-center justify-between text-[11px] uppercase tracking-wide text-purple-200/70">
+              <span>History</span>
+              {entries.length>0 && (
+                <button type="button" onClick={()=>handleClearHistory()} className="text-purple-200/70 font-medium">Clear history</button>
+              )}
+            </div>
+            {entries.length>0 ? (
+              <ul className="mt-3 space-y-2">
+                {entries.map(entry=>{
+                  const isActive = entry.id===activeHistoryId;
+                  return (
                     <li key={entry.id}>
-                      <button type="button" onClick={()=>handleHistorySelect(entry)}
-                              className="w-full text-left px-3 py-2 rounded-xl panel flex items-center justify-between gap-3 text-xs">
+                      <button
+                        type="button"
+                        onClick={()=>handleHistorySelect(entry)}
+                        className={`w-full text-left px-3 py-2 rounded-xl panel flex items-center justify-between gap-3 text-xs transition ${isActive?'border-purple-400/80 ring-2 ring-purple-400/30 bg-purple-900/60':'hover:border-purple-500/60'}`}
+                        aria-pressed={isActive}
+                      >
                         <span className="block text-[13px] font-medium text-purple-100/90">{entry.label}</span>
                         <span className="text-[12px] font-semibold text-purple-200/80">{entry.weekday}</span>
                       </button>
                     </li>
-                  ))}
-                </ul>
-              </div>
+                  );
+                })}
+              </ul>
+            ) : (
+              <p className="mt-3 text-xs text-purple-300/70">Lookups you run will appear here.</p>
             )}
-          </div>
-          {calcDate && (
-            <div className="mt-4">
-              <MethodBreakdownSection date={calcDate}/>
+            <div className="mt-4 pt-4 border-t border-purple-500/40 space-y-3">
+              <button
+                type="button"
+                onClick={toggleCalculations}
+                className={`w-full sm:w-auto px-4 py-2 rounded-xl bg-purple-700 hover:bg-purple-600 text-sm font-medium transition ${showCalcDisabled?'opacity-40 pointer-events-none cursor-not-allowed hover:bg-purple-700':''}`}
+                aria-disabled={showCalcDisabled}
+              >
+                {calcPanelOpen?"Hide calculations":"Show calculations"}
+              </button>
+              {calcPanelOpen && (
+                <div className="rounded-2xl thin bg-purple-950/40 p-4">
+                  <MethodExplanation date={calcDate}/>
+                </div>
+              )}
             </div>
-          )}
+          </div>
         </div>
       );
     }
