@@ -220,13 +220,17 @@
     /* ---------- atoms ---------- */
     const Stat=({label,value,disabled})=>(
       <div className={`px-2.5 py-1.5 rounded-xl panel text-center text-xs sm:text-sm ${disabled?'opacity-60':''} flex flex-col items-center h-full`}>
-        <div className="text-[11px] sm:text-[12px] text-purple-200/80">{label}</div>
+        <div className="text-[11px] sm:text-[12px] text-purple-200/80 text-center leading-tight flex items-center justify-center min-h-[1.65rem] sm:min-h-[1.85rem]">
+          <span>{label}</span>
+        </div>
         <div className="mt-auto pt-0.5 text-base sm:text-lg font-semibold tabular-nums">{disabled?'—':value}</div>
       </div>
     );
     const StatTwo=({label,left,right,disabled})=>(
       <div className={`px-2.5 py-1.5 rounded-xl panel text-center text-xs sm:text-sm ${disabled?'opacity-60':''} flex flex-col items-center h-full`}>
-        <div className="text-[11px] sm:text-[12px] text-purple-200/80">{label}</div>
+        <div className="text-[11px] sm:text-[12px] text-purple-200/80 text-center leading-tight flex items-center justify-center min-h-[1.65rem] sm:min-h-[1.85rem]">
+          <span>{label}</span>
+        </div>
         <div className="mt-auto pt-0.5 text-base sm:text-lg font-semibold tabular-nums">{disabled?'—':`${left}/${right}`}</div>
       </div>
     );
