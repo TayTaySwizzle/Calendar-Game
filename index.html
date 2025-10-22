@@ -219,15 +219,15 @@
 
     /* ---------- atoms ---------- */
     const Stat=({label,value,disabled})=>(
-      <div className={`px-2.5 py-1.5 rounded-xl panel text-center text-xs sm:text-sm ${disabled?'opacity-60':''}`}>
+      <div className={`px-2.5 py-1.5 rounded-xl panel text-center text-xs sm:text-sm ${disabled?'opacity-60':''} flex flex-col items-center h-full`}>
         <div className="text-[11px] sm:text-[12px] text-purple-200/80">{label}</div>
-        <div className="text-base sm:text-lg font-semibold tabular-nums">{disabled?'—':value}</div>
+        <div className="mt-auto pt-0.5 text-base sm:text-lg font-semibold tabular-nums">{disabled?'—':value}</div>
       </div>
     );
     const StatTwo=({label,left,right,disabled})=>(
-      <div className={`px-2.5 py-1.5 rounded-xl panel text-center text-xs sm:text-sm ${disabled?'opacity-60':''}`}>
+      <div className={`px-2.5 py-1.5 rounded-xl panel text-center text-xs sm:text-sm ${disabled?'opacity-60':''} flex flex-col items-center h-full`}>
         <div className="text-[11px] sm:text-[12px] text-purple-200/80">{label}</div>
-        <div className="text-base sm:text-lg font-semibold tabular-nums">{disabled?'—':`${left}/${right}`}</div>
+        <div className="mt-auto pt-0.5 text-base sm:text-lg font-semibold tabular-nums">{disabled?'—':`${left}/${right}`}</div>
       </div>
     );
 
@@ -276,6 +276,7 @@
       const blankStats=()=>({played:0,good:0,streak:0,best:0,timeSum:0,timeCnt:0});
       const blankStatsByEra=()=>({AD:blankStats(), BC:blankStats(), BOTH:blankStats()});
       const [statsByMode,setStatsByMode]=useState({classic:blankStatsByEra(), blitz:blankStatsByEra(), sudden:blankStatsByEra(), flash:blankStatsByEra(), deduction:blankStatsByEra()});
+      const [blitzRoundStats,setBlitzRoundStats]=useState(()=>blankStats());
       const S = (statsByMode[mode]?.[era]) || blankStats();
 
       const [statsOff,setStatsOff]=useState(false);
@@ -759,6 +760,7 @@
         setActive(false); setShowTimerDate(false); setMsg(""); setGuesses([]); setFlash(null);
         setLocked(false); setRevealed(false); setCountedWrong(false);
         setBlitzRemain(blitzSec); blitzStartRef.current=null; blitzPausedAtRef.current=null; blitzPausedAccRef.current=0; setBlitzRunning(false);
+        if(mode==="blitz"){ setBlitzRoundStats(blankStats()); }
         qDeadlineRef.current=null; qPausedAtRef.current=null; qPausedAccRef.current=0; setQRemain(qSec);
         clearTimeout(flashTimerRef.current);
         flashTimerRef.current=null;
@@ -770,7 +772,7 @@
       const begin=()=>{
         __hideErr();
         setActive(true); setShowTimerDate(false); setMsg(""); setLocked(false); setRevealed(false); setCountedWrong(false);
-        if(mode==="blitz"){ blitzStartRef.current=performance.now(); blitzPausedAccRef.current=0; blitzPausedAtRef.current=null; setBlitzRunning(true); setBlitzRemain(blitzSec); }
+        if(mode==="blitz"){ blitzStartRef.current=performance.now(); blitzPausedAccRef.current=0; blitzPausedAtRef.current=null; setBlitzRunning(true); setBlitzRemain(blitzSec); setBlitzRoundStats(blankStats()); }
         if(mode==="sudden"){ const now=performance.now(); qDeadlineRef.current=now + qSec*1000; qPausedAccRef.current=0; qPausedAtRef.current=null; setQRemain(qSec); }
         if(mode==="flash"){
           setPhase('show');
@@ -842,6 +844,10 @@
           return;
         }
         if(!statsOff && !countedWrong){ updateStats(cur=>{ cur.played+=1; cur.streak=0; }); }
+        if(mode==="blitz" && !countedWrong){ setBlitzRoundStats(prev=>({
+          ...prev,
+          played:prev.played+1
+        })); }
         setCountedWrong(true);
         if(isTimer(mode)){
           setActive(false);
@@ -875,14 +881,23 @@
           setFlash({type:'good', idx}); setTimeout(()=>setFlash(null),450);
           if(!statsOff && !countedWrong && tStartRef.current && trackingOn()){ const dt=(performance.now()-tStartRef.current)/1000; updateStats(cur=>{ cur.timeSum+=dt; cur.timeCnt+=1; }); }
           if(!statsOff && !countedWrong){ updateStats(cur=>{ cur.played+=1; cur.good+=1; cur.streak+=1; if(cur.streak>cur.best) cur.best=cur.streak; }); }
+          if(mode==="blitz" && !countedWrong){ setBlitzRoundStats(prev=>({
+            ...prev,
+            played:prev.played+1,
+            good:prev.good+1
+          })); }
           if(mode==="sudden"){
             const now=performance.now(); qDeadlineRef.current = now + qSec*1000; qPausedAccRef.current = 0; qPausedAtRef.current = null; setQRemain(qSec);
           }
           if(mode==="flash"){ clearTimeout(flashTimerRef.current); flashTimerRef.current=null; setPhase('dash'); setActive(false); flashDeadlineRef.current=null; setFlashRemainMs(flashMs); }
           pushAndNext();
         }else{
-          if(mode!=="sudden"){ setGuesses(g=> g.includes(DAY[idx])?g:[...g,DAY[idx]] ); }
+          if(mode==="sudden"){ setGuesses([DAY[idx]]); }else{ setGuesses(g=> g.includes(DAY[idx])?g:[...g,DAY[idx]] ); }
           if(!statsOff && !countedWrong){ updateStats(cur=>{ cur.played+=1; cur.streak=0; }); }
+          if(mode==="blitz" && !countedWrong){ setBlitzRoundStats(prev=>({
+            ...prev,
+            played:prev.played+1
+          })); }
           setCountedWrong(true);
           if(isTimer(mode)){
             if(mode==="sudden"){
@@ -1595,6 +1610,10 @@
           if(!statsOff){
             updateStats(cur=>{ cur.played+=1; cur.streak=0; });
           }
+          if(mode==="blitz"){ setBlitzRoundStats(prev=>({
+            ...prev,
+            played:prev.played+1
+          })); }
         }
         let answerMsg=null;
         if(mode==="deduction" && ded){
@@ -1678,7 +1697,7 @@
           {mode!=="lookup" && mode!=="method" && (
             <>
               <div className="mt-4 grid grid-cols-4 gap-2 sm:gap-3">
-                <Stat label="Score" value={`${S.good}/${S.played}`} disabled={statsOff}/>
+                <Stat label={mode==="blitz"?"Score (round)":"Score"} value={mode==="blitz"?`${blitzRoundStats.good}/${blitzRoundStats.played}`:`${S.good}/${S.played}`} disabled={statsOff}/>
                 <Stat label="Accuracy" value={`${S.played?(S.good/S.played*100).toFixed(1):"0.0"}%`} disabled={statsOff}/>
                 <StatTwo label="Streak / Longest" left={S.streak} right={S.best} disabled={statsOff}/>
                 <Stat label="Avg time (correct)" value={(S.timeCnt?`${(S.timeSum/S.timeCnt).toFixed(2)}s`:"—")} disabled={avgDisabled}/>
@@ -1710,6 +1729,10 @@
             <div className="mt-5">
               <LookupCard history={lookupHistory} onAddHistory={pushLookupHistory} onClearHistory={clearLookupHistory} />
             </div>
+          ) : mode==="method" ? (
+            <div className="mt-5">
+              <MethodPage/>
+            </div>
           ) : (
             <div className="mt-5 p-5 rounded-3xl card">
             {/* Blitz/Sudden/Flash bars */}
@@ -1731,10 +1754,6 @@
                 <div className="bar"><span style={{width:`${flashPercent}%`}}></span></div>
               </div>
             )}
-
-            {/* Method page (blank for now) */}
-            {mode==="method" && <MethodPage/>}
-
             {/* Headline */}
             {mode!=="lookup" && mode!=="deduction" && mode!=="method" && (
               <div className="text-center">
@@ -1788,13 +1807,13 @@
                     >Back</button>
                   </div>
 
-                  {(msg || (guesses.length>0 && mode!=="sudden")) && (
+                  {(msg || guesses.length>0) && (
                     <div className="mt-3 text-purple-100/90 text-sm">
-                      {(mode!=="sudden" && guesses.length>0) && (
-                        <div className="flex flex-wrap gap-1 items-center"><span className="text-purple-300/80 text-xs mr-1">Guesses:</span>{guesses.map(g=><span key={g} className="chip">{g}</span>)}</div>
+                      {(guesses.length>0) && (
+                        <div className="flex flex-wrap gap-1 items-center"><span className="text-purple-300/80 text-xs mr-1">{mode==="sudden"?"Guess:":"Guesses:"}</span>{guesses.map(g=><span key={g} className="chip">{g}</span>)}</div>
                       )}
                       {msg && (
-                        <div className={`${(mode!=="sudden" && guesses.length>0)?'mt-2':''}`}>{msg}</div>
+                        <div className={`${guesses.length>0?'mt-2':''}`}>{msg}</div>
                       )}
                     </div>
                   )}
