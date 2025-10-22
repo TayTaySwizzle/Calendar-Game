@@ -772,7 +772,12 @@
           const now=performance.now();
           flashDeadlineRef.current = now + flashMs;
           setFlashRemainMs(flashMs);
-          flashTimerRef.current=setTimeout(()=>setPhase('hide'),Math.max(50,flashMs));
+          flashTimerRef.current=setTimeout(()=>{
+            setPhase('hide');
+            flashTimerRef.current=null;
+            flashDeadlineRef.current=null;
+            setFlashRemainMs(0);
+          },Math.max(50,flashMs));
         }
         tStartRef.current=performance.now();
         pushAndNext();
@@ -879,11 +884,14 @@
           if(!statsOff && !countedWrong){ updateStats(cur=>{ cur.played+=1; cur.streak=0; }); }
           setCountedWrong(true);
           if(isTimer(mode)){
-            setActive(false);
-            setShowTimerDate(true);
-            if(mode==="blitz"){ setBlitzRunning(false); blitzStartRef.current=null; blitzPausedAtRef.current=null; blitzPausedAccRef.current=0; }
-            if(mode==="sudden"){ qDeadlineRef.current=null; qPausedAtRef.current=null; qPausedAccRef.current=0; }
-            if(mode==="flash"){ clearTimeout(flashTimerRef.current); flashTimerRef.current=null; setPhase('dash'); flashDeadlineRef.current=null; }
+            if(mode==="sudden"){
+              setActive(false);
+              setShowTimerDate(true);
+              qDeadlineRef.current=null; qPausedAtRef.current=null; qPausedAccRef.current=0;
+            }else if(mode!=="blitz" && mode!=="flash"){
+              setActive(false);
+              setShowTimerDate(true);
+            }
           }
           if(mode==="sudden"){ setMsg(`Answer: ${DAY[correct]}. Game over.`); setActive(false); }
           setFlash({type:'bad', idx}); setTimeout(()=>setFlash(null),450);
@@ -1464,7 +1472,7 @@
                   </div>
                 </div>
               </div>
-              <p className="text-xs text-purple-300/70">Proleptic Gregorian calendar. Year 0 isn’t available.</p>
+              <p className="text-xs text-purple-300/70">Proleptic Gregorian calendar. Year 0 is not available.</p>
             </div>
           </div>
         </div>
@@ -1482,7 +1490,7 @@
       const flashPercent = flashMs>0 ? Math.max(0, Math.min(100,(Math.max(0,flashRemainMs)/flashMs)*100)) : 100;
       const shouldShowTimerDate = (!isTimer(mode)) || active || showTimerDate;
       const flashHiding = mode==="flash" && active && phase==='hide';
-      const revealDisabled = locked || calcOpen || calcPenaltyActive || (isTimer(mode) && (!shouldShowTimerDate || flashHiding));
+      const revealDisabled = locked || calcOpen || calcPenaltyActive || (isTimer(mode) && (!shouldShowTimerDate || (mode!=="flash" && flashHiding)));
       const timerBusy = isTimer(mode) && active;
       const calcTarget = React.useMemo(()=>{
         if(mode==="lookup") return null;
@@ -1678,7 +1686,12 @@
           {mode!=="lookup" && mode!=="method" && RangePanel}
 
           {/* MAIN CARD */}
-          <div className="mt-5 p-5 rounded-3xl card">
+          {mode==="lookup" ? (
+            <div className="mt-5">
+              <LookupCard history={lookupHistory} onAddHistory={pushLookupHistory} onClearHistory={clearLookupHistory} />
+            </div>
+          ) : (
+            <div className="mt-5 p-5 rounded-3xl card">
             {/* Blitz/Sudden/Flash bars */}
             {mode==="blitz" && (
               <div className="mb-3">
@@ -1836,12 +1849,9 @@
                 </div>
               </>
             )}
-
-            {/* ======= LOOKUP ======= */}
-            {mode==="lookup" && <LookupCard history={lookupHistory} onAddHistory={pushLookupHistory} onClearHistory={clearLookupHistory} />}
-
-            {mode!=="method" && mode!=="lookup" && <MethodBreakdownSection date={calcTarget} open={calcOpen} onOpenChange={handleCalculationOpenChange} onRequestNew={handleMethodNewRequest}/>}
+            {mode!=="method" && <MethodBreakdownSection date={calcTarget} open={calcOpen} onOpenChange={handleCalculationOpenChange} onRequestNew={handleMethodNewRequest}/>}
           </div>
+          )}
         </div>
       );
     }
