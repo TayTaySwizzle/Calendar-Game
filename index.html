@@ -219,15 +219,15 @@
 
     /* ---------- atoms ---------- */
     const Stat=({label,value,disabled})=>(
-      <div className={`px-3 py-2 rounded-xl panel text-center ${disabled?'opacity-60':''}`}>
-        <div className="text-[12px] text-purple-200/80">{label}</div>
-        <div className="text-lg font-semibold tabular-nums">{disabled?'—':value}</div>
+      <div className={`px-2.5 py-2 rounded-xl panel text-center ${disabled?'opacity-60':''}`}>
+        <div className="text-[11px] leading-4 text-purple-200/80">{label}</div>
+        <div className="text-base font-semibold tabular-nums">{disabled?'—':value}</div>
       </div>
     );
     const StatTwo=({label,left,right,disabled})=>(
-      <div className={`px-3 py-2 rounded-xl panel text-center ${disabled?'opacity-60':''}`}>
-        <div className="text-[12px] text-purple-200/80">{label}</div>
-        <div className="text-lg font-semibold tabular-nums">{disabled?'—':`${left}/${right}`}</div>
+      <div className={`px-2.5 py-2 rounded-xl panel text-center ${disabled?'opacity-60':''}`}>
+        <div className="text-[11px] leading-4 text-purple-200/80">{label}</div>
+        <div className="text-base font-semibold tabular-nums">{disabled?'—':`${left}/${right}`}</div>
       </div>
     );
 
@@ -1677,7 +1677,7 @@
           {/* Stats/toggles (not on lookup/method) */}
           {mode!=="lookup" && mode!=="method" && (
             <>
-              <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="mt-4 grid grid-cols-4 gap-3">
                 <Stat label="Score" value={`${S.good}/${S.played}`} disabled={statsOff}/>
                 <Stat label="Accuracy" value={`${S.played?(S.good/S.played*100).toFixed(1):"0.0"}%`} disabled={statsOff}/>
                 <StatTwo label="Streak / Longest" left={S.streak} right={S.best} disabled={statsOff}/>
