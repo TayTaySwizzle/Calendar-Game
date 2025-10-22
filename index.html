@@ -219,15 +219,15 @@
 
     /* ---------- atoms ---------- */
     const Stat=({label,value,disabled})=>(
-      <div className={`px-3 py-2 rounded-xl panel text-center ${disabled?'opacity-60':''}`}>
-        <div className="text-[12px] text-purple-200/80">{label}</div>
-        <div className="text-lg font-semibold tabular-nums">{disabled?'—':value}</div>
+      <div className={`px-2.5 py-1.5 rounded-xl panel text-center ${disabled?'opacity-60':''}`}>
+        <div className="text-[11px] text-purple-200/80">{label}</div>
+        <div className="text-base font-semibold tabular-nums">{disabled?'—':value}</div>
       </div>
     );
     const StatTwo=({label,left,right,disabled})=>(
-      <div className={`px-3 py-2 rounded-xl panel text-center ${disabled?'opacity-60':''}`}>
-        <div className="text-[12px] text-purple-200/80">{label}</div>
-        <div className="text-lg font-semibold tabular-nums">{disabled?'—':`${left}/${right}`}</div>
+      <div className={`px-2.5 py-1.5 rounded-xl panel text-center ${disabled?'opacity-60':''}`}>
+        <div className="text-[11px] text-purple-200/80">{label}</div>
+        <div className="text-base font-semibold tabular-nums">{disabled?'—':`${left}/${right}`}</div>
       </div>
     );
 
@@ -1308,11 +1308,11 @@
       };
 
       const eraControl = (
-        <div className="flex rounded-xl overflow-hidden border border-purple-800/60 w-full">
+        <div className="flex rounded-lg overflow-hidden border border-purple-800/60 w-full text-xs font-medium">
           {[{k:'AD',label:'AD'},{k:'BOTH',label:'AD+BC'},{k:'BC',label:'BC'}].map(seg=>(
             <button key={seg.k} type="button"
               onClick={()=>{ if(era!==seg.k) applyEra(seg.k); }}
-              className={`flex-1 px-3 py-1.5 text-sm ${era===seg.k ? 'bg-purple-600' : 'bg-purple-900/40 hover:bg-purple-900/70'} ${seg.k!=='BC'?'border-r border-purple-800/60':''}`}>
+              className={`flex-1 px-2.5 py-1.5 transition-colors ${era===seg.k ? 'bg-purple-600' : 'bg-purple-900/40 hover:bg-purple-900/70'} ${seg.k!=='BC'?'border-r border-purple-800/60':''}`}>
               {seg.label}
             </button>
           ))}
@@ -1320,22 +1320,22 @@
       );
 
       const disableAvgToggle = (
-        <label className="flex items-center gap-2 text-sm w-full">
+        <label className="flex items-center justify-between gap-2 text-xs w-full">
           <input type="checkbox" className="sr-only"
             checked={!(mode==="classic"?trackClassic:trackDed)}
             onChange={e=> toggleAvg(e.target.checked)} />
-          <span className={`w-10 h-6 rounded-full relative ${(!(mode==="classic"?trackClassic:trackDed))?"bg-rose-500/70":"bg-zinc-600"}`}>
-            <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${(!(mode==="classic"?trackClassic:trackDed))?"translate-x-4":""}`}></span>
+          <span className={`w-9 h-5 rounded-full relative ${(!(mode==="classic"?trackClassic:trackDed))?"bg-rose-500/70":"bg-zinc-600"}`}>
+            <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform ${(!(mode==="classic"?trackClassic:trackDed))?"translate-x-4":""}`}></span>
           </span>
           <span>Disable avg time</span>
         </label>
       );
 
       const disableStatsToggle = (
-        <label className="flex items-center gap-2 text-sm">
+        <label className="flex items-center justify-between gap-2 text-xs w-full">
           <input type="checkbox" className="sr-only" checked={statsOff} onChange={e=>setStatsOff(e.target.checked)} />
-          <span className={`w-10 h-6 rounded-full relative ${statsOff?"bg-rose-500/70":"bg-zinc-600"}`}>
-            <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${statsOff?"translate-x-4":""}`}></span>
+          <span className={`w-9 h-5 rounded-full relative ${statsOff?"bg-rose-500/70":"bg-zinc-600"}`}>
+            <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform ${statsOff?"translate-x-4":""}`}></span>
           </span>
           <span>Disable stats</span>
         </label>
@@ -1344,36 +1344,36 @@
       const timerSettingControl = (()=>{
         if(mode==="blitz"){
           return (
-            <div className="flex items-center gap-2 w-full">
-              <span className="text-xs text-purple-300/80">Duration:</span>
+            <div className="flex items-center gap-2 w-full text-[11px]">
+              <span className="text-purple-300/80">Duration:</span>
               <input type="range" min="15" max="180" step="5" value={blitzSec}
                 onChange={e=>{const v=+e.target.value; setBlitzSec(v); if(!active) setBlitzRemain(v);}}
                 disabled={active}
                 className="accent-purple-500 w-full max-w-[8rem] disabled:opacity-40 disabled:cursor-not-allowed"/>
-              <span className="tabular-nums text-xs w-12 text-right">{blitzSec}s</span>
+              <span className="tabular-nums w-12 text-right">{blitzSec}s</span>
             </div>
           );
         }
         if(mode==="sudden"){
           return (
-            <div className="flex items-center gap-2 w-full">
-              <span className="text-xs text-purple-300/80 whitespace-nowrap">Per Q:</span>
+            <div className="flex items-center gap-2 w-full text-[11px]">
+              <span className="text-purple-300/80 whitespace-nowrap">Per Q:</span>
               <input type="range" min="3" max="20" step="1" value={qSec}
                 onChange={e=>{const v=+e.target.value; setQSec(v); if(!active) setQRemain(v);}}
                 disabled={active}
                 className="accent-purple-500 w-full max-w-[8rem] disabled:opacity-40 disabled:cursor-not-allowed"/>
-              <span className="tabular-nums text-xs w-12 text-right">{qSec}s</span>
+              <span className="tabular-nums w-12 text-right">{qSec}s</span>
             </div>
           );
         }
         if(mode==="flash"){
           return (
-            <div className="flex items-center gap-2 w-full">
+            <div className="flex items-center gap-2 w-full text-[11px]">
               <input type="range" min="100" max="3000" step="50" value={flashMs}
                 onChange={e=>{const next=+e.target.value; setFlashMs(next); if(!active) setFlashRemainMs(next);}}
                 disabled={active}
                 className="accent-purple-500 w-full max-w-[9rem] disabled:opacity-40 disabled:cursor-not-allowed"/>
-              <span className="tabular-nums text-xs w-14 text-right">{flashMs}ms</span>
+              <span className="tabular-nums w-14 text-right">{flashMs}ms</span>
             </div>
           );
         }
@@ -1677,26 +1677,32 @@
           {/* Stats/toggles (not on lookup/method) */}
           {mode!=="lookup" && mode!=="method" && (
             <>
-              <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2">
                 <Stat label="Score" value={`${S.good}/${S.played}`} disabled={statsOff}/>
                 <Stat label="Accuracy" value={`${S.played?(S.good/S.played*100).toFixed(1):"0.0"}%`} disabled={statsOff}/>
                 <StatTwo label="Streak / Longest" left={S.streak} right={S.best} disabled={statsOff}/>
                 <Stat label="Avg time (correct)" value={(S.timeCnt?`${(S.timeSum/S.timeCnt).toFixed(2)}s`:"—")} disabled={avgDisabled}/>
               </div>
-              <div className="mt-2 grid grid-cols-2 md:grid-cols-4 gap-3 items-stretch">
-                <div className="col-span-1 md:col-span-2 flex items-center">
-                  {eraControl}
+              <div className="mt-2 flex flex-wrap gap-2">
+                <div className="flex-1 min-w-[160px]">
+                  <div className="panel rounded-xl px-2.5 py-2 h-full flex items-center">
+                    <div className="w-full">{eraControl}</div>
+                  </div>
                 </div>
-                <div className="col-span-1 md:col-span-2 flex justify-end">
+                <div className="flex-1 min-w-[140px]">
                   <button type="button"
-                    className="text-sm px-3 py-1.5 rounded-xl bg-purple-700 hover:bg-purple-600 w-full md:w-auto h-full flex items-center justify-center"
+                    className="panel w-full rounded-xl px-3 py-2 text-xs font-medium text-purple-50 hover:bg-purple-700/30 transition-colors focus:outline-none focus:ring-2 focus:ring-purple-400/70"
                     onClick={handleResetStats}>Reset stats</button>
                 </div>
-                <div className="col-span-1 md:col-span-2 flex items-center">
-                  {timerSettingControl}
+                <div className="flex-1 min-w-[200px]">
+                  <div className="panel rounded-xl px-2.5 py-2 h-full flex items-center">
+                    <div className="w-full">{timerSettingControl}</div>
+                  </div>
                 </div>
-                <div className="col-span-1 md:col-span-2 flex items-center justify-end">
-                  {disableStatsToggle}
+                <div className="flex-1 min-w-[180px]">
+                  <div className="panel rounded-xl px-2.5 py-2 h-full flex items-center">
+                    <div className="w-full">{disableStatsToggle}</div>
+                  </div>
                 </div>
               </div>
             </>
