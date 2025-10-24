@@ -270,8 +270,6 @@
       const [calcPenaltyActive,setCalcPenaltyActive]=useState(false);
       const calcOpenStatesRef=useRef(new Map());
       const calcPenaltyStatesRef=useRef(new Map());
-      const skipScrollOnOpenRef=useRef(false);
-      const calcScrollRafRef=useRef(null);
       const calcScrollTimeoutRef=useRef(null);
       const rangeRefreshPendingRef=useRef(false);
 
@@ -648,14 +646,16 @@
 
       /* Era apply — with snapshots when avg-time disabled (Classic & Deduction) */
       function applyEra(newEra){
-        // Save snapshot of current era before leaving, if avg-time disabled
-        if(mode==="classic" && !trackClassic){
+        const shouldPreserveClassic = !trackClassic || statsOff;
+        const shouldPreserveDeduction = !trackDed || statsOff;
+        // Save snapshot of current era before leaving, if preservation enabled
+        if(mode==="classic" && shouldPreserveClassic){
           setSavedClassicByEra(prev=>({
             ...prev,
             [era]: { date:{...date}, guesses:[...guesses], countedWrong, msg, locked, revealed, calcPenaltyActive }
           }));
         }
-        if(mode==="deduction" && !trackDed){
+        if(mode==="deduction" && shouldPreserveDeduction){
           const snapshot = ded ? { ded, guesses:[...guesses], countedWrong, msg, locked, revealed, calcPenaltyActive } : null;
           const typeSnapshots = {...savedDedByType, [dedType]: snapshot};
           setSavedDedByEra(prev=>({
@@ -674,7 +674,7 @@
 
         // Classic/Deduction: preserve or generate new depending on avg-time toggle
         if(mode==="classic"){
-          if(!trackClassic){
+          if(shouldPreserveClassic){
             const snap = (savedClassicByEra[newEra] || null);
             if(snap && snap.date && snap.date.y>=mn && snap.date.y<=mx){
               setDate(snap.date); setGuesses(snap.guesses||[]); setCountedWrong(!!snap.countedWrong);
@@ -694,7 +694,7 @@
           const snap = savedDedByEra[newEra] || null;
           const storedByType = snap?.byType ? {...snap.byType} : blankDedTypeStore();
           setSavedDedByType(storedByType);
-          if(!trackDed){
+          if(shouldPreserveDeduction){
             const currentSnap = snap?.current || storedByType[dedType] || null;
             if(currentSnap && currentSnap.ded){
               setDed(currentSnap.ded); setGuesses(currentSnap.guesses||[]); setCountedWrong(!!currentSnap.countedWrong);
@@ -1564,7 +1564,6 @@
         const savedPenalty = calcPenaltyStatesRef.current.has(mode)
           ? !!calcPenaltyStatesRef.current.get(mode)
           : false;
-        skipScrollOnOpenRef.current = true;
         setCalcOpen(saved);
         setCalcPenalty(savedPenalty);
       },[mode]);
@@ -1573,43 +1572,32 @@
         const prevMode = prevModeRef.current;
         if(prevMode!==mode){
           prevModeRef.current = mode;
-          skipScrollOnOpenRef.current = true;
           return;
         }
-        skipScrollOnOpenRef.current = true;
         setCalcOpen(false);
         calcOpenStatesRef.current.set(mode,false);
         prevModeRef.current = mode;
       },[calcTargetKey, mode]);
 
       useEffect(()=>{
-        const cancelScheduledScroll = ()=>{
-          if(calcScrollRafRef.current!=null){
-            cancelAnimationFrame(calcScrollRafRef.current);
-            calcScrollRafRef.current=null;
-          }
+        return ()=>{
           if(calcScrollTimeoutRef.current!=null){
             clearTimeout(calcScrollTimeoutRef.current);
             calcScrollTimeoutRef.current=null;
           }
         };
-        if(calcOpen){
-          if(skipScrollOnOpenRef.current){
-            skipScrollOnOpenRef.current=false;
-          }else{
-            cancelScheduledScroll();
-            const scrollToBottom = ()=> window.scrollTo({top:document.documentElement.scrollHeight,behavior:'smooth'});
-            calcScrollRafRef.current=requestAnimationFrame(()=>{
-              scrollToBottom();
-              calcScrollTimeoutRef.current=setTimeout(scrollToBottom,120);
-            });
-          }
-        }else{
-          skipScrollOnOpenRef.current=false;
-          cancelScheduledScroll();
+      },[]);
+
+      const scheduleSmoothScrollToBottom = useCallback(()=>{
+        if(typeof window==='undefined') return;
+        if(calcScrollTimeoutRef.current!=null){
+          clearTimeout(calcScrollTimeoutRef.current);
         }
-        return cancelScheduledScroll;
-      },[calcOpen]);
+        calcScrollTimeoutRef.current=window.setTimeout(()=>{
+          window.scrollTo({top:document.documentElement.scrollHeight,behavior:'smooth'});
+          calcScrollTimeoutRef.current=null;
+        },60);
+      },[]);
 
       /* should reset stats create a new date? */
       function shouldNewOnReset(){
@@ -1663,6 +1651,9 @@
         }
         setCalcOpen(next);
         calcOpenStatesRef.current.set(mode,next);
+        if(next){
+          scheduleSmoothScrollToBottom();
+        }
       };
 
       const handleMethodNewRequest = ()=>{
@@ -1672,6 +1663,14 @@
           doNew();
         }
       };
+
+      const handleLookupCalcOpenChange = useCallback((next)=>{
+        const value=!!next;
+        setLookupCalcOpen(value);
+        if(value){
+          scheduleSmoothScrollToBottom();
+        }
+      },[scheduleSmoothScrollToBottom]);
 
       /* Avg toggle click handler (disable/enable) */
       function toggleAvg(disable){
@@ -1761,7 +1760,7 @@
                 selectedHistoryId={lookupSelectedHistoryId}
                 onSelectedHistoryIdChange={setLookupSelectedHistoryId}
                 calcOpen={lookupCalcOpen}
-                onCalcOpenChange={setLookupCalcOpen}
+                onCalcOpenChange={handleLookupCalcOpenChange}
               />
             </div>
           ) : mode==="method" ? (
@@ -1824,20 +1823,37 @@
 
                 {/* Action bubble */}
                 <div className="mt-4 rounded-2xl panel p-3">
-                  <div className="flex flex-wrap items-center gap-2">
-                    {isTimer(mode) && (!active
-                      ? <button type="button" className="px-4 py-2 rounded-xl bg-purple-600 text-white text-sm font-medium" onClick={()=>begin()}>Begin</button>
-                      : <button type="button" className="px-4 py-2 rounded-xl bg-rose-600/90 text-white text-sm font-medium" onClick={()=>arm()}>Reset</button>
+                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 sm:gap-3">
+                    {isTimer(mode) ? (
+                      !active
+                        ? (
+                          <button
+                            type="button"
+                            className="w-full sm:col-span-2 px-4 py-2 rounded-xl bg-purple-600 text-white text-sm font-medium"
+                            onClick={()=>begin()}
+                          >Begin</button>
+                        ) : (
+                          <button
+                            type="button"
+                            className="w-full sm:col-span-2 px-4 py-2 rounded-xl bg-rose-600/90 text-white text-sm font-medium"
+                            onClick={()=>arm()}
+                          >Reset</button>
+                        )
+                    ) : (
+                      <button
+                        type="button"
+                        className={`w-full sm:col-span-2 px-3 py-2 rounded-xl border surface-button text-sm ${timerBusy?'opacity-60 pointer-events-none':''}`}
+                        onClick={()=>doNew()}
+                      >New</button>
                     )}
                     <button
                       type="button"
-                      className={`px-3 py-2 rounded-xl border surface-button text-sm ${timerBusy?'opacity-60 pointer-events-none':''}`}
-                      onClick={()=>doNew()}
-                    >New</button>
-                    <button type="button" className={`px-3 py-2 rounded-xl border surface-button text-sm ${revealDisabled?'opacity-60 pointer-events-none':''}`} onClick={()=>reveal()}>Reveal</button>
+                      className={`w-full sm:col-span-1 px-3 py-2 rounded-xl border surface-button text-sm ${revealDisabled?'opacity-60 pointer-events-none':''}`}
+                      onClick={()=>reveal()}
+                    >Reveal</button>
                     <button
                       type="button"
-                      className={`px-3 py-2 rounded-xl border surface-button text-sm ${timerBusy?'opacity-60 pointer-events-none':''}`}
+                      className={`w-full sm:col-span-1 px-3 py-2 rounded-xl border surface-button text-sm ${timerBusy?'opacity-60 pointer-events-none':''}`}
                       onClick={()=>goBack()}
                     >Back</button>
                   </div>
@@ -1905,10 +1921,22 @@
                 </div>
 
                 <div className="mt-4 rounded-2xl panel p-3">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <button type="button" className="px-3 py-2 rounded-xl border surface-button text-sm" onClick={()=>runDeductionRound()}>New</button>
-                    <button type="button" className={`px-3 py-2 rounded-xl border surface-button text-sm ${revealDisabled?'opacity-60 pointer-events-none':''}`} onClick={()=>reveal()}>Reveal</button>
-                    <button type="button" className="px-3 py-2 rounded-xl border surface-button text-sm" onClick={()=>goBack()}>Back</button>
+                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 sm:gap-3">
+                    <button
+                      type="button"
+                      className="w-full sm:col-span-2 px-3 py-2 rounded-xl border surface-button text-sm"
+                      onClick={()=>runDeductionRound()}
+                    >New</button>
+                    <button
+                      type="button"
+                      className={`w-full sm:col-span-1 px-3 py-2 rounded-xl border surface-button text-sm ${revealDisabled?'opacity-60 pointer-events-none':''}`}
+                      onClick={()=>reveal()}
+                    >Reveal</button>
+                    <button
+                      type="button"
+                      className="w-full sm:col-span-1 px-3 py-2 rounded-xl border surface-button text-sm"
+                      onClick={()=>goBack()}
+                    >Back</button>
                   </div>
                   {(msg || guesses.length>0) && (
                     <div className="mt-3 text-sm">
