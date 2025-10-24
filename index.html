@@ -222,22 +222,36 @@
     };
 
     /* ---------- atoms ---------- */
-    const Stat=({label,value,disabled})=>(
-      <div className={`px-2.5 py-1.5 rounded-xl panel text-center text-xs sm:text-sm ${disabled?'opacity-60':''} flex flex-col items-center h-full`}>
-        <div className="text-[11px] sm:text-[12px] text-purple-200/80 text-center leading-tight flex items-center justify-center min-h-[1.65rem] sm:min-h-[1.85rem]">
-          <span>{label}</span>
-        </div>
-        <div className="mt-auto pt-0.5 text-base sm:text-lg font-semibold tabular-nums">{disabled?'—':value}</div>
-      </div>
-    );
-    const StatTwo=({label,left,right,disabled})=>(
-      <div className={`px-2.5 py-1.5 rounded-xl panel text-center text-xs sm:text-sm ${disabled?'opacity-60':''} flex flex-col items-center h-full`}>
-        <div className="text-[11px] sm:text-[12px] text-purple-200/80 text-center leading-tight flex items-center justify-center min-h-[1.65rem] sm:min-h-[1.85rem]">
-          <span>{label}</span>
-        </div>
-        <div className="mt-auto pt-0.5 text-base sm:text-lg font-semibold tabular-nums">{disabled?'—':`${left}/${right}`}</div>
-      </div>
-    );
+    const Stat=({label,value,disabled,onClick,pressed})=>{
+      const interactive=typeof onClick==='function';
+      const Tag=interactive?'button':'div';
+      const props=interactive?{type:'button',onClick,'aria-pressed':typeof pressed==='boolean'?pressed:undefined,'aria-disabled':disabled||undefined}:{};
+      const baseClass="px-2.5 py-1.5 rounded-xl panel text-center text-xs sm:text-sm flex flex-col items-center h-full";
+      const interactiveClass=interactive?" cursor-pointer focus:outline-none focus:ring-2 focus:ring-purple-400/50 hover:bg-purple-900/40 transition-colors":"";
+      return (
+        <Tag {...props} className={`${baseClass}${disabled?' opacity-60':''}${interactiveClass}`}>
+          <div className="text-[11px] sm:text-[12px] text-purple-200/80 text-center leading-tight flex items-center justify-center min-h-[1.65rem] sm:min-h-[1.85rem]">
+            <span>{label}</span>
+          </div>
+          <div className="mt-auto pt-0.5 text-base sm:text-lg font-semibold tabular-nums">{disabled?'—':value}</div>
+        </Tag>
+      );
+    };
+    const StatTwo=({label,left,right,disabled,onClick,pressed})=>{
+      const interactive=typeof onClick==='function';
+      const Tag=interactive?'button':'div';
+      const props=interactive?{type:'button',onClick,'aria-pressed':typeof pressed==='boolean'?pressed:undefined,'aria-disabled':disabled||undefined}:{};
+      const baseClass="px-2.5 py-1.5 rounded-xl panel text-center text-xs sm:text-sm flex flex-col items-center h-full";
+      const interactiveClass=interactive?" cursor-pointer focus:outline-none focus:ring-2 focus:ring-purple-400/50 hover:bg-purple-900/40 transition-colors":"";
+      return (
+        <Tag {...props} className={`${baseClass}${disabled?' opacity-60':''}${interactiveClass}`}>
+          <div className="text-[11px] sm:text-[12px] text-purple-200/80 text-center leading-tight flex items-center justify-center min-h-[1.65rem] sm:min-h-[1.85rem]">
+            <span>{label}</span>
+          </div>
+          <div className="mt-auto pt-0.5 text-base sm:text-lg font-semibold tabular-nums">{disabled?'—':`${left}/${right}`}</div>
+        </Tag>
+      );
+    };
 
     /* ======================= App ======================= */
     function App(){
@@ -270,7 +284,6 @@
       const [calcPenaltyActive,setCalcPenaltyActive]=useState(false);
       const calcOpenStatesRef=useRef(new Map());
       const calcPenaltyStatesRef=useRef(new Map());
-      const skipScrollOnOpenRef=useRef(false);
       const calcScrollRafRef=useRef(null);
       const calcScrollTimeoutRef=useRef(null);
       const rangeRefreshPendingRef=useRef(false);
@@ -775,6 +788,14 @@
 
       const trackingOn = ()=> (isTimer(mode) || (mode==="classic"&&trackClassic) || (mode==="deduction"&&trackDed));
       const avgDisabled = (statsOff || !( (mode==="classic"&&trackClassic) || (mode==="deduction"&&trackDed) || isTimer(mode) ));
+      const statsPressed = !statsOff;
+      const handleStatsBoxToggle = ()=>{ setStatsOff(prev=>!prev); };
+      const avgTrackingEnabled = (mode==="classic"?trackClassic : mode==="deduction"?trackDed : true);
+      const canToggleAvg = (mode==="classic" || mode==="deduction");
+      const handleAvgStatToggle = ()=>{
+        if(!canToggleAvg) return;
+        toggleAvg(avgTrackingEnabled);
+      };
 
       const arm=()=>{
         __hideErr();
@@ -1355,28 +1376,6 @@
         </div>
       );
 
-      const disableAvgToggle = (
-        <label className="flex items-center gap-2 text-sm w-full">
-          <input type="checkbox" className="sr-only"
-            checked={!(mode==="classic"?trackClassic:trackDed)}
-            onChange={e=> toggleAvg(e.target.checked)} />
-          <span className={`w-10 h-6 rounded-full relative ${(!(mode==="classic"?trackClassic:trackDed))?"bg-rose-500/70":"bg-zinc-600"}`}>
-            <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${(!(mode==="classic"?trackClassic:trackDed))?"translate-x-4":""}`}></span>
-          </span>
-          <span>Disable avg time</span>
-        </label>
-      );
-
-      const disableStatsToggle = (
-        <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" className="sr-only" checked={statsOff} onChange={e=>setStatsOff(e.target.checked)} />
-          <span className={`w-10 h-6 rounded-full relative ${statsOff?"bg-rose-500/70":"bg-zinc-600"}`}>
-            <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${statsOff?"translate-x-4":""}`}></span>
-          </span>
-          <span>Disable stats</span>
-        </label>
-      );
-
       const timerSettingControl = (()=>{
         if(mode==="blitz"){
           return (
@@ -1413,7 +1412,7 @@
             </div>
           );
         }
-        return disableAvgToggle;
+        return null;
       })();
 
       /* range panel */
@@ -1550,6 +1549,7 @@
       const timerBusy = isTimer(mode) && active;
       const calcTarget = React.useMemo(()=>{
         if(mode==="lookup") return null;
+        if(mode==="guide") return null;
         if(mode==="deduction"){
           return ded ? {y:ded.y,m:ded.m,d:ded.d} : null;
         }
@@ -1564,7 +1564,6 @@
         const savedPenalty = calcPenaltyStatesRef.current.has(mode)
           ? !!calcPenaltyStatesRef.current.get(mode)
           : false;
-        skipScrollOnOpenRef.current = true;
         setCalcOpen(saved);
         setCalcPenalty(savedPenalty);
       },[mode]);
@@ -1573,10 +1572,8 @@
         const prevMode = prevModeRef.current;
         if(prevMode!==mode){
           prevModeRef.current = mode;
-          skipScrollOnOpenRef.current = true;
           return;
         }
-        skipScrollOnOpenRef.current = true;
         setCalcOpen(false);
         calcOpenStatesRef.current.set(mode,false);
         prevModeRef.current = mode;
@@ -1593,23 +1590,20 @@
             calcScrollTimeoutRef.current=null;
           }
         };
-        if(calcOpen){
-          if(skipScrollOnOpenRef.current){
-            skipScrollOnOpenRef.current=false;
-          }else{
-            cancelScheduledScroll();
-            const scrollToBottom = ()=> window.scrollTo({top:document.documentElement.scrollHeight,behavior:'smooth'});
-            calcScrollRafRef.current=requestAnimationFrame(()=>{
-              scrollToBottom();
-              calcScrollTimeoutRef.current=setTimeout(scrollToBottom,120);
-            });
-          }
-        }else{
-          skipScrollOnOpenRef.current=false;
+        if(!calcOpen){
           cancelScheduledScroll();
+          return cancelScheduledScroll;
         }
+        cancelScheduledScroll();
+        calcScrollRafRef.current=requestAnimationFrame(()=>{
+          calcScrollRafRef.current=null;
+          calcScrollTimeoutRef.current=window.setTimeout(()=>{
+            calcScrollTimeoutRef.current=null;
+            window.scrollTo({top:document.documentElement.scrollHeight,behavior:'smooth'});
+          },60);
+        });
         return cancelScheduledScroll;
-      },[calcOpen]);
+      },[calcOpen, calcTargetKey, mode]);
 
       /* should reset stats create a new date? */
       function shouldNewOnReset(){
@@ -1706,6 +1700,7 @@
                   <option value="flash">Flash</option>
                   <option value="lookup">Lookup</option>
                   <option value="method">Method</option>
+                  <option value="guide">How to Play</option>
                 </select>
                 <div className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 flex flex-col items-center leading-none text-[7px] text-white/90">
                   <span>▲</span><span>▼</span>
@@ -1715,13 +1710,38 @@
           </div>
 
           {/* Stats/toggles (not on lookup/method) */}
-          {mode!=="lookup" && mode!=="method" && (
+          {mode!=="lookup" && mode!=="method" && mode!=="guide" && (
             <>
               <div className="mt-4 grid grid-cols-4 gap-2 sm:gap-3">
-                <Stat label={mode==="blitz"?"Score (round)":"Score"} value={mode==="blitz"?`${blitzRoundStats.good}/${blitzRoundStats.played}`:`${S.good}/${S.played}`} disabled={statsOff}/>
-                <Stat label="Accuracy" value={`${S.played?(S.good/S.played*100).toFixed(1):"0.0"}%`} disabled={statsOff}/>
-                <StatTwo label="Streak / Longest" left={S.streak} right={S.best} disabled={statsOff}/>
-                <Stat label="Avg time (correct)" value={(S.timeCnt?`${(S.timeSum/S.timeCnt).toFixed(2)}s`:"—")} disabled={avgDisabled}/>
+                <Stat
+                  label={mode==="blitz"?"Score (round)":"Score"}
+                  value={mode==="blitz"?`${blitzRoundStats.good}/${blitzRoundStats.played}`:`${S.good}/${S.played}`}
+                  disabled={statsOff}
+                  onClick={handleStatsBoxToggle}
+                  pressed={statsPressed}
+                />
+                <Stat
+                  label="Accuracy"
+                  value={`${S.played?(S.good/S.played*100).toFixed(1):"0.0"}%`}
+                  disabled={statsOff}
+                  onClick={handleStatsBoxToggle}
+                  pressed={statsPressed}
+                />
+                <StatTwo
+                  label="Streak / Longest"
+                  left={S.streak}
+                  right={S.best}
+                  disabled={statsOff}
+                  onClick={handleStatsBoxToggle}
+                  pressed={statsPressed}
+                />
+                <Stat
+                  label="Avg time (correct)"
+                  value={(S.timeCnt?`${(S.timeSum/S.timeCnt).toFixed(2)}s`:"—")}
+                  disabled={avgDisabled}
+                  onClick={canToggleAvg ? handleAvgStatToggle : undefined}
+                  pressed={canToggleAvg ? avgTrackingEnabled : undefined}
+                />
               </div>
               <div className="mt-2 grid grid-cols-2 md:grid-cols-4 gap-3 items-stretch">
                 <div className="col-span-1 md:col-span-2 flex items-center">
@@ -1732,18 +1752,17 @@
                     className="text-sm px-3 py-1.5 rounded-xl bg-purple-700 hover:bg-purple-600 w-full md:w-auto h-full flex items-center justify-center"
                     onClick={handleResetStats}>Reset stats</button>
                 </div>
-                <div className="col-span-1 md:col-span-2 flex items-center">
-                  {timerSettingControl}
-                </div>
-                <div className="col-span-1 md:col-span-2 flex items-center justify-end">
-                  {disableStatsToggle}
-                </div>
+                {timerSettingControl && (
+                  <div className="col-span-2 md:col-span-4 flex items-center">
+                    {timerSettingControl}
+                  </div>
+                )}
               </div>
             </>
           )}
 
           {/* Year range (not on lookup/method) */}
-          {mode!=="lookup" && mode!=="method" && RangePanel}
+          {mode!=="lookup" && mode!=="method" && mode!=="guide" && RangePanel}
 
           {/* MAIN CARD */}
           {mode==="lookup" ? (
@@ -1767,6 +1786,10 @@
           ) : mode==="method" ? (
             <div className="mt-5">
               <MethodPage/>
+            </div>
+          ) : mode==="guide" ? (
+            <div className="mt-5">
+              <GuidePage/>
             </div>
           ) : (
             <div className="mt-5 p-5 rounded-3xl card">
@@ -1824,20 +1847,36 @@
 
                 {/* Action bubble */}
                 <div className="mt-4 rounded-2xl panel p-3">
-                  <div className="flex flex-wrap items-center gap-2">
-                    {isTimer(mode) && (!active
-                      ? <button type="button" className="px-4 py-2 rounded-xl bg-purple-600 text-white text-sm font-medium" onClick={()=>begin()}>Begin</button>
-                      : <button type="button" className="px-4 py-2 rounded-xl bg-rose-600/90 text-white text-sm font-medium" onClick={()=>arm()}>Reset</button>
+                  <div className="flex flex-nowrap items-center gap-2 sm:gap-3">
+                    {isTimer(mode) ? (
+                      !active ? (
+                        <button
+                          type="button"
+                          className="flex-1 px-4 py-2 rounded-xl bg-purple-600 text-white text-sm font-medium"
+                          onClick={()=>begin()}
+                        >Begin</button>
+                      ) : (
+                        <button
+                          type="button"
+                          className="flex-1 px-4 py-2 rounded-xl bg-rose-600/90 text-white text-sm font-medium"
+                          onClick={()=>arm()}
+                        >Reset</button>
+                      )
+                    ) : (
+                      <button
+                        type="button"
+                        className="flex-1 px-3 py-2 rounded-xl border surface-button text-sm font-medium"
+                        onClick={()=>doNew()}
+                      >New</button>
                     )}
                     <button
                       type="button"
-                      className={`px-3 py-2 rounded-xl border surface-button text-sm ${timerBusy?'opacity-60 pointer-events-none':''}`}
-                      onClick={()=>doNew()}
-                    >New</button>
-                    <button type="button" className={`px-3 py-2 rounded-xl border surface-button text-sm ${revealDisabled?'opacity-60 pointer-events-none':''}`} onClick={()=>reveal()}>Reveal</button>
+                      className={`px-3 py-2 rounded-xl border surface-button text-sm font-medium basis-28 shrink-0 text-center ${revealDisabled?'opacity-60 pointer-events-none':''}`}
+                      onClick={()=>reveal()}
+                    >Reveal</button>
                     <button
                       type="button"
-                      className={`px-3 py-2 rounded-xl border surface-button text-sm ${timerBusy?'opacity-60 pointer-events-none':''}`}
+                      className={`px-3 py-2 rounded-xl border surface-button text-sm font-medium basis-28 shrink-0 text-center ${timerBusy?'opacity-60 pointer-events-none':''}`}
                       onClick={()=>goBack()}
                     >Back</button>
                   </div>
@@ -1905,10 +1944,22 @@
                 </div>
 
                 <div className="mt-4 rounded-2xl panel p-3">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <button type="button" className="px-3 py-2 rounded-xl border surface-button text-sm" onClick={()=>runDeductionRound()}>New</button>
-                    <button type="button" className={`px-3 py-2 rounded-xl border surface-button text-sm ${revealDisabled?'opacity-60 pointer-events-none':''}`} onClick={()=>reveal()}>Reveal</button>
-                    <button type="button" className="px-3 py-2 rounded-xl border surface-button text-sm" onClick={()=>goBack()}>Back</button>
+                  <div className="flex flex-nowrap items-center gap-2 sm:gap-3">
+                    <button
+                      type="button"
+                      className="flex-1 px-3 py-2 rounded-xl border surface-button text-sm font-medium"
+                      onClick={()=>runDeductionRound()}
+                    >New</button>
+                    <button
+                      type="button"
+                      className={`px-3 py-2 rounded-xl border surface-button text-sm font-medium basis-28 shrink-0 text-center ${revealDisabled?'opacity-60 pointer-events-none':''}`}
+                      onClick={()=>reveal()}
+                    >Reveal</button>
+                    <button
+                      type="button"
+                      className="px-3 py-2 rounded-xl border surface-button text-sm font-medium basis-28 shrink-0 text-center"
+                      onClick={()=>goBack()}
+                    >Back</button>
                   </div>
                   {(msg || guesses.length>0) && (
                     <div className="mt-3 text-sm">
@@ -1923,9 +1974,73 @@
                 </div>
               </>
             )}
-              {mode!=="method" && <MethodBreakdownSection date={calcTarget} open={calcOpen} onOpenChange={handleCalculationOpenChange} onRequestNew={handleMethodNewRequest}/>}
+              {mode!=="method" && mode!=="guide" && <MethodBreakdownSection date={calcTarget} open={calcOpen} onOpenChange={handleCalculationOpenChange} onRequestNew={handleMethodNewRequest}/>}
             </div>
           )}
+        </div>
+      );
+    }
+
+    function GuidePage(){
+      const sections=[
+        {
+          key:'classic',
+          title:'Classic',
+          description:'Practice identifying the weekday with unlimited time. Use New to draw a fresh date, Reveal to check yourself, and Back to revisit the previous card.'
+        },
+        {
+          key:'deduction',
+          title:'Deduction',
+          description:'Pick whether to guess the day, month, or year from curated options. Each round focuses on one piece of the date so you can drill tricky areas before revealing the answer.'
+        },
+        {
+          key:'blitz',
+          title:'Blitz',
+          description:'A 60-second sprint (adjustable) where you answer as many dates as possible. Begin starts the timer and resets the round stats, while Reset stops the clock early if you need to bail out.'
+        },
+        {
+          key:'sudden',
+          title:'Sudden Death',
+          description:'Set a per-question countdown and race the clock. Begin arms the timer; a wrong answer or hitting zero ends the run immediately.'
+        },
+        {
+          key:'flash',
+          title:'Flash',
+          description:'Memorise the date during a brief reveal, then answer once it disappears. Begin shows the card for the flash duration you choose, and Reset lets you restart the cycle.'
+        },
+        {
+          key:'lookup',
+          title:'Lookup',
+          description:'Type a date to instantly see its weekday. The history list keeps recent queries so you can tap to reuse them or clear the log entirely.'
+        },
+        {
+          key:'method',
+          title:'Method',
+          description:'Step through my manual calculation method. Switch between Advanced and Beginner views to see both paths for the same date.'
+        }
+      ];
+      return (
+        <div className="space-y-5 text-sm text-purple-100/85">
+          <div className="rounded-2xl panel p-4 space-y-2">
+            <h2 className="text-xl font-semibold text-purple-50">How each mode works</h2>
+            <p className="text-[13px] text-purple-200/80 leading-relaxed">Choose a game from the menu to focus on the skills you want to sharpen. Use the controls in each mode to draw new cards, reveal answers, or step back to review.</p>
+          </div>
+          <div className="grid gap-4 lg:grid-cols-2">
+            {sections.map(section=>(
+              <div key={section.key} className="rounded-2xl panel p-4 space-y-2">
+                <h3 className="text-lg font-semibold text-purple-50">{section.title}</h3>
+                <p className="text-[13px] text-purple-200/80 leading-relaxed">{section.description}</p>
+              </div>
+            ))}
+          </div>
+          <div className="rounded-2xl panel p-4 space-y-2">
+            <h3 className="text-lg font-semibold text-purple-50">Toggling stats</h3>
+            <ul className="list-disc list-inside space-y-1 text-[13px] text-purple-200/80 leading-relaxed">
+              <li>Tap any of the first three stat boxes to pause or resume score, accuracy, and streak tracking. They always turn on or off together.</li>
+              <li>Tap the <span className="font-semibold text-purple-50">Avg time (correct)</span> box to enable timing in Classic and Deduction. It starts dimmed until you turn it on.</li>
+              <li>Dimmed stats stop updating until you tap the box again, so you can take breaks without skewing your numbers.</li>
+            </ul>
+          </div>
         </div>
       );
     }
