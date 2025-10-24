@@ -222,22 +222,44 @@
     };
 
     /* ---------- atoms ---------- */
-    const Stat=({label,value,disabled})=>(
-      <div className={`px-2.5 py-1.5 rounded-xl panel text-center text-xs sm:text-sm ${disabled?'opacity-60':''} flex flex-col items-center h-full`}>
-        <div className="text-[11px] sm:text-[12px] text-purple-200/80 text-center leading-tight flex items-center justify-center min-h-[1.65rem] sm:min-h-[1.85rem]">
-          <span>{label}</span>
-        </div>
-        <div className="mt-auto pt-0.5 text-base sm:text-lg font-semibold tabular-nums">{disabled?'—':value}</div>
-      </div>
-    );
-    const StatTwo=({label,left,right,disabled})=>(
-      <div className={`px-2.5 py-1.5 rounded-xl panel text-center text-xs sm:text-sm ${disabled?'opacity-60':''} flex flex-col items-center h-full`}>
-        <div className="text-[11px] sm:text-[12px] text-purple-200/80 text-center leading-tight flex items-center justify-center min-h-[1.65rem] sm:min-h-[1.85rem]">
-          <span>{label}</span>
-        </div>
-        <div className="mt-auto pt-0.5 text-base sm:text-lg font-semibold tabular-nums">{disabled?'—':`${left}/${right}`}</div>
-      </div>
-    );
+    const Stat=({label,value,disabled,onToggle,pressed})=>{
+      const interactive = typeof onToggle==='function';
+      const Comp = interactive ? 'button' : 'div';
+      const commonClasses = `px-2.5 py-1.5 rounded-xl panel text-center text-xs sm:text-sm ${disabled?'opacity-60':''} flex flex-col items-center h-full transition`;
+      const interactiveClasses = interactive ? ' cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-400/80 hover:bg-purple-900/50' : '';
+      const compProps = interactive ? {
+        type:'button',
+        onClick:onToggle,
+        'aria-pressed':pressed? 'true':'false'
+      } : {};
+      return (
+        <Comp className={commonClasses+interactiveClasses} {...compProps}>
+          <div className="text-[11px] sm:text-[12px] text-purple-200/80 text-center leading-tight flex items-center justify-center min-h-[1.65rem] sm:min-h-[1.85rem]">
+            <span>{label}</span>
+          </div>
+          <div className="mt-auto pt-0.5 text-base sm:text-lg font-semibold tabular-nums">{disabled?'—':value}</div>
+        </Comp>
+      );
+    };
+    const StatTwo=({label,left,right,disabled,onToggle,pressed})=>{
+      const interactive = typeof onToggle==='function';
+      const Comp = interactive ? 'button' : 'div';
+      const commonClasses = `px-2.5 py-1.5 rounded-xl panel text-center text-xs sm:text-sm ${disabled?'opacity-60':''} flex flex-col items-center h-full transition`;
+      const interactiveClasses = interactive ? ' cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-400/80 hover:bg-purple-900/50' : '';
+      const compProps = interactive ? {
+        type:'button',
+        onClick:onToggle,
+        'aria-pressed':pressed? 'true':'false'
+      } : {};
+      return (
+        <Comp className={commonClasses+interactiveClasses} {...compProps}>
+          <div className="text-[11px] sm:text-[12px] text-purple-200/80 text-center leading-tight flex items-center justify-center min-h-[1.65rem] sm:min-h-[1.85rem]">
+            <span>{label}</span>
+          </div>
+          <div className="mt-auto pt-0.5 text-base sm:text-lg font-semibold tabular-nums">{disabled?'—':`${left}/${right}`}</div>
+        </Comp>
+      );
+    };
 
     /* ======================= App ======================= */
     function App(){
@@ -270,9 +292,6 @@
       const [calcPenaltyActive,setCalcPenaltyActive]=useState(false);
       const calcOpenStatesRef=useRef(new Map());
       const calcPenaltyStatesRef=useRef(new Map());
-      const skipScrollOnOpenRef=useRef(false);
-      const calcScrollRafRef=useRef(null);
-      const calcScrollTimeoutRef=useRef(null);
       const rangeRefreshPendingRef=useRef(false);
 
       /* snapshots when avg-time disabled (per era) */
@@ -774,7 +793,11 @@
       },[mode,blitzSec,statsOff,blitzRunning,active,phase]);
 
       const trackingOn = ()=> (isTimer(mode) || (mode==="classic"&&trackClassic) || (mode==="deduction"&&trackDed));
-      const avgDisabled = (statsOff || !( (mode==="classic"&&trackClassic) || (mode==="deduction"&&trackDed) || isTimer(mode) ));
+      const avgToggleable = (mode==="classic" || mode==="deduction");
+      const avgTrackingEnabled = avgToggleable ? (mode==="classic"?trackClassic:trackDed) : isTimer(mode);
+      const avgDisabled = (statsOff || !avgTrackingEnabled);
+      const avgPressed = avgToggleable ? avgTrackingEnabled : true;
+      const toggleStatsOff = ()=>setStatsOff(v=>!v);
 
       const arm=()=>{
         __hideErr();
@@ -1355,28 +1378,6 @@
         </div>
       );
 
-      const disableAvgToggle = (
-        <label className="flex items-center gap-2 text-sm w-full">
-          <input type="checkbox" className="sr-only"
-            checked={!(mode==="classic"?trackClassic:trackDed)}
-            onChange={e=> toggleAvg(e.target.checked)} />
-          <span className={`w-10 h-6 rounded-full relative ${(!(mode==="classic"?trackClassic:trackDed))?"bg-rose-500/70":"bg-zinc-600"}`}>
-            <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${(!(mode==="classic"?trackClassic:trackDed))?"translate-x-4":""}`}></span>
-          </span>
-          <span>Disable avg time</span>
-        </label>
-      );
-
-      const disableStatsToggle = (
-        <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" className="sr-only" checked={statsOff} onChange={e=>setStatsOff(e.target.checked)} />
-          <span className={`w-10 h-6 rounded-full relative ${statsOff?"bg-rose-500/70":"bg-zinc-600"}`}>
-            <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${statsOff?"translate-x-4":""}`}></span>
-          </span>
-          <span>Disable stats</span>
-        </label>
-      );
-
       const timerSettingControl = (()=>{
         if(mode==="blitz"){
           return (
@@ -1413,7 +1414,7 @@
             </div>
           );
         }
-        return disableAvgToggle;
+        return null;
       })();
 
       /* range panel */
@@ -1549,7 +1550,7 @@
       const revealDisabled = locked || calcOpen || calcPenaltyActive || timerBlocksReveal;
       const timerBusy = isTimer(mode) && active;
       const calcTarget = React.useMemo(()=>{
-        if(mode==="lookup") return null;
+        if(mode==="lookup" || mode==="howto") return null;
         if(mode==="deduction"){
           return ded ? {y:ded.y,m:ded.m,d:ded.d} : null;
         }
@@ -1564,7 +1565,6 @@
         const savedPenalty = calcPenaltyStatesRef.current.has(mode)
           ? !!calcPenaltyStatesRef.current.get(mode)
           : false;
-        skipScrollOnOpenRef.current = true;
         setCalcOpen(saved);
         setCalcPenalty(savedPenalty);
       },[mode]);
@@ -1573,43 +1573,13 @@
         const prevMode = prevModeRef.current;
         if(prevMode!==mode){
           prevModeRef.current = mode;
-          skipScrollOnOpenRef.current = true;
           return;
         }
-        skipScrollOnOpenRef.current = true;
         setCalcOpen(false);
         calcOpenStatesRef.current.set(mode,false);
         prevModeRef.current = mode;
       },[calcTargetKey, mode]);
 
-      useEffect(()=>{
-        const cancelScheduledScroll = ()=>{
-          if(calcScrollRafRef.current!=null){
-            cancelAnimationFrame(calcScrollRafRef.current);
-            calcScrollRafRef.current=null;
-          }
-          if(calcScrollTimeoutRef.current!=null){
-            clearTimeout(calcScrollTimeoutRef.current);
-            calcScrollTimeoutRef.current=null;
-          }
-        };
-        if(calcOpen){
-          if(skipScrollOnOpenRef.current){
-            skipScrollOnOpenRef.current=false;
-          }else{
-            cancelScheduledScroll();
-            const scrollToBottom = ()=> window.scrollTo({top:document.documentElement.scrollHeight,behavior:'smooth'});
-            calcScrollRafRef.current=requestAnimationFrame(()=>{
-              scrollToBottom();
-              calcScrollTimeoutRef.current=setTimeout(scrollToBottom,120);
-            });
-          }
-        }else{
-          skipScrollOnOpenRef.current=false;
-          cancelScheduledScroll();
-        }
-        return cancelScheduledScroll;
-      },[calcOpen]);
 
       /* should reset stats create a new date? */
       function shouldNewOnReset(){
@@ -1706,6 +1676,7 @@
                   <option value="flash">Flash</option>
                   <option value="lookup">Lookup</option>
                   <option value="method">Method</option>
+                  <option value="howto">How to play</option>
                 </select>
                 <div className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 flex flex-col items-center leading-none text-[7px] text-white/90">
                   <span>▲</span><span>▼</span>
@@ -1714,36 +1685,60 @@
             </div>
           </div>
 
-          {/* Stats/toggles (not on lookup/method) */}
-          {mode!=="lookup" && mode!=="method" && (
+          {/* Stats/toggles (not on lookup/method/howto) */}
+          {mode!=="lookup" && mode!=="method" && mode!=="howto" && (
             <>
-              <div className="mt-4 grid grid-cols-4 gap-2 sm:gap-3">
-                <Stat label={mode==="blitz"?"Score (round)":"Score"} value={mode==="blitz"?`${blitzRoundStats.good}/${blitzRoundStats.played}`:`${S.good}/${S.played}`} disabled={statsOff}/>
-                <Stat label="Accuracy" value={`${S.played?(S.good/S.played*100).toFixed(1):"0.0"}%`} disabled={statsOff}/>
-                <StatTwo label="Streak / Longest" left={S.streak} right={S.best} disabled={statsOff}/>
-                <Stat label="Avg time (correct)" value={(S.timeCnt?`${(S.timeSum/S.timeCnt).toFixed(2)}s`:"—")} disabled={avgDisabled}/>
+              <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 sm:gap-3">
+                <Stat
+                  label={mode==="blitz"?"Score (round)":"Score"}
+                  value={mode==="blitz"?`${blitzRoundStats.good}/${blitzRoundStats.played}`:`${S.good}/${S.played}`}
+                  disabled={statsOff}
+                  onToggle={toggleStatsOff}
+                  pressed={!statsOff}
+                />
+                <Stat
+                  label="Accuracy"
+                  value={`${S.played?(S.good/S.played*100).toFixed(1):"0.0"}%`}
+                  disabled={statsOff}
+                  onToggle={toggleStatsOff}
+                  pressed={!statsOff}
+                />
+                <StatTwo
+                  label="Streak / Longest"
+                  left={S.streak}
+                  right={S.best}
+                  disabled={statsOff}
+                  onToggle={toggleStatsOff}
+                  pressed={!statsOff}
+                />
+                <Stat
+                  label="Avg time (correct)"
+                  value={(S.timeCnt?`${(S.timeSum/S.timeCnt).toFixed(2)}s`:"—")}
+                  disabled={avgDisabled}
+                  onToggle={avgToggleable?()=>toggleAvg(avgPressed):undefined}
+                  pressed={avgPressed}
+                />
               </div>
-              <div className="mt-2 grid grid-cols-2 md:grid-cols-4 gap-3 items-stretch">
-                <div className="col-span-1 md:col-span-2 flex items-center">
+              <div className={`mt-2 grid gap-3 items-stretch ${timerSettingControl?'grid-cols-1 sm:grid-cols-2 md:grid-cols-3':'grid-cols-1 sm:grid-cols-2 md:grid-cols-2'}`}>
+                <div className="flex items-center">
                   {eraControl}
                 </div>
-                <div className="col-span-1 md:col-span-2 flex justify-end">
+                <div className="flex justify-end">
                   <button type="button"
                     className="text-sm px-3 py-1.5 rounded-xl bg-purple-700 hover:bg-purple-600 w-full md:w-auto h-full flex items-center justify-center"
                     onClick={handleResetStats}>Reset stats</button>
                 </div>
-                <div className="col-span-1 md:col-span-2 flex items-center">
-                  {timerSettingControl}
-                </div>
-                <div className="col-span-1 md:col-span-2 flex items-center justify-end">
-                  {disableStatsToggle}
-                </div>
+                {timerSettingControl && (
+                  <div className="flex items-center sm:col-span-2 md:col-span-1 md:justify-end">
+                    {timerSettingControl}
+                  </div>
+                )}
               </div>
             </>
           )}
 
           {/* Year range (not on lookup/method) */}
-          {mode!=="lookup" && mode!=="method" && RangePanel}
+          {mode!=="lookup" && mode!=="method" && mode!=="howto" && RangePanel}
 
           {/* MAIN CARD */}
           {mode==="lookup" ? (
@@ -1768,6 +1763,10 @@
             <div className="mt-5">
               <MethodPage/>
             </div>
+          ) : mode==="howto" ? (
+            <div className="mt-5">
+              <HowToPlayPage/>
+            </div>
           ) : (
             <div className="mt-5 p-5 rounded-3xl card">
             {/* Blitz/Sudden/Flash bars */}
@@ -1790,7 +1789,7 @@
               </div>
             )}
             {/* Headline */}
-            {mode!=="lookup" && mode!=="deduction" && mode!=="method" && (
+            {mode!=="lookup" && mode!=="deduction" && mode!=="method" && mode!=="howto" && (
               <div className="text-center">
                 <div className="text-xs uppercase tracking-widest text-purple-100/80">What day is this?</div>
                 <div className="mt-1 text-3xl md:text-4xl font-bold">{shouldShowTimerDate ? ((mode==="flash"&&active&&phase==='hide')?"…": fmt(date.y,date.m,date.d)) : "—"}</div>
@@ -1824,20 +1823,36 @@
 
                 {/* Action bubble */}
                 <div className="mt-4 rounded-2xl panel p-3">
-                  <div className="flex flex-wrap items-center gap-2">
-                    {isTimer(mode) && (!active
-                      ? <button type="button" className="px-4 py-2 rounded-xl bg-purple-600 text-white text-sm font-medium" onClick={()=>begin()}>Begin</button>
-                      : <button type="button" className="px-4 py-2 rounded-xl bg-rose-600/90 text-white text-sm font-medium" onClick={()=>arm()}>Reset</button>
+                  <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-stretch gap-3">
+                    {isTimer(mode) ? (
+                      !active ? (
+                        <button
+                          type="button"
+                          className="h-11 w-full rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-sm font-medium flex items-center justify-center transition focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-400"
+                          onClick={()=>begin()}
+                        >Begin</button>
+                      ) : (
+                        <button
+                          type="button"
+                          className="h-11 w-full rounded-xl bg-rose-600/90 hover:bg-rose-600 text-white text-sm font-medium flex items-center justify-center transition focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-400/70"
+                          onClick={()=>arm()}
+                        >Reset</button>
+                      )
+                    ) : (
+                      <button
+                        type="button"
+                        className={`h-11 w-full rounded-xl border surface-button text-sm flex items-center justify-center ${timerBusy?'opacity-60 pointer-events-none':''}`}
+                        onClick={()=>doNew()}
+                      >New</button>
                     )}
                     <button
                       type="button"
-                      className={`px-3 py-2 rounded-xl border surface-button text-sm ${timerBusy?'opacity-60 pointer-events-none':''}`}
-                      onClick={()=>doNew()}
-                    >New</button>
-                    <button type="button" className={`px-3 py-2 rounded-xl border surface-button text-sm ${revealDisabled?'opacity-60 pointer-events-none':''}`} onClick={()=>reveal()}>Reveal</button>
+                      className={`h-11 w-28 rounded-xl border surface-button text-sm flex items-center justify-center ${revealDisabled?'opacity-60 pointer-events-none':''}`}
+                      onClick={()=>reveal()}
+                    >Reveal</button>
                     <button
                       type="button"
-                      className={`px-3 py-2 rounded-xl border surface-button text-sm ${timerBusy?'opacity-60 pointer-events-none':''}`}
+                      className={`h-11 w-28 rounded-xl border surface-button text-sm flex items-center justify-center ${timerBusy?'opacity-60 pointer-events-none':''}`}
                       onClick={()=>goBack()}
                     >Back</button>
                   </div>
@@ -1905,10 +1920,22 @@
                 </div>
 
                 <div className="mt-4 rounded-2xl panel p-3">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <button type="button" className="px-3 py-2 rounded-xl border surface-button text-sm" onClick={()=>runDeductionRound()}>New</button>
-                    <button type="button" className={`px-3 py-2 rounded-xl border surface-button text-sm ${revealDisabled?'opacity-60 pointer-events-none':''}`} onClick={()=>reveal()}>Reveal</button>
-                    <button type="button" className="px-3 py-2 rounded-xl border surface-button text-sm" onClick={()=>goBack()}>Back</button>
+                  <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-stretch gap-3">
+                    <button
+                      type="button"
+                      className="h-11 w-full rounded-xl border surface-button text-sm flex items-center justify-center"
+                      onClick={()=>runDeductionRound()}
+                    >New</button>
+                    <button
+                      type="button"
+                      className={`h-11 w-28 rounded-xl border surface-button text-sm flex items-center justify-center ${revealDisabled?'opacity-60 pointer-events-none':''}`}
+                      onClick={()=>reveal()}
+                    >Reveal</button>
+                    <button
+                      type="button"
+                      className="h-11 w-28 rounded-xl border surface-button text-sm flex items-center justify-center"
+                      onClick={()=>goBack()}
+                    >Back</button>
                   </div>
                   {(msg || guesses.length>0) && (
                     <div className="mt-3 text-sm">
@@ -1923,7 +1950,7 @@
                 </div>
               </>
             )}
-              {mode!=="method" && <MethodBreakdownSection date={calcTarget} open={calcOpen} onOpenChange={handleCalculationOpenChange} onRequestNew={handleMethodNewRequest}/>}
+              {mode!=="method" && mode!=="howto" && <MethodBreakdownSection date={calcTarget} open={calcOpen} onOpenChange={handleCalculationOpenChange} onRequestNew={handleMethodNewRequest}/>}
             </div>
           )}
         </div>
@@ -2064,6 +2091,60 @@
       );
     }
 
+    function HowToPlayPage(){
+      const modeDetails=[
+        {
+          title:"Classic",
+          body:"Guess the weekday for each random date. Tap New for another question, Reveal to check the answer, and Back to revisit the previous date."
+        },
+        {
+          title:"Deduction",
+          body:"Identify the hidden year, month, or day from the clues shown. New gives a fresh deduction puzzle, Reveal confirms the solution, and Back returns to the last prompt."
+        },
+        {
+          title:"Blitz",
+          body:"Tap Begin to start the countdown and answer as many dates as you can before time runs out. Reset arms a new round, Reveal shows the current answer, and Back jumps to the previous date."
+        },
+        {
+          title:"Sudden Death",
+          body:"Each question has its own timer. Begin starts the run, and any miss or expired timer ends the streak. Use Reveal to check the answer or Back to revisit the last prompt."
+        },
+        {
+          title:"Flash",
+          body:"Begin briefly flashes the date before it hides. Answer while it is concealed, and adjust the slider above to change how long the date stays visible. Reveal shows the answer and Back steps back one card."
+        },
+        {
+          title:"Lookup",
+          body:"Enter a specific month/day/year to see the weekday instantly. The history list keeps your recent searches, and Show calculations explains the full method for the selected date."
+        },
+        {
+          title:"Method",
+          body:"A reference for my manual day-of-week method, including tables and worked examples you can study at any time."
+        }
+      ];
+      return (
+        <div className="space-y-5 text-sm text-purple-100/85">
+          <div className="rounded-2xl panel p-4 space-y-3">
+            <h2 className="text-lg font-semibold text-purple-50">How the game works</h2>
+            <p className="text-[13px] text-purple-200/80">Every mode uses the same core controls: New or Begin on the left, Reveal in the middle, and Back on the right. Use them to move forward, check the answer, or revisit the previous prompt.</p>
+            <ul className="space-y-1 text-[13px] text-purple-100/80 list-disc list-inside">
+              <li>Tap any stat box to toggle tracking. The first three stats (Score, Accuracy, Streak/Longest) always switch together.</li>
+              <li>The Avg time box toggles separately in Classic and Deduction so you can choose when to record timing data.</li>
+              <li>Timer modes show sliders above the stats so you can adjust the countdown or flash duration before you begin.</li>
+            </ul>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            {modeDetails.map(section=>(
+              <div key={section.title} className="rounded-2xl panel p-4 space-y-2">
+                <h3 className="text-sm font-semibold uppercase tracking-wide text-purple-100/90">{section.title}</h3>
+                <p className="text-[13px] text-purple-200/80 leading-relaxed">{section.body}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
     function MethodStepsList({title,breakdown}){
       if(!breakdown?.supported){
         return (
@@ -2178,6 +2259,14 @@
       const disabledClass = !hasDate ? ' opacity-60 cursor-not-allowed pointer-events-none' : '';
       const buttonClasses = `${buttonClassName ?? defaultButtonClass}${disabledClass}`;
       const contentClasses = contentClassName ?? 'mt-3 rounded-2xl panel p-4';
+      React.useEffect(()=>{
+        if(typeof window==='undefined') return;
+        if(!open || !hasDate) return;
+        const raf=requestAnimationFrame(()=>{
+          window.scrollTo({top:document.documentElement.scrollHeight,behavior:'smooth'});
+        });
+        return ()=>cancelAnimationFrame(raf);
+      },[open, hasDate, key]);
       return (
         <div className={outerClass||undefined}>
           <button
