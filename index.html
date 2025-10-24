@@ -1556,6 +1556,7 @@
         return date;
       },[mode,date?.y,date?.m,date?.d, ded?.y, ded?.m, ded?.d]);
       const calcTargetKey = calcTarget ? `${calcTarget.y}-${calcTarget.m}-${calcTarget.d}` : 'none';
+      const lookupCalcKey = lookupCalcDate ? `${lookupCalcDate.y}-${lookupCalcDate.m}-${lookupCalcDate.d}` : 'none';
 
       useEffect(()=>{
         const saved = calcOpenStatesRef.current.has(mode)
@@ -1590,7 +1591,11 @@
             calcScrollTimeoutRef.current=null;
           }
         };
-        if(!calcOpen){
+        const isLookupMode = mode==='lookup';
+        const anyCalcOpen = isLookupMode ? lookupCalcOpen : calcOpen;
+        const activeCalcKey = isLookupMode ? lookupCalcKey : calcTargetKey;
+        void activeCalcKey;
+        if(!anyCalcOpen){
           cancelScheduledScroll();
           return cancelScheduledScroll;
         }
@@ -1603,7 +1608,7 @@
           },60);
         });
         return cancelScheduledScroll;
-      },[calcOpen, calcTargetKey, mode]);
+      },[calcOpen, calcTargetKey, lookupCalcOpen, lookupCalcKey, mode]);
 
       /* should reset stats create a new date? */
       function shouldNewOnReset(){
@@ -1743,7 +1748,7 @@
                   pressed={canToggleAvg ? avgTrackingEnabled : undefined}
                 />
               </div>
-              <div className="mt-2 grid grid-cols-2 md:grid-cols-4 gap-3 items-stretch">
+              <div className="mt-3 grid grid-cols-2 md:grid-cols-4 gap-3 items-stretch">
                 <div className="col-span-1 md:col-span-2 flex items-center">
                   {eraControl}
                 </div>
@@ -1852,31 +1857,31 @@
                       !active ? (
                         <button
                           type="button"
-                          className="flex-1 px-4 py-2 rounded-xl bg-purple-600 text-white text-sm font-medium"
+                          className="flex-[1.4] basis-0 px-4 py-2 rounded-xl bg-purple-600 text-white text-sm font-medium"
                           onClick={()=>begin()}
                         >Begin</button>
                       ) : (
                         <button
                           type="button"
-                          className="flex-1 px-4 py-2 rounded-xl bg-rose-600/90 text-white text-sm font-medium"
+                          className="flex-[1.4] basis-0 px-4 py-2 rounded-xl bg-rose-600/90 text-white text-sm font-medium"
                           onClick={()=>arm()}
                         >Reset</button>
                       )
                     ) : (
                       <button
                         type="button"
-                        className="flex-1 px-3 py-2 rounded-xl border surface-button text-sm font-medium"
+                        className="flex-[1.4] basis-0 px-3 py-2 rounded-xl border surface-button text-sm font-medium"
                         onClick={()=>doNew()}
                       >New</button>
                     )}
                     <button
                       type="button"
-                      className={`px-3 py-2 rounded-xl border surface-button text-sm font-medium basis-28 shrink-0 text-center ${revealDisabled?'opacity-60 pointer-events-none':''}`}
+                      className={`px-3 py-2 rounded-xl border surface-button text-sm font-medium basis-24 shrink-0 text-center ${revealDisabled?'opacity-60 pointer-events-none':''}`}
                       onClick={()=>reveal()}
                     >Reveal</button>
                     <button
                       type="button"
-                      className={`px-3 py-2 rounded-xl border surface-button text-sm font-medium basis-28 shrink-0 text-center ${timerBusy?'opacity-60 pointer-events-none':''}`}
+                      className={`px-3 py-2 rounded-xl border surface-button text-sm font-medium basis-24 shrink-0 text-center ${timerBusy?'opacity-60 pointer-events-none':''}`}
                       onClick={()=>goBack()}
                     >Back</button>
                   </div>
@@ -1947,17 +1952,17 @@
                   <div className="flex flex-nowrap items-center gap-2 sm:gap-3">
                     <button
                       type="button"
-                      className="flex-1 px-3 py-2 rounded-xl border surface-button text-sm font-medium"
+                      className="flex-[1.4] basis-0 px-3 py-2 rounded-xl border surface-button text-sm font-medium"
                       onClick={()=>runDeductionRound()}
                     >New</button>
                     <button
                       type="button"
-                      className={`px-3 py-2 rounded-xl border surface-button text-sm font-medium basis-28 shrink-0 text-center ${revealDisabled?'opacity-60 pointer-events-none':''}`}
+                      className={`px-3 py-2 rounded-xl border surface-button text-sm font-medium basis-24 shrink-0 text-center ${revealDisabled?'opacity-60 pointer-events-none':''}`}
                       onClick={()=>reveal()}
                     >Reveal</button>
                     <button
                       type="button"
-                      className="px-3 py-2 rounded-xl border surface-button text-sm font-medium basis-28 shrink-0 text-center"
+                      className="px-3 py-2 rounded-xl border surface-button text-sm font-medium basis-24 shrink-0 text-center"
                       onClick={()=>goBack()}
                     >Back</button>
                   </div>
