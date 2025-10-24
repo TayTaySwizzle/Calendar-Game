@@ -1743,7 +1743,7 @@
                   pressed={canToggleAvg ? avgTrackingEnabled : undefined}
                 />
               </div>
-              <div className="mt-2 grid grid-cols-2 md:grid-cols-4 gap-3 items-stretch">
+              <div className="mt-3 grid grid-cols-2 md:grid-cols-4 gap-3 items-stretch">
                 <div className="col-span-1 md:col-span-2 flex items-center">
                   {eraControl}
                 </div>
@@ -1852,31 +1852,31 @@
                       !active ? (
                         <button
                           type="button"
-                          className="flex-1 px-4 py-2 rounded-xl bg-purple-600 text-white text-sm font-medium"
+                          className="flex-[1.35] basis-0 px-4 py-2 rounded-xl bg-purple-600 text-white text-sm font-medium"
                           onClick={()=>begin()}
                         >Begin</button>
                       ) : (
                         <button
                           type="button"
-                          className="flex-1 px-4 py-2 rounded-xl bg-rose-600/90 text-white text-sm font-medium"
+                          className="flex-[1.35] basis-0 px-4 py-2 rounded-xl bg-rose-600/90 text-white text-sm font-medium"
                           onClick={()=>arm()}
                         >Reset</button>
                       )
                     ) : (
                       <button
                         type="button"
-                        className="flex-1 px-3 py-2 rounded-xl border surface-button text-sm font-medium"
+                        className="flex-[1.35] basis-0 px-3 py-2 rounded-xl border surface-button text-sm font-medium"
                         onClick={()=>doNew()}
                       >New</button>
                     )}
                     <button
                       type="button"
-                      className={`px-3 py-2 rounded-xl border surface-button text-sm font-medium basis-28 shrink-0 text-center ${revealDisabled?'opacity-60 pointer-events-none':''}`}
+                      className={`px-3 py-2 rounded-xl border surface-button text-sm font-medium basis-24 shrink-0 text-center ${revealDisabled?'opacity-60 pointer-events-none':''}`}
                       onClick={()=>reveal()}
                     >Reveal</button>
                     <button
                       type="button"
-                      className={`px-3 py-2 rounded-xl border surface-button text-sm font-medium basis-28 shrink-0 text-center ${timerBusy?'opacity-60 pointer-events-none':''}`}
+                      className={`px-3 py-2 rounded-xl border surface-button text-sm font-medium basis-24 shrink-0 text-center ${timerBusy?'opacity-60 pointer-events-none':''}`}
                       onClick={()=>goBack()}
                     >Back</button>
                   </div>
@@ -1947,17 +1947,17 @@
                   <div className="flex flex-nowrap items-center gap-2 sm:gap-3">
                     <button
                       type="button"
-                      className="flex-1 px-3 py-2 rounded-xl border surface-button text-sm font-medium"
+                      className="flex-[1.35] basis-0 px-3 py-2 rounded-xl border surface-button text-sm font-medium"
                       onClick={()=>runDeductionRound()}
                     >New</button>
                     <button
                       type="button"
-                      className={`px-3 py-2 rounded-xl border surface-button text-sm font-medium basis-28 shrink-0 text-center ${revealDisabled?'opacity-60 pointer-events-none':''}`}
+                      className={`px-3 py-2 rounded-xl border surface-button text-sm font-medium basis-24 shrink-0 text-center ${revealDisabled?'opacity-60 pointer-events-none':''}`}
                       onClick={()=>reveal()}
                     >Reveal</button>
                     <button
                       type="button"
-                      className="px-3 py-2 rounded-xl border surface-button text-sm font-medium basis-28 shrink-0 text-center"
+                      className="px-3 py-2 rounded-xl border surface-button text-sm font-medium basis-24 shrink-0 text-center"
                       onClick={()=>goBack()}
                     >Back</button>
                   </div>
@@ -2338,6 +2338,26 @@
       const setSelectedId = typeof onSelectedHistoryIdChange==='function'?onSelectedHistoryIdChange:()=>{};
       const calcOpenValue = !!calcOpen;
       const setCalcOpen = typeof onCalcOpenChange==='function' ? (next)=>onCalcOpenChange(!!next) : ()=>{};
+      React.useEffect(()=>{
+        if(!calcOpenValue) return;
+        let raf=null;
+        let timeout=null;
+        raf=requestAnimationFrame(()=>{
+          raf=null;
+          timeout=window.setTimeout(()=>{
+            timeout=null;
+            window.scrollTo({top:document.documentElement.scrollHeight,behavior:'smooth'});
+          },60);
+        });
+        return ()=>{
+          if(raf!=null){
+            cancelAnimationFrame(raf);
+          }
+          if(timeout!=null){
+            clearTimeout(timeout);
+          }
+        };
+      },[calcOpenValue, calcDateValue?.y, calcDateValue?.m, calcDateValue?.d]);
       function isLeapY(y){ y = y>0?y:1-Math.abs(y); return y%400===0 || (y%4===0 && y%100!==0); }
       function dimY(y,m){ return m===2 ? (isLeapY(y)?29:28) : [4,6,9,11].includes(m)?30:31; }
       function wdayY(y,m,d){ function jdn(y,m,d){ const a=Math.floor((14-m)/12),y2=y+4800-a,m2=m-3+12*a; return d+Math.floor((153*m2+2)/5)+365*y2+Math.floor(y2/4)-Math.floor(y2/100)+Math.floor(y2/400)-32045; } const toA = y=>y>0?y:1-Math.abs(y); return ((jdn(toA(y),m,d)+1)%7+7)%7; }
