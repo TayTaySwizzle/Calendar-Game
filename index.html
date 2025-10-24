@@ -272,7 +272,6 @@
       const calcPenaltyStatesRef=useRef(new Map());
       const skipScrollOnOpenRef=useRef(false);
       const calcScrollRafRef=useRef(null);
-      const calcScrollTimeoutRef=useRef(null);
       const rangeRefreshPendingRef=useRef(false);
 
       /* snapshots when avg-time disabled (per era) */
@@ -646,16 +645,18 @@
         refreshForRange();
       },[minY,maxY,refreshForRange]);
 
-      /* Era apply — with snapshots when avg-time disabled (Classic & Deduction) */
+      /* Era apply — with snapshots when avg-time or stats disabled (Classic & Deduction) */
       function applyEra(newEra){
-        // Save snapshot of current era before leaving, if avg-time disabled
-        if(mode==="classic" && !trackClassic){
+        // Save snapshot of current era before leaving when we want to preserve it
+        const preserveClassic = (!trackClassic) || statsOff;
+        const preserveDeduction = (!trackDed) || statsOff;
+        if(mode==="classic" && preserveClassic){
           setSavedClassicByEra(prev=>({
             ...prev,
             [era]: { date:{...date}, guesses:[...guesses], countedWrong, msg, locked, revealed, calcPenaltyActive }
           }));
         }
-        if(mode==="deduction" && !trackDed){
+        if(mode==="deduction" && preserveDeduction){
           const snapshot = ded ? { ded, guesses:[...guesses], countedWrong, msg, locked, revealed, calcPenaltyActive } : null;
           const typeSnapshots = {...savedDedByType, [dedType]: snapshot};
           setSavedDedByEra(prev=>({
@@ -674,7 +675,7 @@
 
         // Classic/Deduction: preserve or generate new depending on avg-time toggle
         if(mode==="classic"){
-          if(!trackClassic){
+          if(preserveClassic){
             const snap = (savedClassicByEra[newEra] || null);
             if(snap && snap.date && snap.date.y>=mn && snap.date.y<=mx){
               setDate(snap.date); setGuesses(snap.guesses||[]); setCountedWrong(!!snap.countedWrong);
@@ -694,7 +695,7 @@
           const snap = savedDedByEra[newEra] || null;
           const storedByType = snap?.byType ? {...snap.byType} : blankDedTypeStore();
           setSavedDedByType(storedByType);
-          if(!trackDed){
+          if(preserveDeduction){
             const currentSnap = snap?.current || storedByType[dedType] || null;
             if(currentSnap && currentSnap.ded){
               setDed(currentSnap.ded); setGuesses(currentSnap.guesses||[]); setCountedWrong(!!currentSnap.countedWrong);
@@ -1548,6 +1549,10 @@
       }
       const revealDisabled = locked || calcOpen || calcPenaltyActive || timerBlocksReveal;
       const timerBusy = isTimer(mode) && active;
+      const actionButtonRowClass = "flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3";
+      const wideSurfaceButtonClass = "w-full sm:flex-1 px-3 py-2 rounded-xl border surface-button text-sm";
+      const wideTimerButtonBase = "w-full sm:flex-1 px-4 py-2 rounded-xl text-sm font-medium text-white";
+      const narrowSurfaceButtonClass = "w-full sm:w-32 px-3 py-2 rounded-xl border surface-button text-sm";
       const calcTarget = React.useMemo(()=>{
         if(mode==="lookup") return null;
         if(mode==="deduction"){
@@ -1588,20 +1593,15 @@
             cancelAnimationFrame(calcScrollRafRef.current);
             calcScrollRafRef.current=null;
           }
-          if(calcScrollTimeoutRef.current!=null){
-            clearTimeout(calcScrollTimeoutRef.current);
-            calcScrollTimeoutRef.current=null;
-          }
         };
         if(calcOpen){
           if(skipScrollOnOpenRef.current){
             skipScrollOnOpenRef.current=false;
           }else{
             cancelScheduledScroll();
-            const scrollToBottom = ()=> window.scrollTo({top:document.documentElement.scrollHeight,behavior:'smooth'});
             calcScrollRafRef.current=requestAnimationFrame(()=>{
-              scrollToBottom();
-              calcScrollTimeoutRef.current=setTimeout(scrollToBottom,120);
+              window.scrollTo({top:document.documentElement.scrollHeight,behavior:'smooth'});
+              calcScrollRafRef.current=null;
             });
           }
         }else{
@@ -1658,6 +1658,7 @@
       };
 
       const handleCalculationOpenChange = (next)=>{
+        skipScrollOnOpenRef.current=false;
         if(next){
           applyCalculationPenalty();
         }
@@ -1824,20 +1825,33 @@
 
                 {/* Action bubble */}
                 <div className="mt-4 rounded-2xl panel p-3">
-                  <div className="flex flex-wrap items-center gap-2">
-                    {isTimer(mode) && (!active
-                      ? <button type="button" className="px-4 py-2 rounded-xl bg-purple-600 text-white text-sm font-medium" onClick={()=>begin()}>Begin</button>
-                      : <button type="button" className="px-4 py-2 rounded-xl bg-rose-600/90 text-white text-sm font-medium" onClick={()=>arm()}>Reset</button>
-                    )}
+                  <div className={actionButtonRowClass}>
+                    {isTimer(mode)
+                      ? (!active
+                        ? (
+                          <button
+                            type="button"
+                            className={`${wideTimerButtonBase} bg-purple-600 hover:bg-purple-500`}
+                            onClick={()=>begin()}
+                          >Begin</button>
+                        ) : (
+                          <button
+                            type="button"
+                            className={`${wideTimerButtonBase} bg-rose-600/90 hover:bg-rose-500/90`}
+                            onClick={()=>arm()}
+                          >Reset</button>
+                        ))
+                      : (
+                        <button
+                          type="button"
+                          className={wideSurfaceButtonClass}
+                          onClick={()=>doNew()}
+                        >New</button>
+                      )}
+                    <button type="button" className={`${narrowSurfaceButtonClass} ${revealDisabled?'opacity-60 pointer-events-none':''}`} onClick={()=>reveal()}>Reveal</button>
                     <button
                       type="button"
-                      className={`px-3 py-2 rounded-xl border surface-button text-sm ${timerBusy?'opacity-60 pointer-events-none':''}`}
-                      onClick={()=>doNew()}
-                    >New</button>
-                    <button type="button" className={`px-3 py-2 rounded-xl border surface-button text-sm ${revealDisabled?'opacity-60 pointer-events-none':''}`} onClick={()=>reveal()}>Reveal</button>
-                    <button
-                      type="button"
-                      className={`px-3 py-2 rounded-xl border surface-button text-sm ${timerBusy?'opacity-60 pointer-events-none':''}`}
+                      className={`${narrowSurfaceButtonClass} ${timerBusy?'opacity-60 pointer-events-none':''}`}
                       onClick={()=>goBack()}
                     >Back</button>
                   </div>
@@ -1905,10 +1919,10 @@
                 </div>
 
                 <div className="mt-4 rounded-2xl panel p-3">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <button type="button" className="px-3 py-2 rounded-xl border surface-button text-sm" onClick={()=>runDeductionRound()}>New</button>
-                    <button type="button" className={`px-3 py-2 rounded-xl border surface-button text-sm ${revealDisabled?'opacity-60 pointer-events-none':''}`} onClick={()=>reveal()}>Reveal</button>
-                    <button type="button" className="px-3 py-2 rounded-xl border surface-button text-sm" onClick={()=>goBack()}>Back</button>
+                  <div className={actionButtonRowClass}>
+                    <button type="button" className={wideSurfaceButtonClass} onClick={()=>runDeductionRound()}>New</button>
+                    <button type="button" className={`${narrowSurfaceButtonClass} ${revealDisabled?'opacity-60 pointer-events-none':''}`} onClick={()=>reveal()}>Reveal</button>
+                    <button type="button" className={narrowSurfaceButtonClass} onClick={()=>goBack()}>Back</button>
                   </div>
                   {(msg || guesses.length>0) && (
                     <div className="mt-3 text-sm">
@@ -2291,6 +2305,13 @@
         setCalcOpen(false);
       };
       const hasHistory = entries.length>0;
+      React.useEffect(()=>{
+        if(!calcOpenValue) return;
+        const raf=requestAnimationFrame(()=>{
+          window.scrollTo({top:document.documentElement.scrollHeight,behavior:'smooth'});
+        });
+        return ()=>cancelAnimationFrame(raf);
+      },[calcOpenValue]);
       return (
         <div className="mt-1 space-y-4">
           <div className="rounded-2xl panel p-4 space-y-4">
