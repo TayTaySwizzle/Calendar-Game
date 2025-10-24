@@ -14,6 +14,10 @@
     .card{background:rgba(26,15,43,.85);border:1px solid rgba(120,53,175,.45)}
     .panel{background:rgba(88,28,135,.25);border:1px solid rgba(120,53,175,.45)}
     .thin{border:1px solid rgba(120,53,175,.35)}
+    .surface-button{background:rgba(88,28,135,.32);border-color:rgba(120,53,175,.52);transition:background-color .2s ease-in-out,border-color .2s ease-in-out}
+    .surface-button:hover{background:rgba(88,28,135,.48)}
+    .surface-toggle{background:rgba(88,28,135,.24);transition:background-color .2s ease-in-out}
+    .surface-toggle:hover{background:rgba(88,28,135,.4)}
     button,input,select{-webkit-tap-highlight-color:transparent}
     button{touch-action:manipulation}
     @keyframes flashPulse{0%{background:var(--bg0)}
@@ -316,6 +320,23 @@
       const [ded,setDed]=useState(null);
       const [dedFlash,setDedFlash]=useState(null);
       const [lookupHistory,setLookupHistory]=useState([]);
+      const [lookupInput,setLookupInput]=useState("");
+      const [lookupOutput,setLookupOutput]=useState("");
+      const [lookupCalcDate,setLookupCalcDate]=useState(null);
+      const [lookupSelectedHistoryId,setLookupSelectedHistoryId]=useState(null);
+      const [lookupCalcOpen,setLookupCalcOpen]=useState(false);
+      const prevLookupCalcKeyRef=useRef('none');
+
+      useEffect(()=>{
+        const prevKey=prevLookupCalcKeyRef.current;
+        const nextKey=lookupCalcDate?`${lookupCalcDate.y}-${lookupCalcDate.m}-${lookupCalcDate.d}`:'none';
+        if(prevKey!==nextKey){
+          if(prevKey!=='none' && prevKey!==nextKey){
+            setLookupCalcOpen(false);
+          }
+          prevLookupCalcKeyRef.current=nextKey;
+        }
+      },[lookupCalcDate]);
 
       const pendingDedSwitchRef=useRef(null);
       const prevModeRef=useRef(mode);
@@ -353,34 +374,20 @@
       };
       const setCalcPenalty=(value)=>{ setCalcPenaltyActive(value); calcPenaltyStatesRef.current.set(mode,value); };
 
-      /* avg-time toggle reset of sums when enabling */
+      /* avg-time toggle side effects */
       const prevTrackClassic=useRef(trackClassic);
       useEffect(()=>{
-        if(prevTrackClassic.current===false && trackClassic===true){
-          setStatsByMode(p=>{
-            const modeStats = {...(p.classic||blankStatsByEra())};
-            const eraStats = {...(modeStats[era]||blankStats())};
-            eraStats.timeSum=0;
-            eraStats.timeCnt=0;
-            return {...p, classic:{...modeStats, [era]:eraStats}};
-          });
+        if(!prevTrackClassic.current && trackClassic){
           tStartRef.current=performance.now();
         }
         prevTrackClassic.current=trackClassic;
-      },[trackClassic, era]);
+      },[trackClassic]);
       const prevTrackDed=useRef(trackDed);
       useEffect(()=>{
-        if(prevTrackDed.current===false && trackDed===true){
-          setStatsByMode(p=>{
-            const modeStats = {...(p.deduction||blankStatsByEra())};
-            const eraStats = {...(modeStats[era]||blankStats())};
-            eraStats.timeSum=0;
-            eraStats.timeCnt=0;
-            return {...p, deduction:{...modeStats, [era]:eraStats}};
-          });
+        if(!prevTrackDed.current && trackDed){
           tStartRef.current=performance.now();
           setSavedDedByType(blankDedTypeStore());
-        }else if(prevTrackDed.current===true && trackDed===false){
+        }else if(prevTrackDed.current && !trackDed){
           const snapshot = ded ? ({
             ded,
             guesses:[...guesses],
@@ -398,6 +405,16 @@
         }
         prevTrackDed.current=trackDed;
       },[trackDed]);
+      const prevStatsOffRef=useRef(statsOff);
+      useEffect(()=>{
+        if(prevStatsOffRef.current && !statsOff){
+          const trackingActive = (mode==="classic" && trackClassic) || (mode==="deduction" && trackDed);
+          if(trackingActive){
+            doNew();
+          }
+        }
+        prevStatsOffRef.current=statsOff;
+      },[statsOff, mode, trackClassic, trackDed]);
 
       /* ===== Range helpers ===== */
       const fmtRangeYear = (y)=> y>0?`${y} AD`:`${Math.abs(y)} BC`;
@@ -1299,7 +1316,7 @@
       const headline = mode==="deduction" ? dedHeadline : (showDash ? "—" : showDots ? "…" : fmt(date.y,date.m,date.d));
 
       const baseBtn="w-full rounded-2xl border px-4 py-3 text-base md:text-sm transition shadow-sm select-none";
-      const idleBtn="border-purple-800/60 bg-purple-900/30 hover:bg-purple-900/60";
+      const idleBtn="surface-button";
       const optionsDisabled = ((isTimer(mode) && !active) || locked || calcOpen || calcPenaltyActive);
       const centerLastOptionClasses = (index,total)=>{
         if(total<=0 || index!==total-1) return '';
@@ -1331,7 +1348,7 @@
           {[{k:'AD',label:'AD'},{k:'BOTH',label:'AD+BC'},{k:'BC',label:'BC'}].map(seg=>(
             <button key={seg.k} type="button"
               onClick={()=>{ if(era!==seg.k) applyEra(seg.k); }}
-              className={`flex-1 px-3 py-1.5 text-sm ${era===seg.k ? 'bg-purple-600' : 'bg-purple-900/40 hover:bg-purple-900/70'} ${seg.k!=='BC'?'border-r border-purple-800/60':''}`}>
+              className={`flex-1 px-3 py-1.5 text-sm ${era===seg.k ? 'bg-purple-600' : 'surface-toggle'} ${seg.k!=='BC'?'border-r border-purple-800/60':''}`}>
               {seg.label}
             </button>
           ))}
@@ -1731,7 +1748,21 @@
           {/* MAIN CARD */}
           {mode==="lookup" ? (
             <div className="mt-5">
-              <LookupCard history={lookupHistory} onAddHistory={pushLookupHistory} onClearHistory={clearLookupHistory} />
+              <LookupCard
+                history={lookupHistory}
+                onAddHistory={pushLookupHistory}
+                onClearHistory={clearLookupHistory}
+                inputValue={lookupInput}
+                onInputChange={setLookupInput}
+                outputValue={lookupOutput}
+                onOutputChange={setLookupOutput}
+                calcDate={lookupCalcDate}
+                onCalcDateChange={setLookupCalcDate}
+                selectedHistoryId={lookupSelectedHistoryId}
+                onSelectedHistoryIdChange={setLookupSelectedHistoryId}
+                calcOpen={lookupCalcOpen}
+                onCalcOpenChange={setLookupCalcOpen}
+              />
             </div>
           ) : mode==="method" ? (
             <div className="mt-5">
@@ -1800,13 +1831,13 @@
                     )}
                     <button
                       type="button"
-                      className={`px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm ${timerBusy?'opacity-60 pointer-events-none':''}`}
+                      className={`px-3 py-2 rounded-xl border surface-button text-sm ${timerBusy?'opacity-60 pointer-events-none':''}`}
                       onClick={()=>doNew()}
                     >New</button>
-                    <button type="button" className={`px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm ${revealDisabled?'opacity-60 pointer-events-none':''}`} onClick={()=>reveal()}>Reveal</button>
+                    <button type="button" className={`px-3 py-2 rounded-xl border surface-button text-sm ${revealDisabled?'opacity-60 pointer-events-none':''}`} onClick={()=>reveal()}>Reveal</button>
                     <button
                       type="button"
-                      className={`px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm ${timerBusy?'opacity-60 pointer-events-none':''}`}
+                      className={`px-3 py-2 rounded-xl border surface-button text-sm ${timerBusy?'opacity-60 pointer-events-none':''}`}
                       onClick={()=>goBack()}
                     >Back</button>
                   </div>
@@ -1831,7 +1862,7 @@
                 <div className="mt-3 flex flex-wrap gap-2 justify-center">
                   {["day","month","year"].map(t=>(
                     <button key={t} type="button" onClick={()=>changeDedType(t)}
-                      className={`px-3 py-1.5 rounded-xl text-sm border ${dedType===t?'bg-purple-600 border-purple-500':'bg-purple-900/40 border-purple-800/60 hover:bg-purple-900/70'}`}>
+                      className={`px-3 py-1.5 rounded-xl text-sm border ${dedType===t?'bg-purple-600 border-purple-500':'surface-toggle border-purple-800/60'}`}>
                       {t[0].toUpperCase()+t.slice(1)}
                     </button>
                   ))}
@@ -1875,9 +1906,9 @@
 
                 <div className="mt-4 rounded-2xl panel p-3">
                   <div className="flex flex-wrap items-center gap-2">
-                    <button type="button" className="px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm" onClick={()=>runDeductionRound()}>New</button>
-                    <button type="button" className={`px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm ${revealDisabled?'opacity-60 pointer-events-none':''}`} onClick={()=>reveal()}>Reveal</button>
-                    <button type="button" className="px-3 py-2 rounded-xl border border-purple-700/60 bg-purple-900/50 text-sm" onClick={()=>goBack()}>Back</button>
+                    <button type="button" className="px-3 py-2 rounded-xl border surface-button text-sm" onClick={()=>runDeductionRound()}>New</button>
+                    <button type="button" className={`px-3 py-2 rounded-xl border surface-button text-sm ${revealDisabled?'opacity-60 pointer-events-none':''}`} onClick={()=>reveal()}>Reveal</button>
+                    <button type="button" className="px-3 py-2 rounded-xl border surface-button text-sm" onClick={()=>goBack()}>Back</button>
                   </div>
                   {(msg || guesses.length>0) && (
                     <div className="mt-3 text-sm">
@@ -2087,14 +2118,14 @@
                 <button
                   type="button"
                   onClick={()=>setViewMode('advanced')}
-                  className={`px-3 py-1.5 text-xs font-semibold ${viewMode==='advanced'?'bg-purple-600 text-white':'bg-purple-900/40 text-purple-100/80 hover:bg-purple-900/70'}`}
+                  className={`px-3 py-1.5 text-xs font-semibold ${viewMode==='advanced'?'bg-purple-600 text-white':'surface-toggle text-purple-100/80'}`}
                 >
                   Advanced
                 </button>
                 <button
                   type="button"
                   onClick={()=>setViewMode('beginner')}
-                  className={`px-3 py-1.5 text-xs font-semibold border-l border-purple-700/60 ${viewMode==='beginner'?'bg-purple-600 text-white':'bg-purple-900/40 text-purple-100/80 hover:bg-purple-900/70'}`}
+                  className={`px-3 py-1.5 text-xs font-semibold border-l border-purple-700/60 ${viewMode==='beginner'?'bg-purple-600 text-white':'surface-toggle text-purple-100/80'}`}
                 >
                   Beginner
                 </button>
@@ -2103,7 +2134,7 @@
                 <button
                   type="button"
                   onClick={onRequestNew}
-                  className="px-3 py-1.5 rounded-xl border border-purple-700/60 bg-purple-900/50 text-xs font-medium hover:bg-purple-900/70"
+                  className="px-3 py-1.5 rounded-xl border surface-button text-xs font-medium"
                 >
                   New
                 </button>
@@ -2167,11 +2198,31 @@
     }
 
     /* --------- Lookup component --------- */
-    function LookupCard({history=[], onAddHistory, onClearHistory}){
-      const [lookupIn,setLookupIn]=React.useState("");
-      const [lookupOut,setLookupOut]=React.useState("");
-      const [calcDate,setCalcDate]=React.useState(null);
-      const [selectedHistoryId,setSelectedHistoryId]=React.useState(null);
+    function LookupCard({
+      history=[],
+      onAddHistory,
+      onClearHistory,
+      inputValue="",
+      onInputChange,
+      outputValue="",
+      onOutputChange,
+      calcDate,
+      onCalcDateChange,
+      selectedHistoryId,
+      onSelectedHistoryIdChange,
+      calcOpen=false,
+      onCalcOpenChange
+    }){
+      const lookupIn = typeof inputValue==='string'?inputValue:String(inputValue??'');
+      const setLookupIn = typeof onInputChange==='function'?onInputChange:()=>{};
+      const lookupOut = typeof outputValue==='string'?outputValue:String(outputValue??'');
+      const setLookupOut = typeof onOutputChange==='function'?onOutputChange:()=>{};
+      const calcDateValue = calcDate ?? null;
+      const setCalcDate = typeof onCalcDateChange==='function'?onCalcDateChange:()=>{};
+      const selectedId = selectedHistoryId ?? null;
+      const setSelectedId = typeof onSelectedHistoryIdChange==='function'?onSelectedHistoryIdChange:()=>{};
+      const calcOpenValue = !!calcOpen;
+      const setCalcOpen = typeof onCalcOpenChange==='function' ? (next)=>onCalcOpenChange(!!next) : ()=>{};
       function isLeapY(y){ y = y>0?y:1-Math.abs(y); return y%400===0 || (y%4===0 && y%100!==0); }
       function dimY(y,m){ return m===2 ? (isLeapY(y)?29:28) : [4,6,9,11].includes(m)?30:31; }
       function wdayY(y,m,d){ function jdn(y,m,d){ const a=Math.floor((14-m)/12),y2=y+4800-a,m2=m-3+12*a; return d+Math.floor((153*m2+2)/5)+365*y2+Math.floor(y2/4)-Math.floor(y2/100)+Math.floor(y2/400)-32045; } const toA = y=>y>0?y:1-Math.abs(y); return ((jdn(toA(y),m,d)+1)%7+7)%7; }
@@ -2202,31 +2253,42 @@
         };
         setLookupOut(resultText);
         setCalcDate({y:yy,m:mm,d:dd});
-        setSelectedHistoryId(entry.id);
+        setSelectedId(entry.id);
         if(onAddHistory){
           onAddHistory(entry);
         }
       }
-      function clearLookup(){ setLookupIn(""); if(document.activeElement) document.activeElement.blur(); setLookupOut(""); setCalcDate(null); setSelectedHistoryId(null); }
+      function clearLookup(){
+        setLookupIn("");
+        if(document.activeElement) document.activeElement.blur();
+        setLookupOut("");
+        setCalcDate(null);
+        setSelectedId(null);
+        setCalcOpen(false);
+      }
       const entries = Array.isArray(history)?history:[];
       React.useEffect(()=>{
-        if(!selectedHistoryId) return;
-        if(!entries.some(entry=>entry.id===selectedHistoryId)){
-          setSelectedHistoryId(null);
+        if(!selectedId) return;
+        if(!entries.some(entry=>entry.id===selectedId)){
+          setSelectedId(null);
           setCalcDate(null);
+          setLookupOut("");
+          setCalcOpen(false);
         }
-      },[entries]);
+      },[entries, selectedId]);
       const handleHistorySelect = (entry)=>{
         if(!entry) return;
-        setSelectedHistoryId(entry.id);
+        setSelectedId(entry.id);
         setLookupOut(entry?.result||"");
         if(entry && typeof entry.y==='number'){ setCalcDate({y:entry.y,m:entry.m,d:entry.d}); }
         if(document.activeElement) document.activeElement.blur();
       };
       const handleClearHistory = ()=>{
         if(onClearHistory) onClearHistory();
-        setSelectedHistoryId(null);
+        setSelectedId(null);
         setCalcDate(null);
+        setLookupOut("");
+        setCalcOpen(false);
       };
       const hasHistory = entries.length>0;
       return (
@@ -2257,7 +2319,7 @@
                 {entries.map(entry=>(
                   <li key={entry.id}>
                     <button type="button" onClick={()=>handleHistorySelect(entry)}
-                            className={`w-full text-left px-3 py-2 rounded-xl panel flex items-center justify-between gap-3 text-xs transition ${selectedHistoryId===entry.id?'ring-2 ring-purple-400/70 !bg-purple-900/60':'hover:bg-purple-900/60'}`}>
+                            className={`w-full text-left px-3 py-2 rounded-xl panel flex items-center justify-between gap-3 text-xs transition ${selectedId===entry.id?'ring-2 ring-purple-400/70 !bg-purple-900/60':'hover:bg-purple-900/60'}`}>
                       <span className="block text-[13px] font-medium text-purple-100/90">{entry.label}</span>
                       <span className="text-[12px] font-semibold text-purple-200/80">{entry.weekday}</span>
                     </button>
@@ -2268,10 +2330,12 @@
               <p className="text-sm text-purple-200/70">No lookups yet.</p>
             )}
             <MethodBreakdownSection
-              date={calcDate}
+              date={calcDateValue}
               className="pt-4 border-t border-purple-500/40"
               buttonClassName="w-full px-4 py-2 rounded-xl bg-purple-700 hover:bg-purple-600 text-sm font-medium"
-              contentClassName="mt-3 rounded-xl thin p-3 bg-purple-900/40"
+              contentClassName="mt-3 rounded-xl panel p-3"
+              open={calcOpenValue}
+              onOpenChange={setCalcOpen}
             />
           </div>
         </div>
