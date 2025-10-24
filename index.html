@@ -1338,6 +1338,9 @@
 
       const baseBtn="w-full rounded-2xl border px-4 py-3 text-base md:text-sm transition shadow-sm select-none";
       const idleBtn="surface-button";
+      const primaryActionClass="flex-1 rounded-xl px-5 py-3 text-base font-semibold transition";
+      const primarySurfaceActionClass=`${primaryActionClass} border surface-button`;
+      const secondaryActionClass="basis-24 shrink-0 rounded-xl border surface-button text-xs font-semibold px-3 py-1.5 text-center transition";
       const optionsDisabled = ((isTimer(mode) && !active) || locked || calcOpen || calcPenaltyActive);
       const centerLastOptionClasses = (index,total)=>{
         if(total<=0 || index!==total-1) return '';
@@ -1743,7 +1746,7 @@
                   pressed={canToggleAvg ? avgTrackingEnabled : undefined}
                 />
               </div>
-              <div className="mt-2 grid grid-cols-2 md:grid-cols-4 gap-3 items-stretch">
+              <div className="mt-3 grid grid-cols-2 md:grid-cols-4 gap-3 items-stretch">
                 <div className="col-span-1 md:col-span-2 flex items-center">
                   {eraControl}
                 </div>
@@ -1852,31 +1855,31 @@
                       !active ? (
                         <button
                           type="button"
-                          className="flex-1 px-4 py-2 rounded-xl bg-purple-600 text-white text-sm font-medium"
+                          className={`${primaryActionClass} bg-purple-600 hover:bg-purple-500 text-white`}
                           onClick={()=>begin()}
                         >Begin</button>
                       ) : (
                         <button
                           type="button"
-                          className="flex-1 px-4 py-2 rounded-xl bg-rose-600/90 text-white text-sm font-medium"
+                          className={`${primaryActionClass} bg-rose-600/90 hover:bg-rose-500 text-white`}
                           onClick={()=>arm()}
                         >Reset</button>
                       )
                     ) : (
                       <button
                         type="button"
-                        className="flex-1 px-3 py-2 rounded-xl border surface-button text-sm font-medium"
+                        className={primarySurfaceActionClass}
                         onClick={()=>doNew()}
                       >New</button>
                     )}
                     <button
                       type="button"
-                      className={`px-3 py-2 rounded-xl border surface-button text-sm font-medium basis-28 shrink-0 text-center ${revealDisabled?'opacity-60 pointer-events-none':''}`}
+                      className={`${secondaryActionClass} ${revealDisabled?'opacity-60 pointer-events-none':''}`}
                       onClick={()=>reveal()}
                     >Reveal</button>
                     <button
                       type="button"
-                      className={`px-3 py-2 rounded-xl border surface-button text-sm font-medium basis-28 shrink-0 text-center ${timerBusy?'opacity-60 pointer-events-none':''}`}
+                      className={`${secondaryActionClass} ${timerBusy?'opacity-60 pointer-events-none':''}`}
                       onClick={()=>goBack()}
                     >Back</button>
                   </div>
@@ -1947,17 +1950,17 @@
                   <div className="flex flex-nowrap items-center gap-2 sm:gap-3">
                     <button
                       type="button"
-                      className="flex-1 px-3 py-2 rounded-xl border surface-button text-sm font-medium"
+                      className={primarySurfaceActionClass}
                       onClick={()=>runDeductionRound()}
                     >New</button>
                     <button
                       type="button"
-                      className={`px-3 py-2 rounded-xl border surface-button text-sm font-medium basis-28 shrink-0 text-center ${revealDisabled?'opacity-60 pointer-events-none':''}`}
+                      className={`${secondaryActionClass} ${revealDisabled?'opacity-60 pointer-events-none':''}`}
                       onClick={()=>reveal()}
                     >Reveal</button>
                     <button
                       type="button"
-                      className="px-3 py-2 rounded-xl border surface-button text-sm font-medium basis-28 shrink-0 text-center"
+                      className={secondaryActionClass}
                       onClick={()=>goBack()}
                     >Back</button>
                   </div>
@@ -2338,6 +2341,36 @@
       const setSelectedId = typeof onSelectedHistoryIdChange==='function'?onSelectedHistoryIdChange:()=>{};
       const calcOpenValue = !!calcOpen;
       const setCalcOpen = typeof onCalcOpenChange==='function' ? (next)=>onCalcOpenChange(!!next) : ()=>{};
+      const calcDateKey = calcDateValue ? `${calcDateValue.y}-${calcDateValue.m}-${calcDateValue.d}` : '';
+      const calcScrollRafRef = React.useRef(null);
+      const calcScrollTimeoutRef = React.useRef(null);
+
+      React.useEffect(()=>{
+        const cancelScheduledScroll = ()=>{
+          if(calcScrollRafRef.current!=null){
+            cancelAnimationFrame(calcScrollRafRef.current);
+            calcScrollRafRef.current=null;
+          }
+          if(calcScrollTimeoutRef.current!=null){
+            clearTimeout(calcScrollTimeoutRef.current);
+            calcScrollTimeoutRef.current=null;
+          }
+        };
+        if(!calcOpenValue){
+          cancelScheduledScroll();
+          return cancelScheduledScroll;
+        }
+        cancelScheduledScroll();
+        calcScrollRafRef.current=requestAnimationFrame(()=>{
+          calcScrollRafRef.current=null;
+          calcScrollTimeoutRef.current=window.setTimeout(()=>{
+            calcScrollTimeoutRef.current=null;
+            window.scrollTo({top:document.documentElement.scrollHeight,behavior:'smooth'});
+          },60);
+        });
+        return cancelScheduledScroll;
+      },[calcOpenValue, calcDateKey]);
+
       function isLeapY(y){ y = y>0?y:1-Math.abs(y); return y%400===0 || (y%4===0 && y%100!==0); }
       function dimY(y,m){ return m===2 ? (isLeapY(y)?29:28) : [4,6,9,11].includes(m)?30:31; }
       function wdayY(y,m,d){ function jdn(y,m,d){ const a=Math.floor((14-m)/12),y2=y+4800-a,m2=m-3+12*a; return d+Math.floor((153*m2+2)/5)+365*y2+Math.floor(y2/4)-Math.floor(y2/100)+Math.floor(y2/400)-32045; } const toA = y=>y>0?y:1-Math.abs(y); return ((jdn(toA(y),m,d)+1)%7+7)%7; }
