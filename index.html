@@ -1836,51 +1836,53 @@
             {/* ======= CLASSIC / BLITZ / SUDDEN / FLASH ======= */}
             {["classic","blitz","sudden","flash"].includes(mode) && (
               <>
-                <div className={`mt-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3 ${optionsDisabled?'opacity-60 pointer-events-none':''}`}>
-                  {DAY.map((n,i)=>{
-                    const saturdayPosition = i===DAY.length-1
-                      ? 'col-span-2 sm:col-span-1 sm:col-start-2 md:col-span-2 md:col-start-2 lg:col-span-1 lg:col-start-auto xl:col-span-1 xl:col-start-auto 2xl:col-span-1 2xl:col-start-auto'
-                      : '';
-                    return (
-                      <button key={n} type="button"
-                        onClick={()=>{ submitDoW(i); setInput(""); if(isTouch) document.activeElement?.blur(); }}
-                        className={`${baseBtn} ${flash && flash.idx===i ? (flash.type==='good'?'flash-good':'flash-bad')+' border-transparent' : idleBtn} ${saturdayPosition}`}>{n}</button>
-                    );
-                  })}
+                <div className="mt-4 rounded-2xl panel p-3">
+                  <div className={`grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3 ${optionsDisabled?'opacity-60 pointer-events-none':''}`}>
+                    {DAY.map((n,i)=>{
+                      const saturdayPosition = i===DAY.length-1
+                        ? 'col-span-2 sm:col-span-1 sm:col-start-2 md:col-span-2 md:col-start-2 lg:col-span-1 lg:col-start-auto xl:col-span-1 xl:col-start-auto 2xl:col-span-1 2xl:col-start-auto'
+                        : '';
+                      return (
+                        <button key={n} type="button"
+                          onClick={()=>{ submitDoW(i); setInput(""); if(isTouch) document.activeElement?.blur(); }}
+                          className={`${baseBtn} ${flash && flash.idx===i ? (flash.type==='good'?'flash-good':'flash-bad')+' border-transparent' : idleBtn} ${saturdayPosition}`}>{n}</button>
+                      );
+                    })}
+                  </div>
                 </div>
 
                 {/* Action bubble */}
-                <div className="mt-4 rounded-2xl panel p-3">
+                <div className="mt-3 rounded-2xl panel p-3">
                   <div className="flex flex-nowrap items-center gap-2 sm:gap-3">
                     {isTimer(mode) ? (
                       !active ? (
                         <button
                           type="button"
-                          className="flex-1 px-6 sm:px-7 py-2 rounded-xl bg-purple-600 text-white text-sm font-medium"
+                          className="flex-[2] px-6 sm:px-7 py-2 rounded-xl bg-purple-600 text-white text-sm font-medium"
                           onClick={()=>begin()}
                         >Begin</button>
                       ) : (
                         <button
                           type="button"
-                          className="flex-1 px-6 sm:px-7 py-2 rounded-xl bg-rose-600/90 text-white text-sm font-medium"
+                          className="flex-[2] px-6 sm:px-7 py-2 rounded-xl bg-rose-600/90 text-white text-sm font-medium"
                           onClick={()=>arm()}
                         >Reset</button>
                       )
                     ) : (
                       <button
                         type="button"
-                        className="flex-1 px-6 sm:px-7 py-2 rounded-xl border surface-button text-sm font-medium"
+                        className="flex-[2] px-6 sm:px-7 py-2 rounded-xl border surface-button text-sm font-medium"
                         onClick={()=>doNew()}
                       >New</button>
                     )}
                     <button
                       type="button"
-                      className={`px-3 py-2 rounded-xl border surface-button text-sm font-medium basis-20 sm:basis-24 shrink-0 text-center ${revealDisabled?'opacity-60 pointer-events-none':''}`}
+                      className={`flex-1 px-3 py-2 rounded-xl border surface-button text-sm font-medium text-center ${revealDisabled?'opacity-60 pointer-events-none':''}`}
                       onClick={()=>reveal()}
                     >Reveal</button>
                     <button
                       type="button"
-                      className={`px-3 py-2 rounded-xl border surface-button text-sm font-medium basis-20 sm:basis-24 shrink-0 text-center ${timerBusy?'opacity-60 pointer-events-none':''}`}
+                      className={`flex-1 px-3 py-2 rounded-xl border surface-button text-sm font-medium text-center ${timerBusy?'opacity-60 pointer-events-none':''}`}
                       onClick={()=>goBack()}
                     >Back</button>
                   </div>
@@ -1895,6 +1897,15 @@
                       )}
                     </div>
                   )}
+                  <MethodBreakdownSection
+                    date={calcTarget}
+                    open={calcOpen}
+                    onOpenChange={handleCalculationOpenChange}
+                    onRequestNew={handleMethodNewRequest}
+                    className="mt-3"
+                    buttonClassName="w-full px-4 py-2 rounded-xl bg-purple-700 hover:bg-purple-600 text-sm font-medium"
+                    contentClassName="mt-3 rounded-2xl panel p-4"
+                  />
                 </div>
               </>
             )}
@@ -1951,17 +1962,17 @@
                   <div className="flex flex-nowrap items-center gap-2 sm:gap-3">
                     <button
                       type="button"
-                      className="flex-1 px-6 sm:px-7 py-2 rounded-xl border surface-button text-sm font-medium"
+                      className="flex-[2] px-6 sm:px-7 py-2 rounded-xl border surface-button text-sm font-medium"
                       onClick={()=>runDeductionRound()}
                     >New</button>
                     <button
                       type="button"
-                      className={`px-3 py-2 rounded-xl border surface-button text-sm font-medium basis-20 sm:basis-24 shrink-0 text-center ${revealDisabled?'opacity-60 pointer-events-none':''}`}
+                      className={`flex-1 px-3 py-2 rounded-xl border surface-button text-sm font-medium text-center ${revealDisabled?'opacity-60 pointer-events-none':''}`}
                       onClick={()=>reveal()}
                     >Reveal</button>
                     <button
                       type="button"
-                      className="px-3 py-2 rounded-xl border surface-button text-sm font-medium basis-20 sm:basis-24 shrink-0 text-center"
+                      className="flex-1 px-3 py-2 rounded-xl border surface-button text-sm font-medium text-center"
                       onClick={()=>goBack()}
                     >Back</button>
                   </div>
@@ -1975,13 +1986,21 @@
                       )}
                     </div>
                   )}
+                  <MethodBreakdownSection
+                    date={calcTarget}
+                    open={calcOpen}
+                    onOpenChange={handleCalculationOpenChange}
+                    onRequestNew={handleMethodNewRequest}
+                    className="mt-3"
+                    buttonClassName="w-full px-4 py-2 rounded-xl bg-purple-700 hover:bg-purple-600 text-sm font-medium"
+                    contentClassName="mt-3 rounded-2xl panel p-4"
+                  />
                 </div>
               </>
             )}
-              {mode!=="method" && mode!=="guide" && <MethodBreakdownSection date={calcTarget} open={calcOpen} onOpenChange={handleCalculationOpenChange} onRequestNew={handleMethodNewRequest}/>}
-            </div>
-          )}
-        </div>
+              </div>
+            )}
+          </div>
       );
     }
 
