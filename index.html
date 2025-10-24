@@ -99,6 +99,29 @@
     function randomDate(minY,maxY){ for(;;){ let y=rint(minY,maxY); if(y===0) continue; let m=rint(1,12), d=rint(1,dim(y,m)); if(d<=dim(y,m)) return {y,m,d}; } }
     const blankDedTypeStore = ()=>({year:null,month:null,day:null});
 
+    function useSmoothScrollToBottom(){
+      const raf1Ref=React.useRef(null);
+      const raf2Ref=React.useRef(null);
+      const cancel=React.useCallback(()=>{
+        if(raf1Ref.current!=null){ cancelAnimationFrame(raf1Ref.current); raf1Ref.current=null; }
+        if(raf2Ref.current!=null){ cancelAnimationFrame(raf2Ref.current); raf2Ref.current=null; }
+      },[]);
+      React.useEffect(()=>cancel,[cancel]);
+      return React.useCallback(()=>{
+        if(typeof window==='undefined') return;
+        cancel();
+        raf1Ref.current=requestAnimationFrame(()=>{
+          raf1Ref.current=null;
+          raf2Ref.current=requestAnimationFrame(()=>{
+            raf2Ref.current=null;
+            const doc=document.documentElement;
+            const top = doc ? doc.scrollHeight : (document.body?document.body.scrollHeight:0);
+            window.scrollTo({top,behavior:'smooth'});
+          });
+        });
+      },[cancel]);
+    }
+
     function methodCenturyCode(y){
       const century=Math.floor(y/100);
       const remainder=((century%4)+4)%4;
@@ -271,8 +294,7 @@
       const calcOpenStatesRef=useRef(new Map());
       const calcPenaltyStatesRef=useRef(new Map());
       const skipScrollOnOpenRef=useRef(false);
-      const calcScrollRafRef=useRef(null);
-      const calcScrollTimeoutRef=useRef(null);
+      const scheduleScrollToBottom=useSmoothScrollToBottom();
       const rangeRefreshPendingRef=useRef(false);
 
       /* snapshots when avg-time disabled (per era) */
@@ -649,13 +671,13 @@
       /* Era apply — with snapshots when avg-time disabled (Classic & Deduction) */
       function applyEra(newEra){
         // Save snapshot of current era before leaving, if avg-time disabled
-        if(mode==="classic" && !trackClassic){
+        if(mode==="classic" && (statsOff || !trackClassic)){
           setSavedClassicByEra(prev=>({
             ...prev,
             [era]: { date:{...date}, guesses:[...guesses], countedWrong, msg, locked, revealed, calcPenaltyActive }
           }));
         }
-        if(mode==="deduction" && !trackDed){
+        if(mode==="deduction" && (statsOff || !trackDed)){
           const snapshot = ded ? { ded, guesses:[...guesses], countedWrong, msg, locked, revealed, calcPenaltyActive } : null;
           const typeSnapshots = {...savedDedByType, [dedType]: snapshot};
           setSavedDedByEra(prev=>({
@@ -674,7 +696,7 @@
 
         // Classic/Deduction: preserve or generate new depending on avg-time toggle
         if(mode==="classic"){
-          if(!trackClassic){
+          if(!trackClassic || statsOff){
             const snap = (savedClassicByEra[newEra] || null);
             if(snap && snap.date && snap.date.y>=mn && snap.date.y<=mx){
               setDate(snap.date); setGuesses(snap.guesses||[]); setCountedWrong(!!snap.countedWrong);
@@ -694,7 +716,7 @@
           const snap = savedDedByEra[newEra] || null;
           const storedByType = snap?.byType ? {...snap.byType} : blankDedTypeStore();
           setSavedDedByType(storedByType);
-          if(!trackDed){
+          if(!trackDed || statsOff){
             const currentSnap = snap?.current || storedByType[dedType] || null;
             if(currentSnap && currentSnap.ded){
               setDed(currentSnap.ded); setGuesses(currentSnap.guesses||[]); setCountedWrong(!!currentSnap.countedWrong);
@@ -1582,34 +1604,13 @@
         prevModeRef.current = mode;
       },[calcTargetKey, mode]);
 
-      useEffect(()=>{
-        const cancelScheduledScroll = ()=>{
-          if(calcScrollRafRef.current!=null){
-            cancelAnimationFrame(calcScrollRafRef.current);
-            calcScrollRafRef.current=null;
-          }
-          if(calcScrollTimeoutRef.current!=null){
-            clearTimeout(calcScrollTimeoutRef.current);
-            calcScrollTimeoutRef.current=null;
-          }
-        };
-        if(calcOpen){
-          if(skipScrollOnOpenRef.current){
-            skipScrollOnOpenRef.current=false;
-          }else{
-            cancelScheduledScroll();
-            const scrollToBottom = ()=> window.scrollTo({top:document.documentElement.scrollHeight,behavior:'smooth'});
-            calcScrollRafRef.current=requestAnimationFrame(()=>{
-              scrollToBottom();
-              calcScrollTimeoutRef.current=setTimeout(scrollToBottom,120);
-            });
-          }
-        }else{
+      const handleCalcOpened = React.useCallback(()=>{
+        if(skipScrollOnOpenRef.current){
           skipScrollOnOpenRef.current=false;
-          cancelScheduledScroll();
+          return;
         }
-        return cancelScheduledScroll;
-      },[calcOpen]);
+        scheduleScrollToBottom();
+      },[scheduleScrollToBottom]);
 
       /* should reset stats create a new date? */
       function shouldNewOnReset(){
@@ -1659,6 +1660,7 @@
 
       const handleCalculationOpenChange = (next)=>{
         if(next){
+          skipScrollOnOpenRef.current=false;
           applyCalculationPenalty();
         }
         setCalcOpen(next);
@@ -1762,6 +1764,7 @@
                 onSelectedHistoryIdChange={setLookupSelectedHistoryId}
                 calcOpen={lookupCalcOpen}
                 onCalcOpenChange={setLookupCalcOpen}
+                onScrollToBottom={scheduleScrollToBottom}
               />
             </div>
           ) : mode==="method" ? (
@@ -1824,20 +1827,39 @@
 
                 {/* Action bubble */}
                 <div className="mt-4 rounded-2xl panel p-3">
-                  <div className="flex flex-wrap items-center gap-2">
-                    {isTimer(mode) && (!active
-                      ? <button type="button" className="px-4 py-2 rounded-xl bg-purple-600 text-white text-sm font-medium" onClick={()=>begin()}>Begin</button>
-                      : <button type="button" className="px-4 py-2 rounded-xl bg-rose-600/90 text-white text-sm font-medium" onClick={()=>arm()}>Reset</button>
-                    )}
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-stretch">
+                    <div className="sm:flex-1">
+                      {isTimer(mode)
+                        ? (!active
+                            ? (
+                              <button
+                                type="button"
+                                className="w-full h-11 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-sm font-medium flex items-center justify-center"
+                                onClick={()=>begin()}
+                              >Begin</button>
+                            ) : (
+                              <button
+                                type="button"
+                                className="w-full h-11 rounded-xl bg-rose-600/90 hover:bg-rose-500 text-white text-sm font-medium flex items-center justify-center"
+                                onClick={()=>arm()}
+                              >Reset</button>
+                            ))
+                        : (
+                          <button
+                            type="button"
+                            className={`w-full h-11 rounded-xl border surface-button text-sm font-medium flex items-center justify-center ${timerBusy?'opacity-60 pointer-events-none':''}`}
+                            onClick={()=>doNew()}
+                          >New</button>
+                        )}
+                    </div>
                     <button
                       type="button"
-                      className={`px-3 py-2 rounded-xl border surface-button text-sm ${timerBusy?'opacity-60 pointer-events-none':''}`}
-                      onClick={()=>doNew()}
-                    >New</button>
-                    <button type="button" className={`px-3 py-2 rounded-xl border surface-button text-sm ${revealDisabled?'opacity-60 pointer-events-none':''}`} onClick={()=>reveal()}>Reveal</button>
+                      className={`h-11 rounded-xl border surface-button text-sm font-medium w-full sm:w-32 flex items-center justify-center ${revealDisabled?'opacity-60 pointer-events-none':''}`}
+                      onClick={()=>reveal()}
+                    >Reveal</button>
                     <button
                       type="button"
-                      className={`px-3 py-2 rounded-xl border surface-button text-sm ${timerBusy?'opacity-60 pointer-events-none':''}`}
+                      className={`h-11 rounded-xl border surface-button text-sm font-medium w-full sm:w-32 flex items-center justify-center ${timerBusy?'opacity-60 pointer-events-none':''}`}
                       onClick={()=>goBack()}
                     >Back</button>
                   </div>
@@ -1905,10 +1927,24 @@
                 </div>
 
                 <div className="mt-4 rounded-2xl panel p-3">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <button type="button" className="px-3 py-2 rounded-xl border surface-button text-sm" onClick={()=>runDeductionRound()}>New</button>
-                    <button type="button" className={`px-3 py-2 rounded-xl border surface-button text-sm ${revealDisabled?'opacity-60 pointer-events-none':''}`} onClick={()=>reveal()}>Reveal</button>
-                    <button type="button" className="px-3 py-2 rounded-xl border surface-button text-sm" onClick={()=>goBack()}>Back</button>
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-stretch">
+                    <div className="sm:flex-1">
+                      <button
+                        type="button"
+                        className="w-full h-11 rounded-xl border surface-button text-sm font-medium flex items-center justify-center"
+                        onClick={()=>runDeductionRound()}
+                      >New</button>
+                    </div>
+                    <button
+                      type="button"
+                      className={`h-11 rounded-xl border surface-button text-sm font-medium w-full sm:w-32 flex items-center justify-center ${revealDisabled?'opacity-60 pointer-events-none':''}`}
+                      onClick={()=>reveal()}
+                    >Reveal</button>
+                    <button
+                      type="button"
+                      className="h-11 rounded-xl border surface-button text-sm font-medium w-full sm:w-32 flex items-center justify-center"
+                      onClick={()=>goBack()}
+                    >Back</button>
                   </div>
                   {(msg || guesses.length>0) && (
                     <div className="mt-3 text-sm">
@@ -1923,7 +1959,7 @@
                 </div>
               </>
             )}
-              {mode!=="method" && <MethodBreakdownSection date={calcTarget} open={calcOpen} onOpenChange={handleCalculationOpenChange} onRequestNew={handleMethodNewRequest}/>}
+              {mode!=="method" && <MethodBreakdownSection date={calcTarget} open={calcOpen} onOpenChange={handleCalculationOpenChange} onOpened={handleCalcOpened} onRequestNew={handleMethodNewRequest}/>}
             </div>
           )}
         </div>
@@ -2148,7 +2184,7 @@
       );
     }
 
-    function MethodBreakdownSection({date, open:controlledOpen, onOpenChange, onRequestNew, className, buttonClassName, contentClassName}){
+    function MethodBreakdownSection({date, open:controlledOpen, onOpenChange, onOpened, onRequestNew, className, buttonClassName, contentClassName}){
       const isControlled = typeof controlledOpen === 'boolean' && typeof onOpenChange === 'function';
       const [internalOpen,setInternalOpen]=React.useState(false);
       const key=date?`${date.y}-${date.m}-${date.d}`:"";
@@ -2165,6 +2201,14 @@
         }
       },[hasDate, isControlled, controlledOpen, onOpenChange]);
       const open = hasDate ? (isControlled ? controlledOpen : internalOpen) : false;
+      const prevOpenRef=React.useRef(open);
+      React.useEffect(()=>{
+        const wasOpen=prevOpenRef.current;
+        prevOpenRef.current=open;
+        if(open && !wasOpen && hasDate && typeof onOpened==='function'){
+          onOpened();
+        }
+      },[open, hasDate, onOpened]);
       const toggle = ()=>{
         if(!hasDate) return;
         if(isControlled){
@@ -2211,7 +2255,8 @@
       selectedHistoryId,
       onSelectedHistoryIdChange,
       calcOpen=false,
-      onCalcOpenChange
+      onCalcOpenChange,
+      onScrollToBottom
     }){
       const lookupIn = typeof inputValue==='string'?inputValue:String(inputValue??'');
       const setLookupIn = typeof onInputChange==='function'?onInputChange:()=>{};
@@ -2223,6 +2268,7 @@
       const setSelectedId = typeof onSelectedHistoryIdChange==='function'?onSelectedHistoryIdChange:()=>{};
       const calcOpenValue = !!calcOpen;
       const setCalcOpen = typeof onCalcOpenChange==='function' ? (next)=>onCalcOpenChange(!!next) : ()=>{};
+      const requestScroll = typeof onScrollToBottom==='function' ? onScrollToBottom : ()=>{};
       function isLeapY(y){ y = y>0?y:1-Math.abs(y); return y%400===0 || (y%4===0 && y%100!==0); }
       function dimY(y,m){ return m===2 ? (isLeapY(y)?29:28) : [4,6,9,11].includes(m)?30:31; }
       function wdayY(y,m,d){ function jdn(y,m,d){ const a=Math.floor((14-m)/12),y2=y+4800-a,m2=m-3+12*a; return d+Math.floor((153*m2+2)/5)+365*y2+Math.floor(y2/4)-Math.floor(y2/100)+Math.floor(y2/400)-32045; } const toA = y=>y>0?y:1-Math.abs(y); return ((jdn(toA(y),m,d)+1)%7+7)%7; }
@@ -2336,6 +2382,7 @@
               contentClassName="mt-3 rounded-xl panel p-3"
               open={calcOpenValue}
               onOpenChange={setCalcOpen}
+              onOpened={requestScroll}
             />
           </div>
         </div>
