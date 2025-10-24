@@ -787,7 +787,7 @@
       },[mode,blitzSec,statsOff,blitzRunning,active,phase]);
 
       const trackingOn = ()=> (isTimer(mode) || (mode==="classic"&&trackClassic) || (mode==="deduction"&&trackDed));
-      const avgDisabled = (statsOff || !( (mode==="classic"&&trackClassic) || (mode==="deduction"&&trackDed) || isTimer(mode) ));
+      const avgDisabled = !((mode==="classic"&&trackClassic) || (mode==="deduction"&&trackDed) || isTimer(mode));
       const statsPressed = !statsOff;
       const handleStatsBoxToggle = ()=>{ setStatsOff(prev=>!prev); };
       const avgTrackingEnabled = (mode==="classic"?trackClassic : mode==="deduction"?trackDed : true);
@@ -921,7 +921,7 @@
         if(locked) return;
         if(idx===wday(date.y,date.m,date.d)){
           setFlash({type:'good', idx}); setTimeout(()=>setFlash(null),450);
-          if(!statsOff && !countedWrong && tStartRef.current && trackingOn()){ const dt=(performance.now()-tStartRef.current)/1000; updateStats(cur=>{ cur.timeSum+=dt; cur.timeCnt+=1; }); }
+          if(!countedWrong && tStartRef.current && trackingOn()){ const dt=(performance.now()-tStartRef.current)/1000; updateStats(cur=>{ cur.timeSum+=dt; cur.timeCnt+=1; }); }
           if(!statsOff && !countedWrong){ updateStats(cur=>{ cur.played+=1; cur.good+=1; cur.streak+=1; if(cur.streak>cur.best) cur.best=cur.streak; }); }
           if(mode==="blitz" && !countedWrong){ setBlitzRoundStats(prev=>({
             ...prev,
@@ -1266,7 +1266,7 @@
         if(ded.type==="year"){
           const ok = (+val)===ded.y; flashDed('year', index, ok);
           if(ok){
-            if(!statsOff && !countedWrong && trackDed && tStartRef.current){ const dt=(performance.now()-tStartRef.current)/1000; updateStats(cur=>{cur.timeSum+=dt; cur.timeCnt+=1;}); }
+            if(!countedWrong && trackDed && tStartRef.current){ const dt=(performance.now()-tStartRef.current)/1000; updateStats(cur=>{cur.timeSum+=dt; cur.timeCnt+=1;}); }
             if(!statsOff && !countedWrong){ updateStats(cur=>{ cur.played+=1; cur.good+=1; cur.streak+=1; if(cur.streak>cur.best) cur.best=cur.streak; }); }
             setCorrectThenNext();
           }else{
@@ -1277,7 +1277,7 @@
         if(ded.type==="month"){
           const ok = (+val)===ded.m; flashDed('month', index, ok);
           if(ok){
-            if(!statsOff && !countedWrong && trackDed && tStartRef.current){ const dt=(performance.now()-tStartRef.current)/1000; updateStats(cur=>{cur.timeSum+=dt; cur.timeCnt+=1;}); }
+            if(!countedWrong && trackDed && tStartRef.current){ const dt=(performance.now()-tStartRef.current)/1000; updateStats(cur=>{cur.timeSum+=dt; cur.timeCnt+=1;}); }
             if(!statsOff && !countedWrong){ updateStats(cur=>{ cur.played+=1; cur.good+=1; cur.streak+=1; if(cur.streak>cur.best) cur.best=cur.streak; }); }
             setCorrectThenNext();
           }else{
@@ -1288,7 +1288,7 @@
         if(ded.type==="day"){
           const ok = (+val)===ded.d; flashDed('day', index, ok);
           if(ok){
-            if(!statsOff && !countedWrong && trackDed && tStartRef.current){ const dt=(performance.now()-tStartRef.current)/1000; updateStats(cur=>{cur.timeSum+=dt; cur.timeCnt+=1;}); }
+            if(!countedWrong && trackDed && tStartRef.current){ const dt=(performance.now()-tStartRef.current)/1000; updateStats(cur=>{cur.timeSum+=dt; cur.timeCnt+=1;}); }
             if(!statsOff && !countedWrong){ updateStats(cur=>{ cur.played+=1; cur.good+=1; cur.streak+=1; if(cur.streak>cur.best) cur.best=cur.streak; }); }
             setCorrectThenNext();
           }else{
@@ -1856,31 +1856,31 @@
                       !active ? (
                         <button
                           type="button"
-                          className="flex-1 px-5 py-2 rounded-xl bg-purple-600 text-white text-sm font-medium"
+                          className="flex-1 px-6 sm:px-7 py-2 rounded-xl bg-purple-600 text-white text-sm font-medium"
                           onClick={()=>begin()}
                         >Begin</button>
                       ) : (
                         <button
                           type="button"
-                          className="flex-1 px-5 py-2 rounded-xl bg-rose-600/90 text-white text-sm font-medium"
+                          className="flex-1 px-6 sm:px-7 py-2 rounded-xl bg-rose-600/90 text-white text-sm font-medium"
                           onClick={()=>arm()}
                         >Reset</button>
                       )
                     ) : (
                       <button
                         type="button"
-                        className="flex-1 px-5 py-2 rounded-xl border surface-button text-sm font-medium"
+                        className="flex-1 px-6 sm:px-7 py-2 rounded-xl border surface-button text-sm font-medium"
                         onClick={()=>doNew()}
                       >New</button>
                     )}
                     <button
                       type="button"
-                      className={`px-3 py-2 rounded-xl border surface-button text-sm font-medium basis-24 sm:basis-28 shrink-0 text-center ${revealDisabled?'opacity-60 pointer-events-none':''}`}
+                      className={`px-3 py-2 rounded-xl border surface-button text-sm font-medium basis-20 sm:basis-24 shrink-0 text-center ${revealDisabled?'opacity-60 pointer-events-none':''}`}
                       onClick={()=>reveal()}
                     >Reveal</button>
                     <button
                       type="button"
-                      className={`px-3 py-2 rounded-xl border surface-button text-sm font-medium basis-24 sm:basis-28 shrink-0 text-center ${timerBusy?'opacity-60 pointer-events-none':''}`}
+                      className={`px-3 py-2 rounded-xl border surface-button text-sm font-medium basis-20 sm:basis-24 shrink-0 text-center ${timerBusy?'opacity-60 pointer-events-none':''}`}
                       onClick={()=>goBack()}
                     >Back</button>
                   </div>
@@ -1951,17 +1951,17 @@
                   <div className="flex flex-nowrap items-center gap-2 sm:gap-3">
                     <button
                       type="button"
-                      className="flex-1 px-5 py-2 rounded-xl border surface-button text-sm font-medium"
+                      className="flex-1 px-6 sm:px-7 py-2 rounded-xl border surface-button text-sm font-medium"
                       onClick={()=>runDeductionRound()}
                     >New</button>
                     <button
                       type="button"
-                      className={`px-3 py-2 rounded-xl border surface-button text-sm font-medium basis-24 sm:basis-28 shrink-0 text-center ${revealDisabled?'opacity-60 pointer-events-none':''}`}
+                      className={`px-3 py-2 rounded-xl border surface-button text-sm font-medium basis-20 sm:basis-24 shrink-0 text-center ${revealDisabled?'opacity-60 pointer-events-none':''}`}
                       onClick={()=>reveal()}
                     >Reveal</button>
                     <button
                       type="button"
-                      className="px-3 py-2 rounded-xl border surface-button text-sm font-medium basis-24 sm:basis-28 shrink-0 text-center"
+                      className="px-3 py-2 rounded-xl border surface-button text-sm font-medium basis-20 sm:basis-24 shrink-0 text-center"
                       onClick={()=>goBack()}
                     >Back</button>
                   </div>
