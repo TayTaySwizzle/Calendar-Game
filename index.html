@@ -83,6 +83,23 @@
       [0,0],[4,-2],[8,3],[12,1],[16,-1],[20,4],[24,2],[28,0],[32,-2],[36,3],[40,1],[44,-1],[48,4],[52,2],[56,0],[60,-2],[64,3],[68,1],[72,-1],[76,4],[80,2],[84,0],[88,-2],[92,3],[96,1]
     ]);
     const METHOD_CD_ADVANCED_ZERO_YEARS=new Set([0,6,17,23,28,34,45,51,56,62,73,79,84,90]);
+    const METHOD_NOTATION_ROWS=["Sunday = 0","Monday = 1","Tuesday = 2","Wednesday = 3","Thursday = 4","Friday = 5","Saturday = 6"];
+    const METHOD_MONTH_CODE_ROWS=["January = 6","February = 2","March = 2","April = 5","May = 0","June = 3","July = 5","August = 1","September = 4","October = 6","November = 2","December = 4"];
+    const METHOD_AB_BEGINNER_ROWS=["0 → 0","1 → -2","2 → 3","3 → 1"];
+    const METHOD_AB_ADVANCED_EVEN_ROWS=["0 → 0","1 → -2","2 → 3","3 → 1","4 → 0","5 → -2","6 → 3","7 → 1","8 → 0","9 → -2"];
+    const METHOD_AB_ADVANCED_ODD_ROWS=["0 → 3","1 → 1","2 → 0","3 → -2","4 → 3","5 → 1","6 → 0","7 → -2","8 → 3","9 → 1"];
+    const METHOD_CD_BEGINNER_ROWS=["0 → 0","12 → 1","24 → 2","36 → 3","48 → 4","60 → 5 ≡ -2","72 → 6 ≡ -1","84 → 7 ≡ 0","96 → 8 ≡ 1"];
+    const METHOD_CD_ADVANCED_LEAP_ROWS=["4 → -2","8 → 3","16 → -1","20 → 4","28 → 0","32 → -2","40 → 1","44 → -1","52 → 2","56 → 0","64 → 3","68 → 1","76 → 4","80 → 2","88 → -2","92 → 3"];
+    const METHOD_CD_ADVANCED_ZERO_ROWS=["0, 6, 17, 23, 28, 34, 45, 51, 56, 62, 73, 79, 84, 90"];
+    const METHOD_FINGER_ROWS=[
+      "0 is the outside (by the thumb) of the bottom segment of the pointer finger",
+      "1 is the bottom segment of the pointer finger",
+      "2 is the middle segment of the pointer finger",
+      "3 is the top segment of the pointer finger",
+      "4 is the bottom segment of the middle finger",
+      "5 is the middle segment of the middle finger",
+      "6 is the top segment of the middle finger"
+    ];
     const YEAR_OPTION_DEFAULT=9;
     const DAY_OPTION_COUNT=7;
     const MONTH_OPTION_COUNT=7;
@@ -178,15 +195,15 @@
       const monthCode = METHOD_MONTH_CODES[m] ?? null;
       if(monthCode==null) return {supported:false,error:"Invalid month for the method."};
       const parts=yearParts(y);
-      const lines=[];
-      const pushLine=node=>lines.push(node);
+      const steps=Array.from({length:6},()=>[]);
+      const pushLine=(index,node)=>{ steps[index]?.push(node); };
       let running=normalizeMod(monthCode);
-      pushLine(<>{MONTH[m-1]} month code: {monthCode}.</>);
+      pushLine(0, <>{MONTH[m-1]} month code: {monthCode}.</>);
 
       const dayMod=normalizeMod(d);
       const dayDisplay=dayMod>3?dayMod-7:dayMod;
       const dayOp=formatAddition(running,dayDisplay);
-      pushLine(<>{d} mod 7 = {dayDisplay}: {dayOp.expression}.</>);
+      pushLine(1, <>{d} mod 7 = {dayDisplay}: {dayOp.expression}.</>);
       running=dayOp.after;
 
       const abMod4=normalizeMod(parts.ab);
@@ -195,10 +212,10 @@
         abCodeValue=METHOD_AB_BEGINNER_MAP.get(abMod4)??0;
         const abOp=formatAddition(running,abCodeValue);
         if(parts.a%2===0){
-          pushLine(<>{italic('a')} is even: {parts.b} mod 4 = {abMod4}, which has {italic('ab')} code {formatSigned(canonicalizeMod(abCodeValue))}: {abOp.expression}.</>);
+          pushLine(2, <>{italic('a')} is even: {parts.b} mod 4 = {abMod4}, which has {italic('ab')} code {formatSigned(canonicalizeMod(abCodeValue))}: {abOp.expression}.</>);
         }else{
           const adjustSign=parts.b<=1?'+':'-';
-          pushLine(<>{italic('a')} is odd: ({parts.b} {adjustSign} 2) mod 4 = {abMod4}, which has {italic('ab')} code {formatSigned(canonicalizeMod(abCodeValue))}: {abOp.expression}.</>);
+          pushLine(2, <>{italic('a')} is odd: ({parts.b} {adjustSign} 2) mod 4 = {abMod4}, which has {italic('ab')} code {formatSigned(canonicalizeMod(abCodeValue))}: {abOp.expression}.</>);
         }
         running=abOp.after;
       }else{
@@ -206,7 +223,7 @@
         const map=parts.a%2===0?METHOD_AB_ADVANCED_MAP.even:METHOD_AB_ADVANCED_MAP.odd;
         abCodeValue=map.get(parts.b)??0;
         const abOp=formatAddition(running,abCodeValue);
-        pushLine(<>{italic('a')} is {parity} and {italic('b')} = {parts.b} has {italic('ab')} code {formatSigned(canonicalizeMod(abCodeValue))}: {abOp.expression}.</>);
+        pushLine(2, <>{italic('a')} is {parity} and {italic('b')} = {parts.b} has {italic('ab')} code {formatSigned(canonicalizeMod(abCodeValue))}: {abOp.expression}.</>);
         running=abOp.after;
       }
 
@@ -215,84 +232,84 @@
       const addCdLines=(baseLabel,codeValue)=>{
         const codeDisplay=formatSigned(canonicalizeMod(codeValue));
         if(codeValue===0){
-          pushLine(<>{baseLabel} has {italic('cd')} code 0: total remains unchanged.</>);
+          pushLine(3, <>{baseLabel} has {italic('cd')} code 0: total remains unchanged.</>);
           return;
         }
         const cdOp=formatAddition(running,codeValue);
-        pushLine(<>{baseLabel} has {italic('cd')} code {codeDisplay}: {cdOp.expression}.</>);
+        pushLine(3, <>{baseLabel} has {italic('cd')} code {codeDisplay}: {cdOp.expression}.</>);
         running=cdOp.after;
       };
 
       let cdBase;
       let cdCode;
       let diffBase;
+      let cdInfo;
       if(mode==="beginner"){ 
-        const info=getBeginnerCdInfo(cd);
-        cdBase=info.base;
-        cdCode=info.code;
-        if(info.exact){
-          pushLine(<>{cdString} is a beginner {italic('cd')} year.</>);
+        cdInfo=getBeginnerCdInfo(cd);
+        cdBase=cdInfo.base;
+        cdCode=cdInfo.code;
+        if(cdInfo.exact){
+          pushLine(3, <>{cdString} is a beginner {italic('cd')} year.</>);
           addCdLines(cdString,cdCode);
         }else{
-          const baseString=info.base.toString().padStart(2,'0');
-          pushLine(<>{cdString} is not a beginner {italic('cd')} year.</>);
-          pushLine(<>{baseString} is the closest beginner year less than {cdString}.</>);
+          const baseString=cdInfo.base.toString().padStart(2,'0');
+          pushLine(3, <>{cdString} is not a beginner {italic('cd')} year.</>);
+          pushLine(3, <>{baseString} is the closest beginner year less than {cdString}.</>);
           addCdLines(baseString,cdCode);
         }
-        diffBase=info.base;
+        diffBase=cdInfo.base;
       }else{
-        const info=getAdvancedCdInfo(cd);
-        cdBase=info.base;
-        cdCode=info.code;
-        if(info.isZeroYear){
-          pushLine(<>{cdString} is a 0 year, so leave your total unchanged.</>);
-        }else if(info.exact){
+        cdInfo=getAdvancedCdInfo(cd);
+        cdBase=cdInfo.base;
+        cdCode=cdInfo.code;
+        if(cdInfo.isZeroYear){
+          pushLine(3, <>{cdString} is a 0 year, so leave your total unchanged.</>);
+        }else if(cdInfo.exact){
           const cdOp=formatAddition(running,cdCode);
-          pushLine(<>{cdString} has {italic('cd')} code {formatSigned(canonicalizeMod(cdCode))}: {cdOp.expression}.</>);
+          pushLine(3, <>{cdString} has {italic('cd')} code {formatSigned(canonicalizeMod(cdCode))}: {cdOp.expression}.</>);
           running=cdOp.after;
         }else{
-          const baseString=info.base.toString().padStart(2,'0');
-          pushLine(<>{cdString} is not an advanced {italic('cd')} year.</>);
-          pushLine(<>{baseString} is the closest leap year less than {cdString}.</>);
+          const baseString=cdInfo.base.toString().padStart(2,'0');
+          pushLine(3, <>{cdString} is not an advanced {italic('cd')} year.</>);
+          pushLine(3, <>{baseString} is the closest leap year less than {cdString}.</>);
           addCdLines(baseString,cdCode);
         }
-        diffBase=info.base;
+        diffBase=cdInfo.base;
       }
 
       const diff=cd-diffBase;
       if(mode==="beginner"){ 
         if(diff===0){
-          pushLine(<>The beginner {italic('cd')} year matches the given {italic('cd')} year, so skip this step.</>);
+          pushLine(4, <>The beginner {italic('cd')} year matches the given {italic('cd')} year, so skip this step.</>);
         }else{
           const baseString=diffBase.toString().padStart(2,'0');
-          pushLine(<>{cdString} - {baseString} = {diff}.</>);
+          pushLine(4, <>{cdString} - {baseString} = {diff}.</>);
           const diffMod=normalizeMod(diff);
           if(diffMod===0){
-            pushLine(<>{diff} mod 7 = 0: total remains unchanged.</>);
+            pushLine(4, <>{diff} mod 7 = 0: total remains unchanged.</>);
           }else{
             const diffOp=formatAddition(running,diffMod);
-            pushLine(<>{diff} mod 7 = {diffMod}: {diffOp.expression}.</>);
+            pushLine(4, <>{diff} mod 7 = {diffMod}: {diffOp.expression}.</>);
             running=diffOp.after;
           }
           const quotient=Math.floor(diff/4);
           if(quotient===0){
-            pushLine(<>⌊{diff} / 4⌋ = 0: total remains unchanged.</>);
+            pushLine(4, <>⌊{diff} / 4⌋ = 0: total remains unchanged.</>);
           }else{
             const qOp=formatAddition(running,quotient);
-            pushLine(<>⌊{diff} / 4⌋ = {quotient}: {qOp.expression}.</>);
+            pushLine(4, <>⌊{diff} / 4⌋ = {quotient}: {qOp.expression}.</>);
             running=qOp.after;
           }
         }
       }else{
-        const info=getAdvancedCdInfo(cd);
-        if(info.isZeroYear){
-          pushLine(<>{cdString} is a 0 year, so skip this step.</>);
+        if(cdInfo.isZeroYear){
+          pushLine(4, <>{cdString} is a 0 year, so skip this step.</>);
         }else if(diff===0){
-          pushLine(<>{cdString} is an advanced year, so skip this step.</>);
+          pushLine(4, <>{cdString} is an advanced year, so skip this step.</>);
         }else{
           const baseString=diffBase.toString().padStart(2,'0');
           const diffOp=formatAddition(running,diff);
-          pushLine(<>{cdString} - {baseString} = {diff}: {diffOp.expression}.</>);
+          pushLine(4, <>{cdString} - {baseString} = {diff}: {diffOp.expression}.</>);
           running=diffOp.after;
         }
       }
@@ -306,37 +323,37 @@
       const isLeapYear=(cdMod4===0) && (bcdMod100!==0 || abcdMod400===0);
       const monthNeedsAdjust=m===1||m===2;
       if(cdMod4!==0){
-        pushLine(<>{cdValue} mod 4 ≠ 0, so it is not a leap year, so skip this step.</>);
+        pushLine(5, <>{cdValue} mod 4 ≠ 0, so it is not a leap year, so skip this step.</>);
       }else if(bcdMod100===0 && abcdMod400!==0){
-        pushLine(<>{cdValue} mod 4 = 0, but {bcdValue} mod 100 = 0 and {abcdValue} mod 400 ≠ 0, so it is not a leap year, so skip this step.</>);
+        pushLine(5, <>{cdValue} mod 4 = 0, but {bcdValue} mod 100 = 0 and {abcdValue} mod 400 ≠ 0, so it is not a leap year, so skip this step.</>);
       }else if(!monthNeedsAdjust){
         if(abcdMod400===0 && cdValue===0){
-          pushLine(<>{cdValue} mod 4 = 0 and {abcdValue} mod 400 = 0, but the date is after February, so skip this step.</>);
+          pushLine(5, <>{cdValue} mod 4 = 0 and {abcdValue} mod 400 = 0, but the date is after February, so skip this step.</>);
         }else{
-          pushLine(<>{cdValue} mod 4 = 0 and {cdValue} ≠ 0, but the date is after February, so skip this step.</>);
+          pushLine(5, <>{cdValue} mod 4 = 0 and {cdValue} ≠ 0, but the date is after February, so skip this step.</>);
         }
       }else{
         const leapOp=formatAddition(running,-1,{applySpeedTips:false,canonicalize:false});
         if(abcdMod400===0 && cdValue===0){
-          pushLine(<>{cdValue} mod 4 = 0 and {abcdValue} mod 400 = 0, so it is a leap year. Subtract 1: {leapOp.expression}.</>);
+          pushLine(5, <>{cdValue} mod 4 = 0 and {abcdValue} mod 400 = 0, so it is a leap year. Subtract 1: {leapOp.expression}.</>);
         }else{
-          pushLine(<>{cdValue} mod 4 = 0 and {cdValue} ≠ 0, so it is a leap year. Subtract 1: {leapOp.expression}.</>);
+          pushLine(5, <>{cdValue} mod 4 = 0 and {cdValue} ≠ 0, so it is a leap year. Subtract 1: {leapOp.expression}.</>);
         }
         running=leapOp.after;
       }
 
-      pushLine(<>Therefore the final answer is {running} = {DAY[running]}.</>);
-
       return {
         supported:true,
-        lines,
+        steps,
         total:running,
         weekday:DAY[running],
         monthCode,
         abCodeDisplay:formatSigned(canonicalizeMod(abCodeValue??0)),
         cdCodeDisplay:formatSigned(canonicalizeMod(cdCode??0)),
         leapYear:isLeapYear,
-        cdValue:cd
+        cdValue:cd,
+        dayCode:dayMod,
+        conclusion:<>Therefore the final answer is {running} = {DAY[running]}.</>
       };
     }
 
@@ -345,6 +362,25 @@
       const advanced=computeMethodBreakdown(date,"advanced");
       return {beginner,advanced};
     }
+
+    const SingleColumnTable=({rows})=>{
+      if(!Array.isArray(rows) || rows.length===0){
+        return null;
+      }
+      return (
+        <div className="overflow-hidden rounded-xl border border-purple-800/60 bg-purple-900/20">
+          <table className="w-full text-left text-[13px] text-purple-100/80">
+            <tbody className="divide-y divide-purple-800/60">
+              {rows.map((row,idx)=>(
+                <tr key={idx}>
+                  <td className="px-3 py-1.5 align-top">{row}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      );
+    };
 
     const isTouch=typeof window!=="undefined" && ("ontouchstart" in window || navigator.maxTouchPoints>0 || matchMedia("(pointer:coarse)").matches);
     const isTimer = m => m==="blitz"||m==="sudden"||m==="flash";
@@ -2214,189 +2250,106 @@
             <p className="mt-2 text-purple-200/80">Note: Assumes the proleptic Gregorian calendar for all AD dates.</p>
           </div>
 
-          <div className="rounded-2xl panel p-4 space-y-4">
-            <div>
+          <div className="rounded-2xl panel p-4 space-y-5">
+            <div className="space-y-3">
               <h3 className="text-sm font-semibold text-purple-100/90 uppercase tracking-wide">Definitions:</h3>
-              <div className="mt-3 space-y-3 text-[13px] text-purple-100/80">
-                <div>
-                  <h4 className="font-semibold text-purple-100/90">Notation:</h4>
-                  <ul className="mt-1 space-y-1">
-                    <li>Sunday = 0</li>
-                    <li>Monday = 1</li>
-                    <li>Tuesday = 2</li>
-                    <li>Wednesday = 3</li>
-                    <li>Thursday = 4</li>
-                    <li>Friday = 5</li>
-                    <li>Saturday = 6</li>
-                  </ul>
+              <div className="grid gap-5 lg:grid-cols-2">
+                <div className="space-y-4 text-[13px] text-purple-100/80">
+                  <div className="space-y-2">
+                    <h4 className="font-semibold text-purple-100/90">Notation:</h4>
+                    <SingleColumnTable rows={METHOD_NOTATION_ROWS}/>
+                  </div>
+                  <p>Let the year equal <span className="italic">abcd</span>, where <span className="italic">b</span>, <span className="italic">c</span>, and <span className="italic">d</span> are the last 3 digits of the year and <span className="italic">a</span> is all preceding digits. For very large years, only the last 4 digits matter.</p>
                 </div>
-                <p>Let the year equal <span className="italic">abcd</span>, where <span className="italic">b</span>, <span className="italic">c</span>, and <span className="italic">d</span> are the last 3 digits of the year and <span className="italic">a</span> is all preceding digits. For very large years, only the last 4 digits matter.</p>
+                <div className="space-y-4 text-[13px] text-purple-100/80">
+                  <div className="space-y-2">
+                    <h4 className="font-semibold text-purple-100/90">Mod:</h4>
+                    <SingleColumnTable rows={[<><span className="italic">n</span> mod <span className="italic">m</span> = the remainder after dividing <span className="italic">n</span> by <span className="italic">m</span>.</>]} />
+                  </div>
+                  <div className="space-y-2">
+                    <h4 className="font-semibold text-purple-100/90">Determining Mod 4 for 2 Digits <span className="italic">nm</span>:</h4>
+                    <SingleColumnTable rows={[
+                      <>If <span className="italic">n</span> is even: <span className="italic">nm</span> mod 4 = <span className="italic">m</span> mod 4.</>,
+                      <>If <span className="italic">n</span> is odd: <span className="italic">nm</span> mod 4 = (<span className="italic">m</span> -/+ 2) mod 4.</>
+                    ]}/>
+                    <p className="text-[13px] text-purple-200/75">-2 is preferable and should be used for <span className="italic">m</span> = 2–9. +2 must be used for <span className="italic">m</span> = 0–1.</p>
+                  </div>
+                </div>
               </div>
             </div>
-            <div>
-              <h3 className="text-sm font-semibold text-purple-100/90 uppercase tracking-wide">Mod:</h3>
-              <div className="mt-2 rounded-xl border border-purple-800/60 bg-purple-900/30 px-3 py-2 text-center text-[13px] text-purple-100/90">
-                <span><span className="italic">n</span> mod <span className="italic">m</span> = the remainder after dividing <span className="italic">n</span> by <span className="italic">m</span>.</span>
-              </div>
-            </div>
-            <div>
-              <h3 className="text-sm font-semibold text-purple-100/90 uppercase tracking-wide">Determining Mod 4 for 2 Digits <span className="italic">nm</span>:</h3>
-              <ul className="mt-2 space-y-1 text-[13px] text-purple-100/80">
-                <li>If <span className="italic">n</span> is even: <span className="italic">nm</span> mod 4 = <span className="italic">m</span> mod 4.</li>
-                <li>If <span className="italic">n</span> is odd: <span className="italic">nm</span> mod 4 = (<span className="italic">m</span> -/+ 2) mod 4.</li>
-              </ul>
-              <p className="mt-2 text-[13px] text-purple-200/75">-2 is preferable and should be used for <span className="italic">m</span> = 2–9. +2 must be used for <span className="italic">m</span> = 0–1.</p>
-            </div>
-            <div>
+            <div className="space-y-2 text-[13px] text-purple-100/80">
               <h3 className="text-sm font-semibold text-purple-100/90 uppercase tracking-wide">Leap Year:</h3>
-              <p className="mt-2 text-[13px] text-purple-100/80">It is a leap year if <span className="italic">cd</span> mod 4 = 0, unless <span className="italic">bcd</span> mod 100 = 0 and <span className="italic">abcd</span> mod 400 ≠ 0, then it is not a leap year. If <span className="italic">abcd</span> mod 400 = 0 then it is a leap year.</p>
+              <p>It is a leap year if <span className="italic">cd</span> mod 4 = 0, unless <span className="italic">bcd</span> mod 100 = 0 and <span className="italic">abcd</span> mod 400 ≠ 0, then it is not a leap year. If <span className="italic">abcd</span> mod 400 = 0 then it is a leap year.</p>
             </div>
-            <div>
+            <div className="space-y-2 text-[13px] text-purple-100/80">
               <h3 className="text-sm font-semibold text-purple-100/90 uppercase tracking-wide">Integer Division Explained:</h3>
-              <p className="mt-2 text-[13px] text-purple-100/80">⌊<span className="italic">n</span> / <span className="italic">m</span>⌋ = <span className="italic">n</span> / <span className="italic">m</span> where the remainder is dropped. Equivalently, ⌊<span className="italic">n</span> / <span className="italic">m</span>⌋ = [<span className="italic">n</span> - (<span className="italic">n</span> mod <span className="italic">m</span>)] / <span className="italic">m</span>. This is best done intuitively by asking how many full <span className="italic">m</span>'s can fit into <span className="italic">n</span>.</p>
+              <p>⌊<span className="italic">n</span> / <span className="italic">m</span>⌋ = <span className="italic">n</span> / <span className="italic">m</span> where the remainder is dropped. Equivalently, ⌊<span className="italic">n</span> / <span className="italic">m</span>⌋ = [<span className="italic">n</span> - (<span className="italic">n</span> mod <span className="italic">m</span>)] / <span className="italic">m</span>. This is best done intuitively by asking how many full <span className="italic">m</span>'s can fit into <span className="italic">n</span>.</p>
             </div>
-            <div>
+            <div className="space-y-3 text-[13px] text-purple-100/80">
               <h3 className="text-sm font-semibold text-purple-100/90 uppercase tracking-wide">Counting Using Fingers:</h3>
-              <p className="mt-2 text-[13px] text-purple-100/80">I count using a mod 7 system. I use my right hand to keep track of the numbers by touching my thumb to 7 different segments on my pointer and middle finger.</p>
-              <ul className="mt-2 grid gap-1 text-[13px] text-purple-100/80 md:grid-cols-2">
-                <li>0 is the outside (by the thumb) of the bottom segment of the pointer finger</li>
-                <li>1 is the bottom segment of the pointer finger</li>
-                <li>2 is the middle segment of the pointer finger</li>
-                <li>3 is the top segment of the pointer finger</li>
-                <li>4 is the bottom segment of the middle finger</li>
-                <li>5 is the middle segment of the middle finger</li>
-                <li>6 is the top segment of the middle finger</li>
-              </ul>
-              <p className="mt-2 text-[13px] text-purple-100/80">Thus, adding numbers is simply moving your thumb to different parts of your pointer and middle fingers and learning patterns. Counting like this ensures that only numbers 0–6 are held regardless of what is added or subtracted. The final answer then immediately corresponds to the weekday represented on your hand.</p>
-              <div className="mt-3 text-[13px] text-purple-100/80">
+              <p>I count using a mod 7 system. I use my right hand to keep track of the numbers by touching my thumb to 7 different segments on my pointer and middle finger.</p>
+              <SingleColumnTable rows={METHOD_FINGER_ROWS}/>
+              <div className="space-y-2">
                 <h4 className="font-semibold text-purple-100/90">Speed Tips:</h4>
-                <ul className="mt-1 space-y-1">
+                <ul className="list-disc list-inside space-y-1">
                   <li>Turn +6 into -1.</li>
                   <li>Turn +5 into -2.</li>
                   <li>Turn +3 into -4 from positions 4–6.</li>
                   <li>Turn +4 into -3 from positions 3–6.</li>
                   <li>Turn -3 into +4 from positions 0–2.</li>
                 </ul>
-                <p className="mt-2">This can be done due to counting mod 7. All other additions and subtractions should be left unchanged.</p>
+                <p>This can be done due to counting mod 7. All other additions and subtractions should be left unchanged.</p>
               </div>
             </div>
           </div>
 
-          <div className="rounded-2xl panel p-4 space-y-4">
+          <div className="rounded-2xl panel p-4 space-y-5">
             <h3 className="text-sm font-semibold text-purple-100/90 uppercase tracking-wide">Reference Codes:</h3>
-            <div className="space-y-3 text-[13px] text-purple-100/80">
-              <div>
+            <div className="space-y-4 text-[13px] text-purple-100/80">
+              <div className="space-y-2">
                 <h4 className="font-semibold text-purple-100/90">Month Codes:</h4>
-                <ul className="mt-1 space-y-1">
-                  <li>January = 6</li>
-                  <li>February = 2</li>
-                  <li>March = 2</li>
-                  <li>April = 5</li>
-                  <li>May = 0</li>
-                  <li>June = 3</li>
-                  <li>July = 5</li>
-                  <li>August = 1</li>
-                  <li>September = 4</li>
-                  <li>October = 6</li>
-                  <li>November = 2</li>
-                  <li>December = 4</li>
-                </ul>
+                <SingleColumnTable rows={METHOD_MONTH_CODE_ROWS}/>
               </div>
-              <div>
+              <div className="space-y-3">
                 <h4 className="font-semibold text-purple-100/90">ab Codes:</h4>
-                <div className="mt-2 space-y-2">
-                  <div>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
                     <h5 className="font-semibold text-purple-100/90">Beginner (for <span className="italic">ab</span> mod 4):</h5>
-                    <div className="mt-1 space-y-1">
-                      <div className="flex items-center gap-2"><span>0 →</span><span>0</span></div>
-                      <div className="flex items-center gap-2"><span>1 →</span><span>-2</span></div>
-                      <div className="flex items-center gap-2"><span>2 →</span><span>3</span></div>
-                      <div className="flex items-center gap-2"><span>3 →</span><span>1</span></div>
-                    </div>
+                    <SingleColumnTable rows={METHOD_AB_BEGINNER_ROWS}/>
                   </div>
-                  <div>
+                  <div className="space-y-3">
                     <h5 className="font-semibold text-purple-100/90">Advanced (for <span className="italic">b</span>):</h5>
-                    <div className="mt-1 space-y-2">
-                      <div>
+                    <div className="space-y-3">
+                      <div className="space-y-2">
                         <p>If <span className="italic">a</span> is even:</p>
-                        <div className="mt-1 space-y-1">
-                          <div className="flex items-center gap-2"><span>0 →</span><span>0</span></div>
-                          <div className="flex items-center gap-2"><span>1 →</span><span>-2</span></div>
-                          <div className="flex items-center gap-2"><span>2 →</span><span>3</span></div>
-                          <div className="flex items-center gap-2"><span>3 →</span><span>1</span></div>
-                          <div className="flex items-center gap-2"><span>4 →</span><span>0</span></div>
-                          <div className="flex items-center gap-2"><span>5 →</span><span>-2</span></div>
-                          <div className="flex items-center gap-2"><span>6 →</span><span>3</span></div>
-                          <div className="flex items-center gap-2"><span>7 →</span><span>1</span></div>
-                          <div className="flex items-center gap-2"><span>8 →</span><span>0</span></div>
-                          <div className="flex items-center gap-2"><span>9 →</span><span>-2</span></div>
-                        </div>
+                        <SingleColumnTable rows={METHOD_AB_ADVANCED_EVEN_ROWS}/>
                       </div>
-                      <div>
+                      <div className="space-y-2">
                         <p>If <span className="italic">a</span> is odd:</p>
-                        <div className="mt-1 space-y-1">
-                          <div className="flex items-center gap-2"><span>0 →</span><span>3</span></div>
-                          <div className="flex items-center gap-2"><span>1 →</span><span>1</span></div>
-                          <div className="flex items-center gap-2"><span>2 →</span><span>0</span></div>
-                          <div className="flex items-center gap-2"><span>3 →</span><span>-2</span></div>
-                          <div className="flex items-center gap-2"><span>4 →</span><span>3</span></div>
-                          <div className="flex items-center gap-2"><span>5 →</span><span>1</span></div>
-                          <div className="flex items-center gap-2"><span>6 →</span><span>0</span></div>
-                          <div className="flex items-center gap-2"><span>7 →</span><span>-2</span></div>
-                          <div className="flex items-center gap-2"><span>8 →</span><span>3</span></div>
-                          <div className="flex items-center gap-2"><span>9 →</span><span>1</span></div>
-                        </div>
+                        <SingleColumnTable rows={METHOD_AB_ADVANCED_ODD_ROWS}/>
                       </div>
                     </div>
                   </div>
-                  <p className="text-[12px] text-purple-200/70">Note: For the advanced codes, when <span className="italic">a</span> is even, <span className="italic">b</span> mod 4 simplifies to the beginner ones, and when <span className="italic">a</span> is odd, (<span className="italic">b</span> -/+ 2) mod 4 also simplify to the beginner ones.</p>
                 </div>
+                <p className="text-[12px] text-purple-200/70">Note: For the advanced codes, when <span className="italic">a</span> is even, <span className="italic">b</span> mod 4 simplifies to the beginner ones, and when <span className="italic">a</span> is odd, (<span className="italic">b</span> -/+ 2) mod 4 also simplify to the beginner ones.</p>
               </div>
-              <div>
+              <div className="space-y-3">
                 <h4 className="font-semibold text-purple-100/90">cd Codes:</h4>
-                <div className="mt-2 space-y-3">
-                  <div>
+                <div className="space-y-3">
+                  <div className="space-y-2">
                     <h5 className="font-semibold text-purple-100/90">Beginner:</h5>
-                    <div className="mt-1 space-y-1">
-                      <div className="flex items-center gap-2"><span>0 →</span><span>0</span></div>
-                      <div className="flex items-center gap-2"><span>12 →</span><span>1</span></div>
-                      <div className="flex items-center gap-2"><span>24 →</span><span>2</span></div>
-                      <div className="flex items-center gap-2"><span>36 →</span><span>3</span></div>
-                      <div className="flex items-center gap-2"><span>48 →</span><span>4</span></div>
-                      <div className="flex items-center gap-2"><span>60 →</span><span>5 ≡ -2</span></div>
-                      <div className="flex items-center gap-2"><span>72 →</span><span>6 ≡ -1</span></div>
-                      <div className="flex items-center gap-2"><span>84 →</span><span>7 ≡ 0</span></div>
-                      <div className="flex items-center gap-2"><span>96 →</span><span>8 ≡ 1</span></div>
-                    </div>
+                    <SingleColumnTable rows={METHOD_CD_BEGINNER_ROWS}/>
                   </div>
-                  <div>
+                  <div className="space-y-3">
                     <h5 className="font-semibold text-purple-100/90">Advanced:</h5>
-                    <div className="mt-1 space-y-2">
-                      <div>
+                    <div className="space-y-3">
+                      <div className="space-y-2">
                         <p>Leap Years:</p>
-                        <p>0, 12, 24, 36, 48, 60, 72, 84, 96 (from beginner)</p>
-                        <div className="mt-1 space-y-1">
-                          <div className="flex items-center gap-2"><span>4 →</span><span>-2</span></div>
-                          <div className="flex items-center gap-2"><span>8 →</span><span>3</span></div>
-                          <div className="flex items-center gap-2"><span>16 →</span><span>-1</span></div>
-                          <div className="flex items-center gap-2"><span>20 →</span><span>4</span></div>
-                          <div className="flex items-center gap-2"><span>28 →</span><span>0</span></div>
-                          <div className="flex items-center gap-2"><span>32 →</span><span>-2</span></div>
-                          <div className="flex items-center gap-2"><span>40 →</span><span>1</span></div>
-                          <div className="flex items-center gap-2"><span>44 →</span><span>-1</span></div>
-                          <div className="flex items-center gap-2"><span>52 →</span><span>2</span></div>
-                          <div className="flex items-center gap-2"><span>56 →</span><span>0</span></div>
-                          <div className="flex items-center gap-2"><span>64 →</span><span>3</span></div>
-                          <div className="flex items-center gap-2"><span>68 →</span><span>1</span></div>
-                          <div className="flex items-center gap-2"><span>76 →</span><span>4</span></div>
-                          <div className="flex items-center gap-2"><span>80 →</span><span>2</span></div>
-                          <div className="flex items-center gap-2"><span>88 →</span><span>-2</span></div>
-                          <div className="flex items-center gap-2"><span>92 →</span><span>3</span></div>
-                        </div>
+                        <SingleColumnTable rows={["0, 12, 24, 36, 48, 60, 72, 84, 96 (from beginner)", ...METHOD_CD_ADVANCED_LEAP_ROWS]}/>
                       </div>
-                      <div>
+                      <div className="space-y-2">
                         <p>0 Years (code 0):</p>
-                        <p>0, 6, 17, 23, 28, 34, 45, 51, 56, 62, 73, 79, 84, 90</p>
+                        <SingleColumnTable rows={METHOD_CD_ADVANCED_ZERO_ROWS}/>
                       </div>
                     </div>
                   </div>
@@ -2410,73 +2363,93 @@
             <h3 className="text-sm font-semibold text-purple-100/90 uppercase tracking-wide">Method:</h3>
             <p className="text-[13px] text-purple-100/80">(Beginner memorizes 25 codes, and advanced memorizes 67–132 codes. Advanced is a range because there are 65 more <span className="italic">cd</span> codes available to memorize, though doing so intentionally has extremely diminishing returns. However, with enough practice, you will inevitably memorize other <span className="italic">cd</span> codes.)</p>
             <p className="text-[13px] text-purple-100/80">Note: Start with the month, then day, then <span className="italic">ab</span> in the year, then <span className="italic">cd</span> in the year, then check for leap year when relevant. This order keeps a pure left-to-right reading of the date. In cases where the date is given in a different order, a left-to-right reading should be preferred, and the following steps will be done in a different order.</p>
-            <div className="space-y-2 text-[13px] text-purple-100/80">
-              <p>Start with the month code.</p>
-              <p>Add the day mod 7. Equivalently, subtract the nearest multiple of 7, and add the remainder. This may result in adding a small negative number, which is not an issue.</p>
-              <p>Add the corresponding <span className="italic">ab</span> code.</p>
-              <div className="pl-4 space-y-1">
-                <p>Beginner: Compute <span className="italic">ab</span> mod 4 then add the corresponding code.</p>
-                <p>Advanced: Check whether <span className="italic">a</span> is even or odd, then check the value of <span className="italic">b</span> and add the corresponding code.</p>
-              </div>
-              <p>Add the corresponding <span className="italic">cd</span> code.</p>
-              <div className="pl-4 space-y-1">
-                <p>Beginner: If your given <span className="italic">cd</span> year matches a beginner <span className="italic">cd</span> year, then add the corresponding code. Otherwise, add the corresponding code for the closest beginner <span className="italic">cd</span> year less than your given <span className="italic">cd</span> year.</p>
-                <p>Advanced: If your given <span className="italic">cd</span> year is a 0 year, then leave your total unchanged. If your given <span className="italic">cd</span> year is a leap year, then add the corresponding code. Otherwise, add the corresponding code for the closest leap year less than your given <span className="italic">cd</span> year.</p>
-              </div>
-              <p>If your given <span className="italic">cd</span> year matches a memorized <span className="italic">cd</span> year, then skip this step. Otherwise, take the difference between your given <span className="italic">cd</span> year and the chosen beginner/leap year from above.</p>
-              <div className="pl-4 space-y-1">
-                <p>Beginner: Compute this difference mod 7 and add. Then integer divide the above difference by 4 and add.</p>
-                <p>Advanced: Add this difference.</p>
-              </div>
-              <p>If the month is January or February and it is a leap year, then subtract 1.</p>
-            </div>
+            <ol className="list-decimal list-inside space-y-2 text-[13px] text-purple-100/80">
+              <li>Start with the month code.</li>
+              <li>Add the day mod 7. Equivalently, subtract the nearest multiple of 7, and add the remainder. This may result in adding a small negative number, which is not an issue.</li>
+              <li>
+                Add the corresponding <span className="italic">ab</span> code.
+                <ul className="mt-1 list-disc list-inside space-y-1 pl-4">
+                  <li>Beginner: Compute <span className="italic">ab</span> mod 4 then add the corresponding code.</li>
+                  <li>Advanced: Check whether <span className="italic">a</span> is even or odd, then check the value of <span className="italic">b</span> and add the corresponding code.</li>
+                </ul>
+              </li>
+              <li>
+                Add the corresponding <span className="italic">cd</span> code.
+                <ul className="mt-1 list-disc list-inside space-y-1 pl-4">
+                  <li>Beginner: If your given <span className="italic">cd</span> year matches a beginner <span className="italic">cd</span> year, then add the corresponding code. Otherwise, add the corresponding code for the closest beginner <span className="italic">cd</span> year less than your given <span className="italic">cd</span> year.</li>
+                  <li>Advanced: If your given <span className="italic">cd</span> year is a 0 year, then leave your total unchanged. If your given <span className="italic">cd</span> year is a leap year, then add the corresponding code. Otherwise, add the corresponding code for the closest leap year less than your given <span className="italic">cd</span> year.</li>
+                </ul>
+              </li>
+              <li>
+                If your given <span className="italic">cd</span> year matches a memorized <span className="italic">cd</span> year, then skip this step. Otherwise, take the difference between your given <span className="italic">cd</span> year and the chosen beginner/leap year from above.
+                <ul className="mt-1 list-disc list-inside space-y-1 pl-4">
+                  <li>Beginner: Compute this difference mod 7 and add. Then integer divide the above difference by 4 and add.</li>
+                  <li>Advanced: Add this difference.</li>
+                </ul>
+              </li>
+              <li>If the month is January or February and it is a leap year, then subtract 1.</li>
+            </ol>
           </div>
 
           <div className="rounded-2xl panel p-4 space-y-4">
             <h3 className="text-sm font-semibold text-purple-100/90 uppercase tracking-wide">Examples:</h3>
             <div className="grid gap-4 md:grid-cols-2">
-              <div className="rounded-xl thin p-3 space-y-2">
-                <h4 className="text-sm font-semibold text-purple-100/90">Example 1</h4>
-                <div className="space-y-2 text-[13px] text-purple-100/80">
-                  <p>Example 1: February 26, 1192</p>
-                  <p className="font-semibold text-purple-100/90">Beginner:</p>
-                  <p>February month code: 2.</p>
-                  <p>26 mod 7 = -2: 2 - 2 = 0.</p>
-                  <p><span className="italic">a</span> is odd: (1 + 2) mod 4 = 3, which has <span className="italic">ab</span> code 1: 0 + 1 = 1.</p>
-                  <p>92 is not a beginner <span className="italic">cd</span> year. 84 is the closest beginner year less than 92. 84 has <span className="italic">cd</span> code 0: total remains unchanged.</p>
-                  <p>92 - 84 = 8. 8 mod 7 = 1: 1 + 1 = 2. ⌊8 / 4⌋ = 2: 2 + 2 = 4.</p>
-                  <p>92 mod 4 = 0 and 92 ≠ 0, so it is a leap year. Subtract 1: 4 - 1 = 3.</p>
-                  <p>Therefore the final answer is 3 = Wednesday.</p>
-                  <p className="font-semibold text-purple-100/90">Advanced:</p>
-                  <p>February month code: 2.</p>
-                  <p>26 mod 7 = -2: 2 - 2 = 0.</p>
-                  <p><span className="italic">a</span> is odd and <span className="italic">b</span> = 1 has <span className="italic">ab</span> code 1: 0 + 1 = 1.</p>
-                  <p>92 has <span className="italic">cd</span> code 3 : 1 + 3 = 4.</p>
-                  <p>92 is an advanced year, so skip this step.</p>
-                  <p>92 mod 4 = 0 and 92 ≠ 0, so it is a leap year. Subtract 1: 4 - 1 = 3.</p>
-                  <p>Therefore the final answer is 3 = Wednesday.</p>
+              <div className="rounded-xl thin p-3 space-y-3">
+                <h4 className="text-sm font-semibold text-purple-100/90">Example 1: February 26, 1192</h4>
+                <div className="space-y-3 text-[13px] text-purple-100/80">
+                  <div className="space-y-2">
+                    <p className="font-semibold text-purple-100/90">Beginner:</p>
+                    <ol className="list-decimal list-inside space-y-1">
+                      <li>February month code: 2.</li>
+                      <li>26 mod 7 = -2: 2 - 2 = 0.</li>
+                      <li><span className="italic">a</span> is odd: (1 + 2) mod 4 = 3, which has <span className="italic">ab</span> code 1: 0 + 1 = 1.</li>
+                      <li>92 is not a beginner <span className="italic">cd</span> year. 84 is the closest beginner year less than 92. 84 has <span className="italic">cd</span> code 0: total remains unchanged.</li>
+                      <li>92 - 84 = 8. 8 mod 7 = 1: 1 + 1 = 2. ⌊8 / 4⌋ = 2: 2 + 2 = 4.</li>
+                      <li>92 mod 4 = 0 and 92 ≠ 0, so it is a leap year. Subtract 1: 4 - 1 = 3.</li>
+                    </ol>
+                    <p>Therefore the final answer is 3 = Wednesday.</p>
+                  </div>
+                  <div className="space-y-2">
+                    <p className="font-semibold text-purple-100/90">Advanced:</p>
+                    <ol className="list-decimal list-inside space-y-1">
+                      <li>February month code: 2.</li>
+                      <li>26 mod 7 = -2: 2 - 2 = 0.</li>
+                      <li><span className="italic">a</span> is odd and <span className="italic">b</span> = 1 has <span className="italic">ab</span> code 1: 0 + 1 = 1.</li>
+                      <li>92 has <span className="italic">cd</span> code 3 : 1 + 3 = 4.</li>
+                      <li>92 is an advanced year, so skip this step.</li>
+                      <li>92 mod 4 = 0 and 92 ≠ 0, so it is a leap year. Subtract 1: 4 - 1 = 3.</li>
+                    </ol>
+                    <p>Therefore the final answer is 3 = Wednesday.</p>
+                  </div>
                 </div>
               </div>
-              <div className="rounded-xl thin p-3 space-y-2">
-                <h4 className="text-sm font-semibold text-purple-100/90">Example 2</h4>
-                <div className="space-y-2 text-[13px] text-purple-100/80">
-                  <p>Example 2: July 17, 52266 / July 17, 266</p>
-                  <p className="font-semibold text-purple-100/90">Beginner:</p>
-                  <p>July month code: 5.</p>
-                  <p>17 mod 7 = 3: 5 - 4 = 1.</p>
-                  <p><span className="italic">a</span> is even: 2 mod 4 = 2, which has <span className="italic">ab</span> code 3: 1 + 3 = 4.</p>
-                  <p>66 is not a beginner <span className="italic">cd</span> year. 60 is the closest beginner year less than 66. 60 has <span className="italic">cd</span> code -2: 4 - 2 = 2.</p>
-                  <p>66 - 60 = 6. 6 mod 7 = 6: 2 - 1 = 1. ⌊6 / 4⌋ = 1: 1 + 1 = 2.</p>
-                  <p>66 mod 4 ≠ 0, so it is not a leap year, so skip this step.</p>
-                  <p>Therefore the final answer is 2 = Tuesday.</p>
-                  <p className="font-semibold text-purple-100/90">Advanced:</p>
-                  <p>July month code: 5.</p>
-                  <p>17 mod 7 = 3: 5 - 4 = 1.</p>
-                  <p><span className="italic">a</span> is even and <span className="italic">b</span> = 2 has <span className="italic">ab</span> code 3: 1 + 3 = 4.</p>
-                  <p>66 is not an advanced <span className="italic">cd</span> year. 64 is the closest leap year less than 66. 64 has <span className="italic">cd</span> code 3: 4 - 4 = 0.</p>
-                  <p>66 - 64 = 2: 0 + 2 = 2.</p>
-                  <p>66 mod 4 ≠ 0, so it is not a leap year, so skip this step.</p>
-                  <p>Therefore the final answer is 2 = Tuesday.</p>
+              <div className="rounded-xl thin p-3 space-y-3">
+                <h4 className="text-sm font-semibold text-purple-100/90">Example 2: July 17, 52266 / July 17, 266</h4>
+                <div className="space-y-3 text-[13px] text-purple-100/80">
+                  <div className="space-y-2">
+                    <p className="font-semibold text-purple-100/90">Beginner:</p>
+                    <ol className="list-decimal list-inside space-y-1">
+                      <li>July month code: 5.</li>
+                      <li>17 mod 7 = 3: 5 - 4 = 1.</li>
+                      <li><span className="italic">a</span> is even: 2 mod 4 = 2, which has <span className="italic">ab</span> code 3: 1 + 3 = 4.</li>
+                      <li>66 is not a beginner <span className="italic">cd</span> year. 60 is the closest beginner year less than 66. 60 has <span className="italic">cd</span> code -2: 4 - 2 = 2.</li>
+                      <li>66 - 60 = 6. 6 mod 7 = 6: 2 - 1 = 1. ⌊6 / 4⌋ = 1: 1 + 1 = 2.</li>
+                      <li>66 mod 4 ≠ 0, so it is not a leap year, so skip this step.</li>
+                    </ol>
+                    <p>Therefore the final answer is 2 = Tuesday.</p>
+                  </div>
+                  <div className="space-y-2">
+                    <p className="font-semibold text-purple-100/90">Advanced:</p>
+                    <ol className="list-decimal list-inside space-y-1">
+                      <li>July month code: 5.</li>
+                      <li>17 mod 7 = 3: 5 - 4 = 1.</li>
+                      <li><span className="italic">a</span> is even and <span className="italic">b</span> = 2 has <span className="italic">ab</span> code 3: 1 + 3 = 4.</li>
+                      <li>66 is not an advanced <span className="italic">cd</span> year. 64 is the closest leap year less than 66. 64 has <span className="italic">cd</span> code 3: 4 - 4 = 0.</li>
+                      <li>66 - 64 = 2: 0 + 2 = 2.</li>
+                      <li>66 mod 4 ≠ 0, so it is not a leap year, so skip this step.</li>
+                    </ol>
+                    <p>Therefore the final answer is 2 = Tuesday.</p>
+                  </div>
                 </div>
               </div>
             </div>
@@ -2503,6 +2476,7 @@
       const summaryItems=[
         {label:'Date:',value:fmt(date.y,date.m,date.d)},
         {label:'Weekday:',value:weekdayLabel},
+        {label:'Day code:',value:activeBreakdown.dayCode},
         {label:'Month code:',value:activeBreakdown.monthCode},
         {label:'ab code:',value:activeBreakdown.abCodeDisplay},
         {label:'cd code:',value:activeBreakdown.cdCodeDisplay},
@@ -2545,9 +2519,18 @@
             </div>
           </div>
           <div className="space-y-2 text-[13px] text-purple-100/80">
-            {activeBreakdown.lines.map((line,idx)=>(
-              <p key={idx}>{line}</p>
-            ))}
+            <ol className="list-decimal list-inside space-y-2">
+              {activeBreakdown.steps.map((stepLines,idx)=>(
+                <li key={idx} className="space-y-1">
+                  {stepLines.map((line,subIdx)=>(
+                    <p key={subIdx}>{line}</p>
+                  ))}
+                </li>
+              ))}
+            </ol>
+            {activeBreakdown.conclusion && (
+              <p>{activeBreakdown.conclusion}</p>
+            )}
           </div>
         </div>
       );
