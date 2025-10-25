@@ -457,6 +457,9 @@
       const [statsOff,setStatsOff]=useState(false);
       const [trackClassic,setTrackClassic]=useState(false);    // avg time enabled? (classic)
       const [trackDed,setTrackDed]=useState(false);            // avg time enabled? (deduction)
+      const [trackBlitz,setTrackBlitz]=useState(true);         // avg time enabled? (blitz)
+      const [trackSudden,setTrackSudden]=useState(true);       // avg time enabled? (sudden death)
+      const [trackFlash,setTrackFlash]=useState(true);         // avg time enabled? (flash)
 
       const tStartRef=useRef(null);
       const [flash,setFlash]=useState(null);
@@ -940,12 +943,19 @@
         return ()=>cancelAnimationFrame(raf);
       },[mode,blitzSec,statsOff,blitzRunning,active,phase]);
 
-      const trackingOn = ()=> (isTimer(mode) || (mode==="classic"&&trackClassic) || (mode==="deduction"&&trackDed));
-      const avgDisabled = !((mode==="classic"&&trackClassic) || (mode==="deduction"&&trackDed) || isTimer(mode));
+      const trackingOn = ()=>{
+        if(mode==="classic") return trackClassic;
+        if(mode==="deduction") return trackDed;
+        if(mode==="blitz") return trackBlitz;
+        if(mode==="sudden") return trackSudden;
+        if(mode==="flash") return trackFlash;
+        return false;
+      };
+      const avgTrackingEnabled = trackingOn();
+      const avgDisabled = !avgTrackingEnabled;
       const statsPressed = !statsOff;
       const handleStatsBoxToggle = ()=>{ setStatsOff(prev=>!prev); };
-      const avgTrackingEnabled = (mode==="classic"?trackClassic : mode==="deduction"?trackDed : true);
-      const canToggleAvg = (mode==="classic" || mode==="deduction");
+      const canToggleAvg = (["classic","deduction","blitz","sudden","flash"].includes(mode));
       const handleAvgStatToggle = ()=>{
         if(!canToggleAvg) return;
         toggleAvg(avgTrackingEnabled);
@@ -978,7 +988,7 @@
           setFlashRemainMs(flashMs);
           flashTimerRef.current=setTimeout(endFlashPhase,Math.max(50,flashMs));
         }
-        tStartRef.current=performance.now();
+        tStartRef.current=trackingOn()?performance.now():null;
         pushAndNext();
       };
 
@@ -1827,14 +1837,33 @@
 
       /* Avg toggle click handler (disable/enable) */
       function toggleAvg(disable){
-        if(mode!=="classic" && mode!=="deduction") return;
+        if(!["classic","deduction","blitz","sudden","flash"].includes(mode)) return;
         if(disable){ // turning OFF tracking
-          if(mode==="classic") setTrackClassic(false); else setTrackDed(false);
+          if(mode==="classic") setTrackClassic(false);
+          else if(mode==="deduction") setTrackDed(false);
+          else if(mode==="blitz") setTrackBlitz(false);
+          else if(mode==="sudden") setTrackSudden(false);
+          else setTrackFlash(false);
           tStartRef.current=null;
-        }else{       // turning ON tracking -> acts like New (no penalty)
-          if(mode==="classic") setTrackClassic(true); else setTrackDed(true);
-          doNew();
-          tStartRef.current=performance.now();
+        }else{       // turning ON tracking
+          if(mode==="classic"){
+            setTrackClassic(true);
+            doNew();
+            tStartRef.current=performance.now();
+          }else if(mode==="deduction"){
+            setTrackDed(true);
+            doNew();
+            tStartRef.current=performance.now();
+          }else if(mode==="blitz"){
+            setTrackBlitz(true);
+            tStartRef.current=active?performance.now():null;
+          }else if(mode==="sudden"){
+            setTrackSudden(true);
+            tStartRef.current=active?performance.now():null;
+          }else if(mode==="flash"){
+            setTrackFlash(true);
+            tStartRef.current=active?performance.now():null;
+          }
         }
       }
 
