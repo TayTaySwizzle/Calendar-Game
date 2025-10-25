@@ -2211,7 +2211,7 @@
       const listMargin = title ? "mt-2" : "mt-1";
       return (
         <div>
-          {title && <h4 className="text-sm font-semibold text-purple-100/90">{title}</h4>}
+          {title && <h4 className="text-sm font-semibold text-purple-100/90 text-center">{title}</h4>}
           <ol className={`${listMargin} space-y-2 text-sm text-purple-100/80 list-decimal list-inside`}>
             {breakdown.steps.map((step,idx)=>(
               <li key={idx}>
