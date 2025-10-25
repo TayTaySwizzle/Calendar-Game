@@ -18,6 +18,10 @@
     .surface-button:hover{background:rgba(88,28,135,.48)}
     .surface-toggle{background:rgba(88,28,135,.24);transition:background-color .2s ease-in-out}
     .surface-toggle:hover{background:rgba(88,28,135,.4)}
+    .btn-solid{background:#7c3aed;color:#fff;transition:background-color .2s ease-in-out,box-shadow .2s ease-in-out}
+    .btn-solid:hover{background:#6d28d9}
+    .btn-solid:focus-visible{outline:2px solid rgba(196,181,253,.55);outline-offset:2px}
+    .btn-solid[aria-disabled="true"],.btn-solid:disabled{opacity:.6;cursor:not-allowed}
     button,input,select{-webkit-tap-highlight-color:transparent}
     button{touch-action:manipulation}
     @keyframes flashPulse{0%{background:var(--bg0)}
@@ -1369,7 +1373,7 @@
           {[{k:'AD',label:'AD'},{k:'BOTH',label:'AD+BC'},{k:'BC',label:'BC'}].map(seg=>(
             <button key={seg.k} type="button"
               onClick={()=>{ if(era!==seg.k) applyEra(seg.k); }}
-              className={`flex-1 px-3 py-1.5 text-sm ${era===seg.k ? 'bg-purple-600' : 'surface-toggle'} ${seg.k!=='BC'?'border-r border-purple-800/60':''}`}>
+              className={`flex-1 px-3 py-1.5 text-sm font-medium ${era===seg.k ? 'btn-solid text-white' : 'surface-toggle text-purple-100/80'} ${seg.k!=='BC'?'border-r border-purple-800/60':''}`}>
               {seg.label}
             </button>
           ))}
@@ -1753,7 +1757,7 @@
                 </div>
                 <div className="col-span-1 md:col-span-2 flex justify-end">
                   <button type="button"
-                    className="text-sm px-3 py-1.5 rounded-xl bg-purple-700 hover:bg-purple-600 w-full md:w-auto h-full flex items-center justify-center"
+                    className="text-sm px-3 py-1.5 rounded-xl btn-solid w-full md:w-auto h-full flex items-center justify-center"
                     onClick={handleResetStats}>Reset stats</button>
                 </div>
                 {timerSettingControl && (
@@ -1854,7 +1858,7 @@
                       !active ? (
                         <button
                           type="button"
-                          className="col-span-2 px-6 sm:px-7 py-2 rounded-xl bg-purple-600 text-white text-sm font-medium"
+                          className="col-span-2 px-6 sm:px-7 py-2 rounded-xl btn-solid text-sm font-medium"
                           onClick={()=>begin()}
                         >Begin</button>
                       ) : (
@@ -1900,7 +1904,7 @@
                 <div className="mt-3 flex flex-wrap gap-2 justify-center">
                   {["day","month","year"].map(t=>(
                     <button key={t} type="button" onClick={()=>changeDedType(t)}
-                      className={`px-3 py-1.5 rounded-xl text-sm border ${dedType===t?'bg-purple-600 border-purple-500':'surface-toggle border-purple-800/60'}`}>
+                      className={`px-3 py-1.5 rounded-xl text-sm font-medium border ${dedType===t?'btn-solid border-purple-500 text-white':'surface-toggle border-purple-800/60 text-purple-100/80'}`}>
                       {t[0].toUpperCase()+t.slice(1)}
                     </button>
                   ))}
@@ -2250,14 +2254,14 @@
                 <button
                   type="button"
                   onClick={()=>setViewMode('advanced')}
-                  className={`px-3 py-1.5 text-xs font-semibold ${viewMode==='advanced'?'bg-purple-600 text-white':'surface-toggle text-purple-100/80'}`}
+                  className={`px-3 py-1.5 text-xs font-semibold ${viewMode==='advanced'?'btn-solid text-white':'surface-toggle text-purple-100/80'}`}
                 >
                   Advanced
                 </button>
                 <button
                   type="button"
                   onClick={()=>setViewMode('beginner')}
-                  className={`px-3 py-1.5 text-xs font-semibold border-l border-purple-700/60 ${viewMode==='beginner'?'bg-purple-600 text-white':'surface-toggle text-purple-100/80'}`}
+                  className={`px-3 py-1.5 text-xs font-semibold border-l border-purple-700/60 ${viewMode==='beginner'?'btn-solid text-white':'surface-toggle text-purple-100/80'}`}
                 >
                   Beginner
                 </button>
@@ -2273,9 +2277,7 @@
               )}
             </div>
           </div>
-          <div className="rounded-2xl panel p-3">
-            <MethodStepsList title={`${viewMode==='advanced'?'Advanced':'Beginner'} path`} breakdown={activeBreakdown}/>
-          </div>
+          <MethodStepsList title={`${viewMode==='advanced'?'Advanced':'Beginner'} path`} breakdown={activeBreakdown}/>
         </div>
       );
     }
@@ -2306,7 +2308,7 @@
         }
       };
       const outerClass = className ?? 'mt-5';
-      const defaultButtonClass = 'w-full md:w-auto px-4 py-2 rounded-xl bg-purple-700 hover:bg-purple-600 text-sm font-medium';
+      const defaultButtonClass = 'w-full md:w-auto px-4 py-2 rounded-xl btn-solid text-sm font-medium';
       const disabledClass = !hasDate ? ' opacity-60 cursor-not-allowed pointer-events-none' : '';
       const buttonClasses = `${buttonClassName ?? defaultButtonClass}${disabledClass}`;
       const contentClasses = contentClassName ?? 'mt-3 rounded-2xl panel p-4';
@@ -2429,7 +2431,7 @@
             <div className="flex flex-wrap items-stretch gap-2">
               <input value={lookupIn} onChange={e=>setLookupIn(e.target.value)} placeholder="e.g., 7/4/1776"
                     className="panel rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-400 flex-1 min-w-0"/>
-              <button type="button" onClick={()=>runLookup()} className="px-4 py-2 rounded-xl bg-purple-600 text-white text-sm font-medium">Lookup</button>
+              <button type="button" onClick={()=>runLookup()} className="px-4 py-2 rounded-xl btn-solid text-sm font-medium">Lookup</button>
               <button type="button" onClick={()=>clearLookup()} className="px-4 py-2 rounded-xl bg-zinc-700 text-white text-sm font-medium">Clear</button>
             </div>
             {lookupOut && <div className="text-sm">{lookupOut}</div>}
@@ -2464,7 +2466,7 @@
             <MethodBreakdownSection
               date={calcDateValue}
               className="pt-4 border-t border-purple-500/40"
-              buttonClassName="w-full px-4 py-2 rounded-xl bg-purple-700 hover:bg-purple-600 text-sm font-medium"
+              buttonClassName="w-full px-4 py-2 rounded-xl btn-solid text-sm font-medium"
               contentClassName="mt-3 rounded-xl panel p-3"
               open={calcOpenValue}
               onOpenChange={setCalcOpen}
