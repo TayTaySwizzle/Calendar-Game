@@ -455,8 +455,60 @@
       const S = (statsByMode[mode]?.[era]) || blankStats();
 
       const [statsOff,setStatsOff]=useState(false);
-      const [trackClassic,setTrackClassic]=useState(false);    // avg time enabled? (classic)
-      const [trackDed,setTrackDed]=useState(false);            // avg time enabled? (deduction)
+      const [avgTrackingByMode,setAvgTrackingByMode]=useState({
+        classic:false,
+        deduction:false,
+        blitz:true,
+        sudden:true,
+        flash:true
+      });
+      const trackClassic = avgTrackingByMode.classic;
+      const trackDed = avgTrackingByMode.deduction;
+      const trackBlitz = avgTrackingByMode.blitz;
+      const trackSudden = avgTrackingByMode.sudden;
+      const trackFlash = avgTrackingByMode.flash;
+      const getTrackState = (modeKey)=>{
+        switch(modeKey){
+          case 'classic': return trackClassic;
+          case 'deduction': return trackDed;
+          case 'blitz': return trackBlitz;
+          case 'sudden': return trackSudden;
+          case 'flash': return trackFlash;
+          default: return false;
+        }
+      };
+      const setAvgTracking = (modeKey,value)=>{
+        setAvgTrackingByMode(prev=>{
+          if(prev[modeKey]===value) return prev;
+          return {...prev, [modeKey]:value};
+        });
+      };
+      const setTrackClassic = value=>setAvgTracking('classic',value);
+      const setTrackDed = value=>setAvgTracking('deduction',value);
+      const setTrackBlitz = value=>setAvgTracking('blitz',value);
+      const setTrackSudden = value=>setAvgTracking('sudden',value);
+      const setTrackFlash = value=>setAvgTracking('flash',value);
+      const setTrackForMode = (modeKey,value)=>{
+        switch(modeKey){
+          case 'classic':
+            setTrackClassic(value);
+            break;
+          case 'deduction':
+            setTrackDed(value);
+            break;
+          case 'blitz':
+            setTrackBlitz(value);
+            break;
+          case 'sudden':
+            setTrackSudden(value);
+            break;
+          case 'flash':
+            setTrackFlash(value);
+            break;
+          default:
+            break;
+        }
+      };
 
       const tStartRef=useRef(null);
       const [flash,setFlash]=useState(null);
@@ -575,13 +627,13 @@
       const prevStatsOffRef=useRef(statsOff);
       useEffect(()=>{
         if(prevStatsOffRef.current && !statsOff){
-          const trackingActive = (mode==="classic" && trackClassic) || (mode==="deduction" && trackDed);
+          const trackingActive = getTrackState(mode);
           if(trackingActive){
             doNew();
           }
         }
         prevStatsOffRef.current=statsOff;
-      },[statsOff, mode, trackClassic, trackDed]);
+      },[statsOff, mode, trackClassic, trackDed, trackBlitz, trackSudden, trackFlash]);
 
       /* ===== Range helpers ===== */
       const fmtRangeYear = (y)=> y>0?`${y} AD`:`${Math.abs(y)} BC`;
@@ -940,12 +992,12 @@
         return ()=>cancelAnimationFrame(raf);
       },[mode,blitzSec,statsOff,blitzRunning,active,phase]);
 
-      const trackingOn = ()=> (isTimer(mode) || (mode==="classic"&&trackClassic) || (mode==="deduction"&&trackDed));
-      const avgDisabled = !((mode==="classic"&&trackClassic) || (mode==="deduction"&&trackDed) || isTimer(mode));
+      const trackingOn = ()=> getTrackState(mode);
+      const avgTrackingEnabled = getTrackState(mode);
+      const avgDisabled = !avgTrackingEnabled;
       const statsPressed = !statsOff;
       const handleStatsBoxToggle = ()=>{ setStatsOff(prev=>!prev); };
-      const avgTrackingEnabled = (mode==="classic"?trackClassic : mode==="deduction"?trackDed : true);
-      const canToggleAvg = (mode==="classic" || mode==="deduction");
+      const canToggleAvg = (mode==="classic" || mode==="deduction" || isTimer(mode));
       const handleAvgStatToggle = ()=>{
         if(!canToggleAvg) return;
         toggleAvg(avgTrackingEnabled);
@@ -1013,7 +1065,22 @@
 
       const clearLookupHistory = ()=>setLookupHistory([]);
 
-      useEffect(()=>{ if(mode==="classic" && trackClassic) tStartRef.current=performance.now(); },[mode,trackClassic,date]);
+      useEffect(()=>{
+        if(mode==="classic"){
+          if(trackClassic){
+            tStartRef.current=performance.now();
+          }else{
+            tStartRef.current=null;
+          }
+        }else if(isTimer(mode)){
+          const trackEnabled = mode==="blitz"?trackBlitz : mode==="sudden"?trackSudden : trackFlash;
+          if(trackEnabled && active){
+            tStartRef.current=performance.now();
+          }else{
+            tStartRef.current=null;
+          }
+        }
+      },[mode,date,trackClassic,trackBlitz,trackSudden,trackFlash,active]);
 
       /* New (never counts wrong) */
       const doNew=(opts={})=>{
@@ -1765,8 +1832,7 @@
 
       /* should reset stats create a new date? */
       function shouldNewOnReset(){
-        const avgEnabled = (mode==="classic"?trackClassic : mode==="deduction"?trackDed : true);
-        if(!avgEnabled && !countedWrong) return false;
+        if(!avgTrackingEnabled && !countedWrong) return false;
         return true;
       }
 
@@ -1827,14 +1893,19 @@
 
       /* Avg toggle click handler (disable/enable) */
       function toggleAvg(disable){
-        if(mode!=="classic" && mode!=="deduction") return;
+        const modeKey = mode;
+        if(!(modeKey==="classic" || modeKey==="deduction" || isTimer(modeKey))) return;
         if(disable){ // turning OFF tracking
-          if(mode==="classic") setTrackClassic(false); else setTrackDed(false);
+          setTrackForMode(modeKey,false);
           tStartRef.current=null;
         }else{       // turning ON tracking -> acts like New (no penalty)
-          if(mode==="classic") setTrackClassic(true); else setTrackDed(true);
+          setTrackForMode(modeKey,true);
           doNew();
-          tStartRef.current=performance.now();
+          if(isTimer(modeKey)){
+            tStartRef.current = active ? performance.now() : null;
+          }else{
+            tStartRef.current=performance.now();
+          }
         }
       }
 
