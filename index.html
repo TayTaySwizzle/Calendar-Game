@@ -117,87 +117,100 @@
       return {key:chosen[0],code:chosen[1],exact};
     }
 
-    function computeMethodBreakdown({y,m,d},mode="beginner"){ // returns steps + result
+    function computeMethodBreakdown({y,m,d},mode="beginner"){ // returns detailed breakdown info
       if(!Number.isFinite(y) || y<=0) return {supported:false,error:"The written method covers AD years only."};
-      const steps=[];
       const monthCode = METHOD_MONTH_CODES[m] ?? null;
       if(monthCode==null) return {supported:false,error:"Invalid month for the method."};
-      let running=((monthCode%7)+7)%7;
-      steps.push({
-        title:"Month code",
-        detail:`Start with the month code for ${MONTH[m-1]}: ${monthCode}.`,
-        total:running
-      });
 
       const dayMod=((d%7)+7)%7;
-      running=(running+dayMod)%7;
-      steps.push({
-        title:"Add the day",
-        detail:`Add the day mod 7: ${d} mod 7 = ${dayMod}. Running total: ${running}.`,
-        total:running
-      });
+      const monthPlusDay = monthCode + dayMod;
+      let running = ((monthCode%7)+7)%7;
+      running = (running + dayMod)%7;
+      const afterDay = running;
 
       const centuryInfo=methodCenturyCode(y);
-      running=(running+centuryInfo.code)%7;
-      steps.push({
-        title:"ab mod 4 code",
-        detail:`The century is ${centuryInfo.century}. ${centuryInfo.century} mod 4 = ${centuryInfo.remainder}. Using the ab mod 4 codes, that maps to ${centuryInfo.code}. Running total: ${running}.`,
-        total:running
-      });
+      const abCode=((centuryInfo.code%7)+7)%7;
+      const beforeAb=afterDay;
+      const abSumRaw=beforeAb+abCode;
+      running=(running+abCode)%7;
+      const afterAb=running;
 
-      const cd=y%100;
+      const cd=((y%100)+100)%100;
       const keyInfo=methodKeyYearInfo(cd,mode);
-      running=(running+keyInfo.code)%7;
-      steps.push({
-        title:"Key cd year code",
-        detail: keyInfo.exact
-          ? `${cd.toString().padStart(2,'0')} is a key cd year with code ${keyInfo.code}. Running total: ${running}.`
-          : `${cd.toString().padStart(2,'0')} is not on the list, so use the closest key cd year ≤ it: ${keyInfo.key.toString().padStart(2,'0')} with code ${keyInfo.code}. Running total: ${running}.`,
-        total:running,
-        meta:{keyInfo}
-      });
+      const keyContribution=((keyInfo.code%7)+7)%7;
+      const beforeKey=afterAb;
+      const keySumRaw=beforeKey+keyContribution;
+      running=(running+keyContribution)%7;
+      const afterKey=running;
 
       const diff=cd-keyInfo.key;
+      const diffQuotient=diff>0?Math.floor(diff/4):0;
+      const diffModRaw=diff>0?((diff%7)+7)%7:0;
+      const diffSumRaw=diff>0?diff+diffQuotient:0;
+      const diffContribution=diff>0?((diffSumRaw%7)+7)%7:0;
+      const beforeDiff=afterKey;
+      const diffTotalRaw=beforeDiff+diffContribution;
       if(diff>0){
-        const quotient=Math.floor(diff/4);
-        const contribution=(diff+quotient)%7;
-        running=(running+contribution)%7;
-        steps.push({
-          title:"Add the difference",
-          detail:`Add the difference ${diff} and ⌊${diff} / 4⌋ = ${quotient}. (${diff} + ${quotient}) mod 7 = ${contribution}. Running total: ${running}.`,
-          total:running
-        });
-      }else{
-        steps.push({
-          title:"Add the difference",
-          detail:"The key cd year matches the year, so there is no difference to add.",
-          total:running
-        });
+        running=(running+diffContribution)%7;
       }
+      const afterDiff=running;
 
-      const leap=isLeap(y) && (m===1 || m===2);
-      if(leap){
+      const leapYear=isLeap(y);
+      const leapApplies=leapYear && (m===1 || m===2);
+      const beforeLeap=afterDiff;
+      const leapResultRaw=beforeLeap-1;
+      if(leapApplies){
         running=(running+6)%7; // subtract 1
-        steps.push({
-          title:"Leap year adjustment",
-          detail:`${fmtYear(y)} is a leap year and the month is ${MONTH[m-1]}, so subtract 1. Running total: ${running}.`,
-          total:running
-        });
-      }else{
-        steps.push({
-          title:"Leap year adjustment",
-          detail:"No subtraction is needed (not a January/February leap-year date).",
-          total:running
-        });
       }
+      const finalTotal=running;
 
-      steps.push({
-        title:"Final weekday",
-        detail:`${MONTH[m-1]} ${d}, ${y} lands on ${DAY[running]}.`,
-        total:running
-      });
+      const weekday=DAY[running];
+      const cdContribution=((keyContribution+diffContribution)%7+7)%7;
 
-      return {supported:true,steps,total:running,weekday:DAY[running],cd,monthCode,dayMod,centuryInfo,keyInfo,diff,leap};
+      return {
+        supported:true,
+        weekday,
+        total:finalTotal,
+        date:{y,m,d},
+        monthCode,
+        dayMod,
+        monthPlusDay,
+        afterDay,
+        ab:{
+          code:abCode,
+          century:centuryInfo.century,
+          remainder:centuryInfo.remainder,
+          rawSum:abSumRaw,
+          after:afterAb
+        },
+        cdInfo:{
+          value:cd,
+          key:keyInfo.key,
+          code:keyInfo.code,
+          exact:keyInfo.exact,
+          contribution:keyContribution,
+          rawSum:keySumRaw,
+          after:afterKey,
+          diff,
+          diffQuotient,
+          diffMod:diffModRaw,
+          diffSum:diffSumRaw,
+          diffContribution,
+          diffAfter:afterDiff,
+          diffTotalRaw
+        },
+        leap:{
+          isLeap:leapYear,
+          applies:leapApplies,
+          before:beforeLeap,
+          after:finalTotal,
+          raw:leapResultRaw
+        },
+        summary:{
+          cdContribution,
+          abCode
+        }
+      };
     }
 
     function buildMethodBreakdowns(date){
@@ -2144,7 +2157,11 @@
                   <div className="font-semibold text-[13px] text-purple-100/90">{section.label}</div>
                   <div className="grid grid-cols-2 gap-y-1 text-[13px] text-purple-100/80 mt-1">
                     {section.codes.map(([value,code])=>(
-                      <div key={value} className="flex justify-between"><span>{value} →</span><span className="font-semibold">{code}</span></div>
+                      <div key={value} className="grid grid-cols-[auto_auto_auto] items-center gap-x-1">
+                        <span>{value}</span>
+                        <span className="opacity-80">→</span>
+                        <span className="font-semibold justify-self-end">{code}</span>
+                      </div>
                     ))}
                   </div>
                   {section.note && <p className="mt-1 text-[12px] text-purple-200/70">{section.note}</p>}
@@ -2160,7 +2177,11 @@
                 <div className="font-semibold text-[13px] text-purple-100/90">{section.label}</div>
                 <div className="grid grid-cols-3 sm:grid-cols-4 gap-y-1 text-[13px] text-purple-100/80">
                   {section.codes.map(([year,code])=>(
-                    <div key={`${section.label}-${year}`} className="flex justify-between"><span>{year.toString().padStart(2,'0')} →</span><span className="font-semibold">{code}</span></div>
+                    <div key={`${section.label}-${year}`} className="grid grid-cols-[auto_auto_auto] items-center gap-x-1">
+                      <span>{year.toString().padStart(2,'0')}</span>
+                      <span className="opacity-80">→</span>
+                      <span className="font-semibold justify-self-end">{code}</span>
+                    </div>
                   ))}
                 </div>
                 {section.note && <p className="text-[12px] text-purple-200/70">{section.note}</p>}
@@ -2186,12 +2207,12 @@
             <p className="text-[13px] text-purple-200/80">1992 is an AD leap year. Below is the step-by-step computation using both the beginner list and the advanced list.</p>
             <div className="grid gap-4 md:grid-cols-2">
               <div className="rounded-xl thin p-3">
-                <h4 className="text-sm font-semibold text-purple-100/90">Beginner</h4>
-                <MethodStepsList breakdown={exampleBreakdowns.beginner}/>
+                <h4 className="text-sm font-semibold text-purple-100/90">Example 1</h4>
+                <MethodStepsList breakdown={exampleBreakdowns.beginner} mode="beginner"/>
               </div>
               <div className="rounded-xl thin p-3">
-                <h4 className="text-sm font-semibold text-purple-100/90">Advanced</h4>
-                <MethodStepsList breakdown={exampleBreakdowns.advanced}/>
+                <h4 className="text-sm font-semibold text-purple-100/90">Example 2</h4>
+                <MethodStepsList breakdown={exampleBreakdowns.advanced} mode="advanced"/>
               </div>
             </div>
             <p className="text-[13px] text-purple-200/80">Both paths end at 3, which is Wednesday.</p>
@@ -2200,7 +2221,7 @@
       );
     }
 
-    function MethodStepsList({title,breakdown}){
+    function MethodStepsList({title,breakdown,mode="beginner"}){
       if(!breakdown?.supported){
         return (
           <div className="p-3 rounded-xl panel text-sm text-purple-100/90">
@@ -2208,16 +2229,39 @@
           </div>
         );
       }
+      const {date,monthCode,dayMod,monthPlusDay,afterDay,ab,cdInfo,leap,weekday,total}=breakdown;
+      const monthLabel = MONTH[date.m-1];
+      const abSource = Math.floor(date.y/100);
+      const cdLabel = cdInfo.value.toString().padStart(2,'0');
+      const keyLabel = cdInfo.key.toString().padStart(2,'0');
+      const diffLine = cdInfo.diff>0
+        ? `${cdLabel} - ${keyLabel} = ${cdInfo.diff}. ${cdInfo.diff} mod 7 = ${cdInfo.diffMod}. ${cdInfo.diff} / 4 = ${cdInfo.diffQuotient}, so add ${cdInfo.diffQuotient}. ${cdInfo.diff} + ${cdInfo.diffQuotient} = ${cdInfo.diffSum}. ${cdInfo.diffSum} mod 7 = ${cdInfo.diffContribution}. ${cdInfo.after} + ${cdInfo.diffContribution} = ${cdInfo.diffTotalRaw}.`
+        : "No difference to add.";
+      const leapLine = leap.applies
+        ? `${date.y} is a leap year, so subtract 1. ${leap.before} - 1 = ${leap.before-1}. ${leap.before-1} mod 7 = ${leap.after}.`
+        : (leap.isLeap
+            ? `${date.y} is a leap year, but the date is not in January or February, so skip this step.`
+            : `${date.y} is not a leap year, so skip this step.`);
+      const modeLabel = mode==='advanced'?'advanced':'beginner';
+      const cdLineBase = cdInfo.exact
+        ? `${cdLabel} is a ${modeLabel} cd year. ${cdLabel} has cd code ${cdInfo.contribution}. ${ab.after} + ${cdInfo.contribution} = ${cdInfo.rawSum}. ${cdInfo.rawSum} mod 7 = ${cdInfo.after}.`
+        : `${cdLabel} is not a ${modeLabel} cd year. ${keyLabel} is the closest ${modeLabel} year less than ${cdLabel}. ${keyLabel} has cd code ${cdInfo.contribution}${cdInfo.contribution===0?'; total remains unchanged.':`. ${ab.after} + ${cdInfo.contribution} = ${cdInfo.rawSum}. ${cdInfo.rawSum} mod 7 = ${cdInfo.after}.`}`;
+      const stepThree = `${abSource} mod 4 = ${ab.remainder}. ab code = ${ab.code}. ${afterDay} + ${ab.code} = ${ab.rawSum}. ${ab.rawSum} mod 7 = ${ab.after}. ${cdLineBase}`;
+      const steps=[
+        `${monthLabel} month code: ${monthCode}.`,
+        `${date.d} mod 7 = ${dayMod}. Add the day to the month code: ${monthCode} + ${dayMod} = ${monthPlusDay}. ${monthPlusDay} mod 7 = ${afterDay}.`,
+        stepThree,
+        diffLine,
+        leapLine,
+        `Therefore the final answer is ${total} = ${weekday}.`
+      ];
       const listMargin = title ? "mt-2" : "mt-1";
       return (
         <div>
           {title && <h4 className="text-sm font-semibold text-purple-100/90 text-center">{title}</h4>}
           <ol className={`${listMargin} space-y-2 text-sm text-purple-100/80 list-decimal list-inside`}>
-            {breakdown.steps.map((step,idx)=>(
-              <li key={idx}>
-                <div className="font-medium text-purple-100">{step.title}</div>
-                <div className="text-[13px] text-purple-200/80 leading-relaxed">{step.detail}</div>
-              </li>
+            {steps.map((text,idx)=>(
+              <li key={idx} className="text-[13px] text-purple-200/80 leading-relaxed">{text}</li>
             ))}
           </ol>
         </div>
@@ -2243,11 +2287,15 @@
       return (
         <div className="space-y-4">
           <div className="grid items-start gap-3 md:gap-4" style={{gridTemplateColumns:'minmax(0,1fr) auto'}}>
-            <div className="text-sm text-purple-100/80 min-w-0">
+            <div className="text-sm text-purple-100/80 min-w-0 space-y-1">
               <div><span className="font-semibold">Date:</span> {fmt(date.y,date.m,date.d)}</div>
               <div><span className="font-semibold">Weekday:</span> {weekdayLabel}</div>
-              <div><span className="font-semibold">Month code:</span> {METHOD_MONTH_CODES[date.m]}</div>
-              <div><span className="font-semibold">cd:</span> {cdValue<10?`0${cdValue}`:cdValue}</div>
+              <div className="grid grid-cols-2 gap-x-4 text-[13px] pt-1">
+                <div><span className="font-semibold">Month code:</span> {activeBreakdown?.monthCode ?? '—'}</div>
+                <div><span className="font-semibold">ab code:</span> {activeBreakdown?.summary?.abCode ?? '—'}</div>
+                <div><span className="font-semibold">cd code:</span> {activeBreakdown?.summary?.cdContribution ?? '—'}</div>
+                <div><span className="font-semibold">Leap year:</span> {activeBreakdown?.leap?.isLeap ? 'Yes' : 'No'}</div>
+              </div>
             </div>
             <div className="flex flex-col items-end gap-2 text-sm">
               <div className="flex overflow-hidden rounded-xl border border-purple-700/60">
@@ -2277,7 +2325,11 @@
               )}
             </div>
           </div>
-          <MethodStepsList title={`${viewMode==='advanced'?'Advanced':'Beginner'} path`} breakdown={activeBreakdown}/>
+          <MethodStepsList
+            title={`${viewMode==='advanced'?'Advanced':'Beginner'} path`}
+            breakdown={activeBreakdown}
+            mode={viewMode}
+          />
         </div>
       );
     }
