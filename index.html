@@ -1818,24 +1818,11 @@
             )}
             {/* Headline */}
             {mode!=="lookup" && mode!=="deduction" && mode!=="method" && (
-              <div className="text-center">
-                <div className="text-xs uppercase tracking-widest text-purple-100/80">What day is this?</div>
-                <div className="mt-1 text-3xl md:text-4xl font-bold">{shouldShowTimerDate ? ((mode==="flash"&&active&&phase==='hide')?"…": fmt(date.y,date.m,date.d)) : "—"}</div>
-              </div>
-            )}
-            {mode==="deduction" && (
-              <div className="text-center">
-                <div className="text-xs uppercase tracking-widest text-purple-100/80">
-                  {dedType==="year"?"What year is this?":dedType==="month"?"What month is this?":"What day is this?"}
+              <div className="mt-4 rounded-2xl panel p-4">
+                <div className="text-center">
+                  <div className="text-xs uppercase tracking-widest text-purple-100/80">What day is this?</div>
+                  <div className="mt-1 text-3xl md:text-4xl font-bold">{shouldShowTimerDate ? ((mode==="flash"&&active&&phase==='hide')?"…": fmt(date.y,date.m,date.d)) : "—"}</div>
                 </div>
-                <div className="mt-1 text-3xl md:text-4xl font-bold">{ded ? (ded.type==="year"?`${MONTH[ded.m-1]} ${ded.d}`: ded.type==="month"?`${ded.d}, ${fmtYear(ded.y)}` : `${MONTH[ded.m-1]}, ${fmtYear(ded.y)}`) : "—"}</div>
-                {ded && <div className="mt-1 text-lg md:text-xl text-purple-100">Weekday:&nbsp;<span className="font-semibold text-xl">{DAY[ded.w]}</span></div>}
-              </div>
-            )}
-
-            {/* ======= CLASSIC / BLITZ / SUDDEN / FLASH ======= */}
-            {["classic","blitz","sudden","flash"].includes(mode) && (
-              <>
                 <div className={`mt-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3 ${optionsDisabled?'opacity-60 pointer-events-none':''}`}>
                   {DAY.map((n,i)=>{
                     const saturdayPosition = i===DAY.length-1
@@ -1848,60 +1835,17 @@
                     );
                   })}
                 </div>
-
-                {/* Action bubble */}
-                <div className="mt-4 rounded-2xl panel p-3">
-                  <div className="flex flex-nowrap items-center gap-2 sm:gap-3">
-                    {isTimer(mode) ? (
-                      !active ? (
-                        <button
-                          type="button"
-                          className="flex-1 px-6 sm:px-7 py-2 rounded-xl bg-purple-600 text-white text-sm font-medium"
-                          onClick={()=>begin()}
-                        >Begin</button>
-                      ) : (
-                        <button
-                          type="button"
-                          className="flex-1 px-6 sm:px-7 py-2 rounded-xl bg-rose-600/90 text-white text-sm font-medium"
-                          onClick={()=>arm()}
-                        >Reset</button>
-                      )
-                    ) : (
-                      <button
-                        type="button"
-                        className="flex-1 px-6 sm:px-7 py-2 rounded-xl border surface-button text-sm font-medium"
-                        onClick={()=>doNew()}
-                      >New</button>
-                    )}
-                    <button
-                      type="button"
-                      className={`px-3 py-2 rounded-xl border surface-button text-sm font-medium basis-20 sm:basis-24 shrink-0 text-center ${revealDisabled?'opacity-60 pointer-events-none':''}`}
-                      onClick={()=>reveal()}
-                    >Reveal</button>
-                    <button
-                      type="button"
-                      className={`px-3 py-2 rounded-xl border surface-button text-sm font-medium basis-20 sm:basis-24 shrink-0 text-center ${timerBusy?'opacity-60 pointer-events-none':''}`}
-                      onClick={()=>goBack()}
-                    >Back</button>
-                  </div>
-
-                  {(msg || guesses.length>0) && (
-                    <div className="mt-3 text-purple-100/90 text-sm">
-                      {(guesses.length>0) && (
-                        <div className="flex flex-wrap gap-1 items-center"><span className="text-purple-300/80 text-xs mr-1">{mode==="sudden"?"Guess:":"Guesses:"}</span>{guesses.map(g=><span key={g} className="chip">{g}</span>)}</div>
-                      )}
-                      {msg && (
-                        <div className={`${guesses.length>0?'mt-2':''}`}>{msg}</div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </>
+              </div>
             )}
-
-            {/* ======= DEDUCTION ======= */}
             {mode==="deduction" && (
-              <>
+              <div className="mt-4 rounded-2xl panel p-4">
+                <div className="text-center">
+                  <div className="text-xs uppercase tracking-widest text-purple-100/80">
+                    {dedType==="year"?"What year is this?":dedType==="month"?"What month is this?":"What day is this?"}
+                  </div>
+                  <div className="mt-1 text-3xl md:text-4xl font-bold">{ded ? (ded.type==="year"?`${MONTH[ded.m-1]} ${ded.d}`: ded.type==="month"?`${ded.d}, ${fmtYear(ded.y)}` : `${MONTH[ded.m-1]}, ${fmtYear(ded.y)}`) : "—"}</div>
+                  {ded && <div className="mt-1 text-lg md:text-xl text-purple-100">Weekday:&nbsp;<span className="font-semibold text-xl">{DAY[ded.w]}</span></div>}
+                </div>
                 <div className="mt-3 flex flex-wrap gap-2 justify-center">
                   {["day","month","year"].map(t=>(
                     <button key={t} type="button" onClick={()=>changeDedType(t)}
@@ -1946,39 +1890,66 @@
                     </div>
                   )}
                 </div>
-
-                <div className="mt-4 rounded-2xl panel p-3">
-                  <div className="flex flex-nowrap items-center gap-2 sm:gap-3">
-                    <button
-                      type="button"
-                      className="flex-1 px-6 sm:px-7 py-2 rounded-xl border surface-button text-sm font-medium"
-                      onClick={()=>runDeductionRound()}
-                    >New</button>
-                    <button
-                      type="button"
-                      className={`px-3 py-2 rounded-xl border surface-button text-sm font-medium basis-20 sm:basis-24 shrink-0 text-center ${revealDisabled?'opacity-60 pointer-events-none':''}`}
-                      onClick={()=>reveal()}
-                    >Reveal</button>
-                    <button
-                      type="button"
-                      className="px-3 py-2 rounded-xl border surface-button text-sm font-medium basis-20 sm:basis-24 shrink-0 text-center"
-                      onClick={()=>goBack()}
-                    >Back</button>
-                  </div>
-                  {(msg || guesses.length>0) && (
-                    <div className="mt-3 text-sm">
-                      {guesses.length>0 && (
-                        <div className="flex flex-wrap gap-1 items-center"><span className="text-purple-300/80 text-xs mr-1">Guesses:</span>{guesses.map(g=><span key={g} className="chip">{g}</span>)}</div>
-                      )}
-                      {msg && (
-                        <div className={`${guesses.length>0?'mt-2':''}`}>{msg}</div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </>
+              </div>
             )}
-              {mode!=="method" && mode!=="guide" && <MethodBreakdownSection date={calcTarget} open={calcOpen} onOpenChange={handleCalculationOpenChange} onRequestNew={handleMethodNewRequest}/>}
+
+            {/* ======= CONTROL PANEL ======= */}
+            {mode!=="lookup" && mode!=="method" && mode!=="guide" && (
+              <div className="mt-4 rounded-2xl panel p-3">
+                <div className="flex flex-nowrap items-center gap-2 sm:gap-3">
+                  {isTimer(mode) ? (
+                    !active ? (
+                      <button
+                        type="button"
+                        className="grow basis-40 sm:basis-48 px-6 sm:px-7 py-2 rounded-xl bg-purple-600 text-white text-sm font-medium"
+                        onClick={()=>begin()}
+                      >Begin</button>
+                    ) : (
+                      <button
+                        type="button"
+                        className="grow basis-40 sm:basis-48 px-6 sm:px-7 py-2 rounded-xl bg-rose-600/90 text-white text-sm font-medium"
+                        onClick={()=>arm()}
+                      >Reset</button>
+                    )
+                  ) : (
+                    <button
+                      type="button"
+                      className="grow basis-40 sm:basis-48 px-6 sm:px-7 py-2 rounded-xl border surface-button text-sm font-medium"
+                      onClick={()=>doNew()}
+                    >New</button>
+                  )}
+                  <button
+                    type="button"
+                    className={`grow basis-20 sm:basis-24 px-3 py-2 rounded-xl border surface-button text-sm font-medium text-center ${revealDisabled?'opacity-60 pointer-events-none':''}`}
+                    onClick={()=>reveal()}
+                  >Reveal</button>
+                  <button
+                    type="button"
+                    className={`grow basis-20 sm:basis-24 px-3 py-2 rounded-xl border surface-button text-sm font-medium text-center ${timerBusy?'opacity-60 pointer-events-none':''}`}
+                    onClick={()=>goBack()}
+                  >Back</button>
+                </div>
+
+                {(msg || guesses.length>0) && (
+                  <div className="mt-3 text-sm text-purple-100/90">
+                    {(guesses.length>0) && (
+                      <div className="flex flex-wrap gap-1 items-center"><span className="text-purple-300/80 text-xs mr-1">{mode==="sudden"?"Guess:":"Guesses:"}</span>{guesses.map(g=><span key={g} className="chip">{g}</span>)}</div>
+                    )}
+                    {msg && (
+                      <div className={`${guesses.length>0?'mt-2':''}`}>{msg}</div>
+                    )}
+                  </div>
+                )}
+
+                <MethodBreakdownSection
+                  className="mt-3"
+                  date={calcTarget}
+                  open={calcOpen}
+                  onOpenChange={handleCalculationOpenChange}
+                  onRequestNew={handleMethodNewRequest}
+                />
+              </div>
+            )}
             </div>
           )}
         </div>
