@@ -7,7 +7,7 @@
   <title>Calendar Game</title>
   <meta name="application-name" content="Calendar Game">
   <meta name="apple-mobile-web-app-title" content="Calendar Game">
-  <script>(function(){var d=window.matchMedia('(prefers-color-scheme: dark)').matches;document.documentElement.setAttribute('data-theme',d?'nebula':'light');})();</script>
+  <script>(function(){var d=window.matchMedia('(prefers-color-scheme: dark)').matches;document.documentElement.setAttribute('data-theme',d?'dusk':'light');})();</script>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     :root{
@@ -70,7 +70,7 @@
     const METHOD_CD_ADVANCED_LEAP_MAP=new Map([[0,0],[4,-2],[8,3],[12,1],[16,-1],[20,-3],[24,2],[28,0],[32,-2],[36,3],[40,1],[44,-1],[48,-3],[52,2],[56,0],[60,-2],[64,3],[68,1],[72,-1],[76,-3],[80,2],[84,0],[88,-2],[92,3],[96,1]]);
     const METHOD_CD_ADVANCED_ZERO_YEARS=new Set([0,6,17,23,28,34,45,51,56,62,73,79,84,90]);
     const YEAR_OPTION_DEFAULT=9,DAY_OPTION_COUNT=7,MONTH_OPTION_COUNT=7;
-    const THEMES=[{id:'nebula',name:'Nebula'},{id:'midnight',name:'Midnight'},{id:'dusk',name:'Dusk'},{id:'parchment',name:'Parchment'},{id:'light',name:'Light'}];
+    const THEMES=[{id:'dusk',name:'Dusk'},{id:'midnight',name:'Midnight'},{id:'nebula',name:'Nebula'},{id:'light',name:'Light'},{id:'parchment',name:'Parchment'}];
     const toAstro=y=>y>0?y:1-Math.abs(y);
     const isLeap=y=>{y=toAstro(y);return y%400===0||(y%4===0&&y%100!==0);};
     const dim=(y,m)=>m===2?(isLeap(y)?29:28):[4,6,9,11].includes(m)?30:31;
@@ -289,9 +289,9 @@
       // Theme state
       const [systemIsDark,setSystemIsDark]=useState(()=>typeof window!=="undefined"?window.matchMedia("(prefers-color-scheme: dark)").matches:true);
       const [useSystem,setUseSystem]=useState(true);
-      const [darkTheme,setDarkTheme]=useState("nebula");
+      const [darkTheme,setDarkTheme]=useState("dusk");
       const [lightTheme,setLightTheme]=useState("light");
-      const [manualTheme,setManualTheme]=useState("nebula");
+      const [manualTheme,setManualTheme]=useState("dusk");
       const [themeOpen,setThemeOpen]=useState(false);
       const activeTheme=useSystem?(systemIsDark?darkTheme:lightTheme):manualTheme;
       useEffect(()=>{const mq=window.matchMedia("(prefers-color-scheme: dark)");const h=e=>setSystemIsDark(e.matches);mq.addEventListener("change",h);return()=>mq.removeEventListener("change",h);},[]);
