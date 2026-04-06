@@ -37,12 +37,16 @@
     .bar{height:6px;border-radius:6px;overflow:hidden;background:var(--bar-bg);border:1px solid var(--bar-bd)}
     .bar>span{display:block;height:100%;background:linear-gradient(90deg,#a855f7,#7c3aed)}
     .expander{transition:max-height .28s ease-in-out;overflow:hidden;will-change:max-height}
+    @keyframes fadeSlideIn{0%{opacity:0;transform:translateY(-6px)}100%{opacity:1;transform:translateY(0)}}
+    .anim-in{animation:fadeSlideIn .2s ease-out}
     [data-theme="parchment"] .text-purple-50,[data-theme="light"] .text-purple-50{color:var(--body-color)!important}
     [data-theme="parchment"] .text-purple-100,[data-theme="light"] .text-purple-100{color:var(--sec-color)!important}
     [data-theme="parchment"] .text-purple-100\/80,[data-theme="light"] .text-purple-100\/80,[data-theme="parchment"] .text-purple-100\/90,[data-theme="light"] .text-purple-100\/90,[data-theme="parchment"] .text-purple-100\/85,[data-theme="light"] .text-purple-100\/85{color:var(--sec-color)!important}
     [data-theme="parchment"] .text-purple-200\/80,[data-theme="light"] .text-purple-200\/80,[data-theme="parchment"] .text-purple-200\/70,[data-theme="light"] .text-purple-200\/70,[data-theme="parchment"] .text-purple-200\/90,[data-theme="light"] .text-purple-200\/90,[data-theme="parchment"] .text-purple-300\/80,[data-theme="light"] .text-purple-300\/80{color:var(--mut-color)!important}
     [data-theme="parchment"] .text-purple-300\/60,[data-theme="light"] .text-purple-300\/60,[data-theme="parchment"] .text-purple-300\/70,[data-theme="light"] .text-purple-300\/70{color:var(--fnt-color)!important}
     [data-theme="parchment"] .text-white\/90,[data-theme="light"] .text-white\/90{color:var(--mut-color)!important}
+    [data-theme="parchment"] .bg-purple-500\/20,[data-theme="light"] .bg-purple-500\/20{background-color:rgba(120,53,175,.2)!important}
+    [data-theme="parchment"] .border-purple-500\/40,[data-theme="light"] .border-purple-500\/40{border-color:rgba(120,53,175,.3)!important}
   </style>
 </head>
 <body class="text-purple-50">
@@ -91,18 +95,19 @@
     function Expander({open,children}){
       const outerRef=useRef(null);
       const innerRef=useRef(null);
-      const [maxH,setMaxH]=useState("0px");
       useEffect(()=>{
-        if(!open){
-          // Pin to current rendered height first, then transition to 0
-          const cur=outerRef.current?.scrollHeight;
-          if(cur){setMaxH(cur+"px");requestAnimationFrame(()=>requestAnimationFrame(()=>setMaxH("0px")));}
-          else setMaxH("0px");
-          return;
+        const el=outerRef.current;if(!el)return;
+        if(open){
+          const h=innerRef.current?.scrollHeight??0;
+          el.style.maxHeight=h+"px";
+        }else{
+          // Must pin to current rendered height before transitioning to 0
+          el.style.maxHeight=el.scrollHeight+"px";
+          el.getBoundingClientRect(); // force reflow
+          el.style.maxHeight="0px";
         }
-        if(innerRef.current)setMaxH(innerRef.current.scrollHeight+"px");
       },[open]);
-      return(<div ref={outerRef} className="expander" style={{maxHeight:maxH}}><div ref={innerRef}>{children}</div></div>);
+      return(<div ref={outerRef} className="expander" style={{maxHeight:"0px"}}><div ref={innerRef}>{children}</div></div>);
     }
 
     const Stat=({label,value,disabled,onClick,pressed})=>{
@@ -284,15 +289,22 @@
       },[activeTheme]);
       const [extStats,setExtStats]=useState(true);
       const [statsOffByMode,setStatsOffByMode]=useState({});
-      const [avgVisOffByMode,setAvgVisOffByMode]=useState({});
-      const [lastVisOffByMode,setLastVisOffByMode]=useState({});
-      const [medVisOffByMode,setMedVisOffByMode]=useState({});
+      const [avgVisOffByMode,setAvgVisOffByMode]=useState({deduction:true});
+      const [lastVisOffByMode,setLastVisOffByMode]=useState({deduction:true});
+      const [medVisOffByMode,setMedVisOffByMode]=useState({deduction:true});
       const statsOff=statsOffByMode[mode]??false;
       const avgVisOff=avgVisOffByMode[mode]??false;
       const lastVisOff=lastVisOffByMode[mode]??false;
       const medVisOff=medVisOffByMode[mode]??false;
       const toggleStatsOff=()=>setStatsOffByMode(p=>({...p,[mode]:!statsOff}));
-      const toggleTimingVis=()=>{const next=!(avgVisOffByMode[mode]??false);setAvgVisOffByMode(p=>({...p,[mode]:next}));setLastVisOffByMode(p=>({...p,[mode]:next}));setMedVisOffByMode(p=>({...p,[mode]:next}));};
+      const toggleTimingVis=()=>{
+        const next=!(avgVisOffByMode[mode]??false);
+        setAvgVisOffByMode(p=>({...p,[mode]:next}));
+        setLastVisOffByMode(p=>({...p,[mode]:next}));
+        setMedVisOffByMode(p=>({...p,[mode]:next}));
+        // When re-enabling timing, clear old times so only new times count
+        if(!next)setStatsByMode(prev=>{const ms={...(prev[mode]||blankStatsByEra())};const es={...(ms.AD||blankStats()),times:[]};return{...prev,[mode]:{...ms,AD:es}};});
+      };
       const [minY,setMinY]=useState(1),[maxY,setMaxY]=useState(10000);
       const [minInputVal,setMinInputVal]=useState("1");
       const [maxInputVal,setMaxInputVal]=useState("10000");
@@ -388,9 +400,10 @@
       function runDeductionRound(){setDedStack(s=>ded?[...s,ded]:s);spawnDed();setMsg("");setRevealed(false);setLocked(false);setGuesses([]);setCountedWrong(false);setCanOverrideCorrect(false);setCalcPenalty(false);wrongTimeRef.current=null;prevStatsSnapshotRef.current=null;}
       function pushAndNext(){
         if(["classic","flash","blitz","sudden"].includes(mode)){
-          setStack(s=>[...s,{...date}]);setDate(randomDate(minY,maxY));setGuesses([]);setRevealed(false);setLocked(false);setCountedWrong(false);setMsg("");setCalcPenalty(false);wrongTimeRef.current=null;
-          // Only clear snapshot if we're NOT in override-correct window
-          if(!canOverrideCorrect)prevStatsSnapshotRef.current=null;
+          setStack(s=>[...s,{...date}]);setDate(randomDate(minY,maxY));
+          setGuesses([]);setRevealed(false);setLocked(false);setCountedWrong(false);setMsg("");setCalcPenalty(false);
+          wrongTimeRef.current=null;
+          // prevStatsSnapshotRef intentionally NOT cleared here so override-after-correct works across the question boundary
           if(isTimer(mode)&&active)tStartRef.current=performance.now();else if(mode==="classic")tStartRef.current=performance.now();
         }
         if(mode==="deduction")runDeductionRound();
@@ -528,7 +541,7 @@
       const handleCalcOpenChange=next=>{if(next)applyCalcPenalty();setCalcOpen(next);calcOpenStatesRef.current.set(mode,next);};
       const showStatsAndRange=mode!=="lookup"&&mode!=="guide"&&mode!=="aox";
       const sAvg=calcAvg(S.times),sLast=calcLast(S.times),sMed=calcMed(S.times);
-      const ThemePanel=()=>(<div className="mt-2 rounded-2xl panel p-3 space-y-3"><div className="flex items-center justify-between"><span className="text-sm text-purple-200/80">Use System Settings</span><button type="button" onClick={()=>setUseSystem(v=>!v)} className={`px-3 py-1 rounded-xl text-xs font-medium border ${useSystem?"btn-solid border-purple-500":"surface-toggle border-purple-800/60 text-purple-100/80"}`}>{useSystem?"On":"Off"}</button></div>{useSystem?(<><div className="flex items-center gap-3"><span className="text-xs text-purple-200/80 w-10 shrink-0">Dark:</span><select value={darkTheme} onChange={e=>setDarkTheme(e.target.value)} className="panel rounded-xl px-2 py-1 text-sm flex-1 focus:outline-none focus:ring-2 focus:ring-purple-400 appearance-none">{THEMES.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></div><div className="h-px bg-purple-500/20 my-1"></div><div className="flex items-center gap-3"><span className="text-xs text-purple-200/80 w-10 shrink-0">Light:</span><select value={lightTheme} onChange={e=>setLightTheme(e.target.value)} className="panel rounded-xl px-2 py-1 text-sm flex-1 focus:outline-none focus:ring-2 focus:ring-purple-400 appearance-none">{THEMES.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></div></>):(<div className="flex items-center gap-3"><span className="text-xs text-purple-200/80 w-10 shrink-0">Theme:</span><select value={manualTheme} onChange={e=>setManualTheme(e.target.value)} className="panel rounded-xl px-2 py-1 text-sm flex-1 focus:outline-none focus:ring-2 focus:ring-purple-400 appearance-none">{THEMES.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></div>)}</div>);
+      const ThemePanel=()=>(<div className="mt-2 rounded-2xl panel p-3 space-y-3 anim-in"><div className="flex items-center justify-between"><span className="text-sm text-purple-200/80">Use System Settings</span><button type="button" onClick={()=>setUseSystem(v=>!v)} className={`px-3 py-1 rounded-xl text-xs font-medium border ${useSystem?"btn-solid border-purple-500":"surface-toggle border-purple-800/60 text-purple-100/80"}`}>{useSystem?"On":"Off"}</button></div>{useSystem?(<><div className="flex items-center gap-3"><span className="text-xs text-purple-200/80 w-10 shrink-0">Dark:</span><select value={darkTheme} onChange={e=>setDarkTheme(e.target.value)} className="panel rounded-xl px-2 py-1 text-sm flex-1 focus:outline-none focus:ring-2 focus:ring-purple-400 appearance-none">{THEMES.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></div><div className="h-px bg-purple-500/20 my-1"></div><div className="flex items-center gap-3"><span className="text-xs text-purple-200/80 w-10 shrink-0">Light:</span><select value={lightTheme} onChange={e=>setLightTheme(e.target.value)} className="panel rounded-xl px-2 py-1 text-sm flex-1 focus:outline-none focus:ring-2 focus:ring-purple-400 appearance-none">{THEMES.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></div></>):(<div className="flex items-center gap-3"><span className="text-xs text-purple-200/80 w-10 shrink-0">Theme:</span><select value={manualTheme} onChange={e=>setManualTheme(e.target.value)} className="panel rounded-xl px-2 py-1 text-sm flex-1 focus:outline-none focus:ring-2 focus:ring-purple-400 appearance-none">{THEMES.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></div>)}</div>);
       return(
         <div className="mx-auto px-4 py-5 w-full max-w-[480px]">
           <div className="flex items-center justify-between gap-4">
@@ -638,7 +651,7 @@
       const [open,setOpen]=useState(null);
       const toggle=id=>setOpen(o=>o===id?null:id);
       const Section=({id,title,children})=>(<div className="rounded-2xl card overflow-hidden"><button type="button" onClick={()=>toggle(id)} className="w-full text-left px-4 py-3 flex items-center justify-between"><span className="text-sm font-semibold text-purple-50">{title}</span><span className={`text-[7px] text-white/90 leading-none transition-transform ease-in-out ${open===id?"rotate-180":""}`} style={{transitionDuration:"250ms"}}>▼</span></button><Expander open={open===id}><div className="px-4 pb-4 pt-1 text-[13px] text-purple-100/90 leading-relaxed space-y-2">{children}</div></Expander></div>);
-      const Divider=({label})=>(<div className="flex items-center gap-2 px-1 pt-1"><div className="flex-1 h-px bg-purple-500/20"></div><span className="text-[10px] uppercase tracking-widest text-purple-300/40">{label}</span><div className="flex-1 h-px bg-purple-500/20"></div></div>);
+      const Divider=({label})=>(<div className="flex items-center gap-2 px-1 pt-1"><div className="flex-1 h-px bg-purple-500/20"></div><span className="text-[10px] uppercase tracking-widest text-purple-300/60">{label}</span><div className="flex-1 h-px bg-purple-500/20"></div></div>);
       return(
         <div className="space-y-2">
           <Section id="overview" title="What Is Calendar Game?"><p>Calendar Game is a training tool for mental calculation of the day of the week. You're given a date and must identify which weekday it falls on — as quickly and accurately as possible. All dates use the proleptic Gregorian calendar.</p></Section>
