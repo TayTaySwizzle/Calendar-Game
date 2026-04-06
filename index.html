@@ -670,23 +670,28 @@
       );
     }
 
+    function GuideSection({id,title,children,openId,onToggle}){
+      const isOpen=openId===id;
+      const isInstant=openId!==null&&openId!==id;
+      return(<div className="rounded-2xl panel overflow-hidden"><button type="button" onClick={()=>onToggle(id)} className="w-full text-left px-4 py-3 flex items-center justify-between"><span className="text-sm font-semibold text-purple-50">{title}</span><span className={`text-[7px] text-white/90 leading-none transition-transform ease-in-out ${isOpen?"rotate-180":""}`} style={{transitionDuration:"250ms"}}>▼</span></button><Expander open={isOpen} instant={isInstant}><div className="px-4 pb-4 pt-1 text-[13px] text-purple-100/90 leading-relaxed space-y-2">{children}</div></Expander></div>);
+    }
     function GuidePage(){
       const [open,setOpen]=useState(null);
-      const toggle=id=>setOpen(o=>o===id?null:id);
-      const Section=({id,title,children})=>(<div className="rounded-2xl panel overflow-hidden"><button type="button" onClick={()=>toggle(id)} className="w-full text-left px-4 py-3 flex items-center justify-between"><span className="text-sm font-semibold text-purple-50">{title}</span><span className={`text-[7px] text-white/90 leading-none transition-transform ease-in-out ${open===id?"rotate-180":""}`} style={{transitionDuration:"250ms"}}>▼</span></button><Expander open={open===id} instant={open!==null&&open!==id}><div className="px-4 pb-4 pt-1 text-[13px] text-purple-100/90 leading-relaxed space-y-2">{children}</div></Expander></div>);
+      const toggle=useCallback(id=>setOpen(o=>o===id?null:id),[]);
       const Divider=({label})=>(<div className="flex items-center gap-2 px-1 pt-1"><div className="flex-1 h-px bg-purple-500/20"></div><span className="text-[10px] uppercase tracking-widest text-purple-300/60">{label}</span><div className="flex-1 h-px bg-purple-500/20"></div></div>);
+      const S=({id,title,children})=>(<GuideSection id={id} title={title} openId={open} onToggle={toggle}>{children}</GuideSection>);
       return(
         <div className="space-y-2">
-          <Section id="overview" title="What Is Calendar Game?"><p>Calendar Game is a training tool for mental calculation of the day of the week. You're given a date and must identify which weekday it falls on — as quickly and accurately as possible. All dates use the proleptic Gregorian calendar.</p></Section>
+          <S id="overview" title="What Is Calendar Game?"><p>Calendar Game is a training tool for mental calculation of the day of the week. You're given a date and must identify which weekday it falls on — as quickly and accurately as possible. All dates use the proleptic Gregorian calendar.</p></S>
           <Divider label="Interface"/>
-          <Section id="buttons" title="Buttons">
+          <S id="buttons" title="Buttons">
             <p><b>New</b> — load a fresh date. In timer modes, only available after pressing Begin.</p>
             <p><b>Back</b> — return to the previous date. The answer is shown and the card is locked. No stat penalty.</p>
             <p><b>Reveal</b> — show the correct answer without guessing. Counts as a wrong attempt.</p>
             <p><b>Override</b> — fix a mistake. After a wrong answer: gives you credit and records the time to your wrong answer, then moves on. After a correct answer: undoes the credit (useful if you fat-fingered the right day), then moves to a new date without recording time.</p>
             <p><b>Show Codes</b> — reveals the calculation codes for the current date. Counts as wrong if you haven't already answered incorrectly. In AoX without Allow Mistakes, opening Show Codes ends the run.</p>
-          </Section>
-          <Section id="stats" title="Stats">
+          </S>
+          <S id="stats" title="Stats">
             <p><b>Score</b> — correct first-try answers out of total attempts.</p>
             <p><b>Accuracy</b> — percentage of questions answered correctly on the first try.</p>
             <p><b>Streak / Longest</b> — your current consecutive correct streak and your all-time longest in this mode.</p>
@@ -694,24 +699,24 @@
             <p><b>Last Time (Correct)</b> — your most recent first-try correct answer time.</p>
             <p><b>Median Time (Correct)</b> — the middle value of all your correct times when sorted. Less skewed by outliers than the average.</p>
             <p className="text-purple-300/70 text-[12px]">Tap Score, Accuracy, or Streak to hide all three together. Tap Avg Time, Last Time, or Median Time to toggle each independently. Settings are saved per mode. Use More Stats to show or hide the bottom row.</p>
-          </Section>
-          <Section id="range" title="Year Range"><p>Expand to control which years dates are drawn from. Defaults to 1–10000 AD. Changing the range resets the current round.</p></Section>
-          <Section id="theme" title="Theme"><p>Five themes: Dusk (default dark navy), Midnight (true black with purple), Nebula (deep purple), Light (clean white), and Parchment (warm cream). Enable Use System Settings to match your device's light/dark mode automatically, with separate theme choices for each. Disable to pick one manually.</p></Section>
+          </S>
+          <S id="range" title="Year Range"><p>Expand to control which years dates are drawn from. Defaults to 1–10000 AD. Changing the range resets the current round.</p></S>
+          <S id="theme" title="Theme"><p>Five themes: Dusk (default dark navy), Midnight (true black with purple), Nebula (deep purple), Light (clean white), and Parchment (warm cream). Enable Use System Settings to match your device's light/dark mode automatically, with separate theme choices for each. Disable to pick one manually.</p></S>
           <Divider label="Modes"/>
-          <Section id="classic" title="Classic"><p>The main practice mode with no time pressure. Answer at your own pace. Override works after both wrong and correct answers.</p></Section>
-          <Section id="aox" title="AoX">
+          <S id="classic" title="Classic"><p>The main practice mode with no time pressure. Answer at your own pace. Override works after both wrong and correct answers.</p></S>
+          <S id="aox" title="AoX">
             <p>Average your times over a set number of solves (2–1000). Press Begin to start a run.</p>
             <p><b>Allow Mistakes</b> — wrong answers don't end the run but don't count toward your average.</p>
             <p><b>One-By-One</b> — hides the date between solves. Press Continue to reveal each new date.</p>
             <p><b>Back</b> — review the previous date without affecting the run. Press Continue to resume.</p>
             <p><b>Override</b> — after wrong: gives credit with time recorded. After correct: undoes the credit.</p>
             <p>Best Avg and Best Median are saved per n and Allow Mistakes setting. The score display freezes when a run ends and only resets after pressing Reset.</p>
-          </Section>
-          <Section id="deduction" title="Deduction"><p>Identify the missing piece of a date given the rest plus the weekday. Choose Day, Month, or Year mode. Each question has exactly one correct answer. Switch subtypes anytime — progress in each is preserved.</p></Section>
-          <Section id="blitz" title="Blitz"><p>Answer as many dates as possible within the time limit (default 60s, adjustable). Score shown is for the current round only.</p></Section>
-          <Section id="sudden" title="Sudden Death"><p>Each question has its own countdown (default 7s, adjustable). A wrong answer or running out of time ends the run immediately.</p></Section>
-          <Section id="flash" title="Flash"><p>The date is briefly revealed (50ms–3000ms, default 1200ms) then hidden. Answer from memory.</p></Section>
-          <Section id="lookup" title="Lookup"><p>Enter any AD date as month/day/year (e.g. 7/4/1776) to instantly see its weekday. Supports years 1–10000. Show Codes is available for all results.</p></Section>
+          </S>
+          <S id="deduction" title="Deduction"><p>Identify the missing piece of a date given the rest plus the weekday. Choose Day, Month, or Year mode. Each question has exactly one correct answer. Switch subtypes anytime — progress in each is preserved.</p></S>
+          <S id="blitz" title="Blitz"><p>Answer as many dates as possible within the time limit (default 60s, adjustable). Score shown is for the current round only.</p></S>
+          <S id="sudden" title="Sudden Death"><p>Each question has its own countdown (default 7s, adjustable). A wrong answer or running out of time ends the run immediately.</p></S>
+          <S id="flash" title="Flash"><p>The date is briefly revealed (50ms–3000ms, default 1200ms) then hidden. Answer from memory.</p></S>
+          <S id="lookup" title="Lookup"><p>Enter any AD date as month/day/year (e.g. 7/4/1776) to instantly see its weekday. Supports years 1–10000. Show Codes is available for all results.</p></S>
         </div>
       );
     }
