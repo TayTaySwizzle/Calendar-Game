@@ -10,12 +10,13 @@
   <script>(function(){var d=window.matchMedia('(prefers-color-scheme: dark)').matches;document.documentElement.setAttribute('data-theme',d?'dusk':'light');})();</script>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    :root{--bg1:#0b0714;--bg2:#140b22;--card-bg:rgba(26,15,43,.85);--card-bd:rgba(120,53,175,.45);--panel-bg:rgba(88,28,135,.25);--panel-bd:rgba(120,53,175,.45);--thin-bd:rgba(120,53,175,.35);--sbtn-bg:rgba(88,28,135,.32);--sbtn-bd:rgba(120,53,175,.52);--sbtn-hov:rgba(88,28,135,.48);--stgl-bg:rgba(88,28,135,.24);--stgl-hov:rgba(88,28,135,.4);--chip-bg:rgba(120,53,175,.25);--chip-bd:rgba(120,53,175,.45);--bar-bg:rgba(120,53,175,.25);--bar-bd:rgba(120,53,175,.45);--body-color:#f5f3ff;--sec-color:rgba(237,233,254,.8);--mut-color:rgba(216,180,254,.7);--fnt-color:rgba(196,181,254,.6)}
-    [data-theme="dusk"]{--bg1:#0d1117;--bg2:#161b27;--card-bg:rgba(13,17,23,.92);--card-bd:rgba(99,102,241,.4);--panel-bg:rgba(28,38,68,.35);--panel-bd:rgba(99,102,241,.4);--thin-bd:rgba(99,102,241,.3);--sbtn-bg:rgba(38,48,88,.38);--sbtn-bd:rgba(99,102,241,.5);--sbtn-hov:rgba(38,48,88,.55);--stgl-bg:rgba(28,38,68,.28);--stgl-hov:rgba(28,38,68,.45);--chip-bg:rgba(99,102,241,.2);--chip-bd:rgba(99,102,241,.4);--bar-bg:rgba(99,102,241,.2);--bar-bd:rgba(99,102,241,.4)}
-    [data-theme="midnight"]{--bg1:#000;--bg2:#080012;--card-bg:rgba(4,0,12,.93);--card-bd:rgba(139,92,246,.5);--panel-bg:rgba(45,0,90,.28);--panel-bd:rgba(139,92,246,.5);--thin-bd:rgba(139,92,246,.38);--sbtn-bg:rgba(55,0,110,.35);--sbtn-bd:rgba(139,92,246,.55);--sbtn-hov:rgba(55,0,110,.5);--stgl-bg:rgba(45,0,90,.25);--stgl-hov:rgba(45,0,90,.42);--chip-bg:rgba(139,92,246,.2);--chip-bd:rgba(139,92,246,.45);--bar-bg:rgba(139,92,246,.2);--bar-bd:rgba(139,92,246,.45)}
-    [data-theme="parchment"]{--bg1:#f5efe0;--bg2:#ede8d5;--card-bg:rgba(255,252,244,.97);--card-bd:rgba(120,53,175,.22);--panel-bg:rgba(120,53,175,.07);--panel-bd:rgba(120,53,175,.22);--thin-bd:rgba(120,53,175,.18);--sbtn-bg:rgba(120,53,175,.1);--sbtn-bd:rgba(120,53,175,.28);--sbtn-hov:rgba(120,53,175,.18);--stgl-bg:rgba(120,53,175,.07);--stgl-hov:rgba(120,53,175,.14);--chip-bg:rgba(120,53,175,.09);--chip-bd:rgba(120,53,175,.22);--bar-bg:rgba(120,53,175,.09);--bar-bd:rgba(120,53,175,.22);--body-color:#2e1065;--sec-color:rgba(46,16,101,.78);--mut-color:rgba(46,16,101,.62);--fnt-color:rgba(46,16,101,.5)}
-    [data-theme="light"]{--bg1:#f0f0f5;--bg2:#fff;--card-bg:rgba(255,255,255,.98);--card-bd:rgba(120,53,175,.22);--panel-bg:rgba(237,233,254,.48);--panel-bd:rgba(120,53,175,.22);--thin-bd:rgba(120,53,175,.18);--sbtn-bg:rgba(237,233,254,.65);--sbtn-bd:rgba(120,53,175,.28);--sbtn-hov:rgba(237,233,254,.88);--stgl-bg:rgba(237,233,254,.42);--stgl-hov:rgba(237,233,254,.65);--chip-bg:rgba(237,233,254,.75);--chip-bd:rgba(120,53,175,.22);--bar-bg:rgba(237,233,254,.75);--bar-bd:rgba(120,53,175,.22);--body-color:#1e1b4b;--sec-color:rgba(30,27,75,.78);--mut-color:rgba(30,27,75,.62);--fnt-color:rgba(30,27,75,.5)}
-    body{background:linear-gradient(180deg,var(--bg1),var(--bg2));color:var(--body-color)}
+    :root{--bg1:#0b0714;--bg2:#0b0714;--card-bg:rgba(26,15,43,.85);--card-bd:rgba(120,53,175,.45);--panel-bg:rgba(88,28,135,.25);--panel-bd:rgba(120,53,175,.45);--thin-bd:rgba(120,53,175,.35);--sbtn-bg:rgba(88,28,135,.32);--sbtn-bd:rgba(120,53,175,.52);--sbtn-hov:rgba(88,28,135,.48);--stgl-bg:rgba(88,28,135,.24);--stgl-hov:rgba(88,28,135,.4);--chip-bg:rgba(120,53,175,.25);--chip-bd:rgba(120,53,175,.45);--bar-bg:rgba(120,53,175,.25);--bar-bd:rgba(120,53,175,.45);--body-color:#f5f3ff;--sec-color:rgba(237,233,254,.8);--mut-color:rgba(216,180,254,.7);--fnt-color:rgba(196,181,254,.6);--tc:#0b0714}
+    [data-theme="dusk"]{--bg1:#0d1117;--bg2:#0d1117;--tc:#0d1117;--card-bg:rgba(13,17,23,.92);--card-bd:rgba(99,102,241,.4);--panel-bg:rgba(28,38,68,.35);--panel-bd:rgba(99,102,241,.4);--thin-bd:rgba(99,102,241,.3);--sbtn-bg:rgba(38,48,88,.38);--sbtn-bd:rgba(99,102,241,.5);--sbtn-hov:rgba(38,48,88,.55);--stgl-bg:rgba(28,38,68,.28);--stgl-hov:rgba(28,38,68,.45);--chip-bg:rgba(99,102,241,.2);--chip-bd:rgba(99,102,241,.4);--bar-bg:rgba(99,102,241,.2);--bar-bd:rgba(99,102,241,.4)}
+    [data-theme="midnight"]{--bg1:#000;--bg2:#000;--tc:#000;--card-bg:rgba(4,0,12,.93);--card-bd:rgba(139,92,246,.5);--panel-bg:rgba(45,0,90,.28);--panel-bd:rgba(139,92,246,.5);--thin-bd:rgba(139,92,246,.38);--sbtn-bg:rgba(55,0,110,.35);--sbtn-bd:rgba(139,92,246,.55);--sbtn-hov:rgba(55,0,110,.5);--stgl-bg:rgba(45,0,90,.25);--stgl-hov:rgba(45,0,90,.42);--chip-bg:rgba(139,92,246,.2);--chip-bd:rgba(139,92,246,.45);--bar-bg:rgba(139,92,246,.2);--bar-bd:rgba(139,92,246,.45)}
+    [data-theme="nebula"]{--bg1:#0b0714;--bg2:#0b0714;--tc:#0b0714}
+    [data-theme="parchment"]{--bg1:#f0e8d5;--bg2:#f0e8d5;--tc:#f0e8d5;--card-bg:rgba(255,252,244,.97);--card-bd:rgba(120,53,175,.22);--panel-bg:rgba(120,53,175,.07);--panel-bd:rgba(120,53,175,.22);--thin-bd:rgba(120,53,175,.18);--sbtn-bg:rgba(120,53,175,.1);--sbtn-bd:rgba(120,53,175,.28);--sbtn-hov:rgba(120,53,175,.18);--stgl-bg:rgba(120,53,175,.07);--stgl-hov:rgba(120,53,175,.14);--chip-bg:rgba(120,53,175,.09);--chip-bd:rgba(120,53,175,.22);--bar-bg:rgba(120,53,175,.09);--bar-bd:rgba(120,53,175,.22);--body-color:#2e1065;--sec-color:rgba(46,16,101,.78);--mut-color:rgba(46,16,101,.62);--fnt-color:rgba(46,16,101,.5)}
+    [data-theme="light"]{--bg1:#f2f2f7;--bg2:#f2f2f7;--tc:#f2f2f7;--card-bg:rgba(255,255,255,.98);--card-bd:rgba(120,53,175,.22);--panel-bg:rgba(237,233,254,.48);--panel-bd:rgba(120,53,175,.22);--thin-bd:rgba(120,53,175,.18);--sbtn-bg:rgba(237,233,254,.65);--sbtn-bd:rgba(120,53,175,.28);--sbtn-hov:rgba(237,233,254,.88);--stgl-bg:rgba(237,233,254,.42);--stgl-hov:rgba(237,233,254,.65);--chip-bg:rgba(237,233,254,.75);--chip-bd:rgba(120,53,175,.22);--bar-bg:rgba(237,233,254,.75);--bar-bd:rgba(120,53,175,.22);--body-color:#1e1b4b;--sec-color:rgba(30,27,75,.78);--mut-color:rgba(30,27,75,.62);--fnt-color:rgba(30,27,75,.5)}
+    body{background:var(--bg1);color:var(--body-color)}
     .card{background:var(--card-bg);border:1px solid var(--card-bd)}
     .panel{background:var(--panel-bg);border:1px solid var(--panel-bd)}
     .thin{border:1px solid var(--thin-bd)}
@@ -88,13 +89,20 @@
     const blockMinusBI=e=>{if(e.data&&e.data.includes("-"))e.preventDefault();};
 
     function Expander({open,children}){
+      const outerRef=useRef(null);
       const innerRef=useRef(null);
       const [maxH,setMaxH]=useState("0px");
       useEffect(()=>{
-        if(!open){setMaxH("0px");return;}
+        if(!open){
+          // Pin to current rendered height first, then transition to 0
+          const cur=outerRef.current?.scrollHeight;
+          if(cur){setMaxH(cur+"px");requestAnimationFrame(()=>requestAnimationFrame(()=>setMaxH("0px")));}
+          else setMaxH("0px");
+          return;
+        }
         if(innerRef.current)setMaxH(innerRef.current.scrollHeight+"px");
       },[open]);
-      return(<div className="expander" style={{maxHeight:maxH}}><div ref={innerRef}>{children}</div></div>);
+      return(<div ref={outerRef} className="expander" style={{maxHeight:maxH}}><div ref={innerRef}>{children}</div></div>);
     }
 
     const Stat=({label,value,disabled,onClick,pressed})=>{
@@ -229,7 +237,7 @@
               <button type="button" onClick={()=>{if(!isRunning||runPhase==="idle")setOneByOne(v=>!v);}} className={`px-2 py-1 rounded-xl text-xs font-medium border shrink-0 ${oneByOne?"btn-solid border-purple-500":"surface-toggle border-purple-800/60 text-purple-100/80"}`}>One-By-One</button>
             </div>
             <div className="mt-2 flex gap-4 text-xs text-purple-300/60">
-              <span>Best Avg: {bestData.avg!=null?`${bestData.avg.toFixed(2)}s`:"—"}</span>
+              <span>Best Average: {bestData.avg!=null?`${bestData.avg.toFixed(2)}s`:"—"}</span>
               <span>Best Median: {bestData.med!=null?`${bestData.med.toFixed(2)}s`:"—"}</span>
             </div>
           </div>
@@ -268,7 +276,12 @@
       const [themeOpen,setThemeOpen]=useState(false);
       const activeTheme=useSystem?(systemIsDark?darkTheme:lightTheme):manualTheme;
       useEffect(()=>{const mq=window.matchMedia("(prefers-color-scheme: dark)");const h=e=>setSystemIsDark(e.matches);mq.addEventListener("change",h);return()=>mq.removeEventListener("change",h);},[]);
-      useEffect(()=>{document.documentElement.setAttribute("data-theme",activeTheme);},[activeTheme]);
+      useEffect(()=>{
+        document.documentElement.setAttribute("data-theme",activeTheme);
+        const tc=getComputedStyle(document.documentElement).getPropertyValue("--tc").trim();
+        const meta=document.querySelector("meta[name='theme-color']");
+        if(meta&&tc)meta.content=tc;
+      },[activeTheme]);
       const [extStats,setExtStats]=useState(true);
       const [statsOffByMode,setStatsOffByMode]=useState({});
       const [avgVisOffByMode,setAvgVisOffByMode]=useState({});
@@ -279,9 +292,7 @@
       const lastVisOff=lastVisOffByMode[mode]??false;
       const medVisOff=medVisOffByMode[mode]??false;
       const toggleStatsOff=()=>setStatsOffByMode(p=>({...p,[mode]:!statsOff}));
-      const toggleAvgVis=()=>setAvgVisOffByMode(p=>({...p,[mode]:!avgVisOff}));
-      const toggleLastVis=()=>setLastVisOffByMode(p=>({...p,[mode]:!lastVisOff}));
-      const toggleMedVis=()=>setMedVisOffByMode(p=>({...p,[mode]:!medVisOff}));
+      const toggleTimingVis=()=>{const next=!(avgVisOffByMode[mode]??false);setAvgVisOffByMode(p=>({...p,[mode]:next}));setLastVisOffByMode(p=>({...p,[mode]:next}));setMedVisOffByMode(p=>({...p,[mode]:next}));};
       const [minY,setMinY]=useState(1),[maxY,setMaxY]=useState(10000);
       const [minInputVal,setMinInputVal]=useState("1");
       const [maxInputVal,setMaxInputVal]=useState("10000");
@@ -321,10 +332,10 @@
       const suddenBarRef=useRef(null),suddenTimeRef=useRef(null);
       const [active,setActive]=useState(false);
       const [showTimerDate,setShowTimerDate]=useState(false);
-      const [flashMs,setFlashMs]=useState(1200);
+      const [flashMs,setFlashMs]=useState(500);
       const [flashPhase,setFlashPhase]=useState("dash");
       const flashTimerRef=useRef(null);
-      const [flashRemainMs,setFlashRemainMs]=useState(1200);
+      const [flashRemainMs,setFlashRemainMs]=useState(500);
       const flashDeadlineRef=useRef(null);
       const flashBarRef=useRef(null);
       const endFlashPhase=useCallback(()=>{setFlashPhase("hide");flashDeadlineRef.current=null;setFlashRemainMs(0);flashTimerRef.current=null;},[]);
@@ -377,7 +388,9 @@
       function runDeductionRound(){setDedStack(s=>ded?[...s,ded]:s);spawnDed();setMsg("");setRevealed(false);setLocked(false);setGuesses([]);setCountedWrong(false);setCanOverrideCorrect(false);setCalcPenalty(false);wrongTimeRef.current=null;prevStatsSnapshotRef.current=null;}
       function pushAndNext(){
         if(["classic","flash","blitz","sudden"].includes(mode)){
-          setStack(s=>[...s,{...date}]);setDate(randomDate(minY,maxY));setGuesses([]);setRevealed(false);setLocked(false);setCountedWrong(false);setMsg("");setCalcPenalty(false);wrongTimeRef.current=null;prevStatsSnapshotRef.current=null;
+          setStack(s=>[...s,{...date}]);setDate(randomDate(minY,maxY));setGuesses([]);setRevealed(false);setLocked(false);setCountedWrong(false);setMsg("");setCalcPenalty(false);wrongTimeRef.current=null;
+          // Only clear snapshot if we're NOT in override-correct window
+          if(!canOverrideCorrect)prevStatsSnapshotRef.current=null;
           if(isTimer(mode)&&active)tStartRef.current=performance.now();else if(mode==="classic")tStartRef.current=performance.now();
         }
         if(mode==="deduction")runDeductionRound();
@@ -515,7 +528,7 @@
       const handleCalcOpenChange=next=>{if(next)applyCalcPenalty();setCalcOpen(next);calcOpenStatesRef.current.set(mode,next);};
       const showStatsAndRange=mode!=="lookup"&&mode!=="guide"&&mode!=="aox";
       const sAvg=calcAvg(S.times),sLast=calcLast(S.times),sMed=calcMed(S.times);
-      const ThemePanel=()=>(<div className="mt-2 rounded-2xl card p-3 space-y-3"><div className="flex items-center justify-between"><span className="text-sm text-purple-200/80">Use System Settings</span><button type="button" onClick={()=>setUseSystem(v=>!v)} className={`px-3 py-1 rounded-xl text-xs font-medium border ${useSystem?"btn-solid border-purple-500":"surface-toggle border-purple-800/60 text-purple-100/80"}`}>{useSystem?"On":"Off"}</button></div>{useSystem?(<><div className="flex items-center gap-3"><span className="text-xs text-purple-200/80 w-10 shrink-0">Dark:</span><select value={darkTheme} onChange={e=>setDarkTheme(e.target.value)} className="panel rounded-xl px-2 py-1 text-sm flex-1 focus:outline-none focus:ring-2 focus:ring-purple-400 appearance-none">{THEMES.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></div><div className="flex items-center gap-3"><span className="text-xs text-purple-200/80 w-10 shrink-0">Light:</span><select value={lightTheme} onChange={e=>setLightTheme(e.target.value)} className="panel rounded-xl px-2 py-1 text-sm flex-1 focus:outline-none focus:ring-2 focus:ring-purple-400 appearance-none">{THEMES.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></div></>):(<div className="flex items-center gap-3"><span className="text-xs text-purple-200/80 w-10 shrink-0">Theme:</span><select value={manualTheme} onChange={e=>setManualTheme(e.target.value)} className="panel rounded-xl px-2 py-1 text-sm flex-1 focus:outline-none focus:ring-2 focus:ring-purple-400 appearance-none">{THEMES.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></div>)}</div>);
+      const ThemePanel=()=>(<div className="mt-2 rounded-2xl panel p-3 space-y-3"><div className="flex items-center justify-between"><span className="text-sm text-purple-200/80">Use System Settings</span><button type="button" onClick={()=>setUseSystem(v=>!v)} className={`px-3 py-1 rounded-xl text-xs font-medium border ${useSystem?"btn-solid border-purple-500":"surface-toggle border-purple-800/60 text-purple-100/80"}`}>{useSystem?"On":"Off"}</button></div>{useSystem?(<><div className="flex items-center gap-3"><span className="text-xs text-purple-200/80 w-10 shrink-0">Dark:</span><select value={darkTheme} onChange={e=>setDarkTheme(e.target.value)} className="panel rounded-xl px-2 py-1 text-sm flex-1 focus:outline-none focus:ring-2 focus:ring-purple-400 appearance-none">{THEMES.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></div><div className="h-px bg-purple-500/20 my-1"></div><div className="flex items-center gap-3"><span className="text-xs text-purple-200/80 w-10 shrink-0">Light:</span><select value={lightTheme} onChange={e=>setLightTheme(e.target.value)} className="panel rounded-xl px-2 py-1 text-sm flex-1 focus:outline-none focus:ring-2 focus:ring-purple-400 appearance-none">{THEMES.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></div></>):(<div className="flex items-center gap-3"><span className="text-xs text-purple-200/80 w-10 shrink-0">Theme:</span><select value={manualTheme} onChange={e=>setManualTheme(e.target.value)} className="panel rounded-xl px-2 py-1 text-sm flex-1 focus:outline-none focus:ring-2 focus:ring-purple-400 appearance-none">{THEMES.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></div>)}</div>);
       return(
         <div className="mx-auto px-4 py-5 w-full max-w-[480px]">
           <div className="flex items-center justify-between gap-4">
@@ -532,9 +545,9 @@
               <Stat label={mode==="blitz"?"Score (Round)":"Score"} value={mode==="blitz"?`${blitzRoundStats.good}/${blitzRoundStats.played}`:`${S.good}/${S.played}`} disabled={statsOff} onClick={toggleStatsOff} pressed={!statsOff}/>
               <Stat label="Accuracy" value={`${S.played?(S.good/S.played*100).toFixed(1):"0.0"}%`} disabled={statsOff} onClick={toggleStatsOff} pressed={!statsOff}/>
               <StatTwo label="Streak / Longest" left={S.streak} right={S.best} disabled={statsOff} onClick={toggleStatsOff} pressed={!statsOff}/>
-              <Stat label="Avg Time (Correct)" value={fmtTime(sAvg)} disabled={avgVisOff} onClick={toggleAvgVis} pressed={!avgVisOff}/>
+              <Stat label="Avg Time (Correct)" value={fmtTime(sAvg)} disabled={avgVisOff} onClick={toggleTimingVis} pressed={!avgVisOff}/>
             </div>
-            {extStats&&(<div className="mt-2 flex justify-evenly"><div className="w-1/4"><Stat label="Last Time (Correct)" value={fmtTime(sLast)} disabled={lastVisOff} onClick={toggleLastVis} pressed={!lastVisOff}/></div><div className="w-1/4"><Stat label="Median Time (Correct)" value={fmtTime(sMed)} disabled={medVisOff} onClick={toggleMedVis} pressed={!medVisOff}/></div></div>)}
+            {extStats&&(<div className="mt-2 flex justify-evenly"><div className="w-1/4"><Stat label="Last Time (Correct)" value={fmtTime(sLast)} disabled={lastVisOff} onClick={toggleTimingVis} pressed={!lastVisOff}/></div><div className="w-1/4"><Stat label="Median Time (Correct)" value={fmtTime(sMed)} disabled={medVisOff} onClick={toggleTimingVis} pressed={!medVisOff}/></div></div>)}
             <div className="mt-3 flex gap-2 flex-wrap items-center">
               <button type="button" className="px-2.5 py-1.5 rounded-xl btn-solid text-xs font-medium" onClick={handleResetStats}>Reset Stats</button>
               <button type="button" className={`px-2.5 py-1.5 rounded-xl text-xs font-medium border ${extStats?"btn-solid border-purple-500":"surface-toggle border-purple-800/60 text-purple-100/80"}`} onClick={()=>setExtStats(v=>!v)}>More Stats</button>
@@ -542,7 +555,7 @@
               {timerSettingControl&&<div className="ml-auto">{timerSettingControl}</div>}
             </div>
             {themeOpen&&<ThemePanel/>}
-            <div className="mt-3 rounded-2xl card p-3">
+            <div className="mt-3 rounded-2xl panel p-3">
               <button type="button" onClick={()=>setRangeOpen(o=>!o)} aria-expanded={rangeOpen} className="w-full text-left text-sm text-purple-200/90 flex items-center justify-between">
                 <span>Year Range: <span className="tabular-nums ml-1">{minY} → {maxY}</span></span>
                 <span className={`text-white/90 text-[7px] leading-none transition-transform ease-in-out ${rangeOpen?"rotate-180":""}`} style={{transitionDuration:"250ms"}}>▼</span>
@@ -662,7 +675,7 @@
           <Section id="blitz" title="Blitz"><p>Answer as many dates as possible within the time limit (default 60s, adjustable). Score shown is for the current round only.</p></Section>
           <Section id="sudden" title="Sudden Death"><p>Each question has its own countdown (default 7s, adjustable). A wrong answer or running out of time ends the run immediately.</p></Section>
           <Section id="flash" title="Flash"><p>The date is briefly revealed (50ms–3000ms, default 1200ms) then hidden. Answer from memory.</p></Section>
-          <Section id="lookup" title="Lookup"><p>Enter any date as month/day/year (e.g. 7/4/1776) to see its weekday. Supports BC dates with a leading minus (e.g. −1 for 1 BC; no year 0). Show Codes works for AD dates.</p></Section>
+          <Section id="lookup" title="Lookup"><p>Enter any AD date as month/day/year (e.g. 7/4/1776) to instantly see its weekday. Supports years 1–10000. Show Codes is available for all results.</p></Section>
         </div>
       );
     }
@@ -699,7 +712,7 @@
       function isLeapL(y){y=y>0?y:1-Math.abs(y);return y%400===0||(y%4===0&&y%100!==0);}
       function dimL(y,m){return m===2?(isLeapL(y)?29:28):[4,6,9,11].includes(m)?30:31;}
       function wdayL(y,m,d){function jdn(y,m,d){const a=Math.floor((14-m)/12),y2=y+4800-a,m2=m-3+12*a;return d+Math.floor((153*m2+2)/5)+365*y2+Math.floor(y2/4)-Math.floor(y2/100)+Math.floor(y2/400)-32045;}return((jdn(y>0?y:1-Math.abs(y),m,d)+1)%7+7)%7;}
-      function runLookup(){const s=li.trim();if(s===lastLookupRef.current)return;const match=/^(-?\d{1,2})\/(\d{1,2})\/(-?\d{1,5})$/.exec(s);if(!match){slo("Enter date as month/day/year, e.g. 7/4/1776.");return;}let mm=+match[1],dd=+match[2],yy=+match[3];if(yy===0){slo("No year 0. Use −1 for 1 BC.");return;}if(yy<-10000||yy>10000){slo("Year must be −10000 to 10000.");return;}if(mm<1||mm>12){slo("Month must be 1–12.");return;}const maxd=dimL(yy,mm);if(dd<1||dd>maxd){slo(`Day must be 1–${maxd} for ${MONTH[mm-1]}.`);return;}const d=DAY[wdayL(yy,mm,dd)];const rt=`${MONTH[mm-1]} ${dd}, ${fmtYear(yy)} is a ${d}.`;const entry={id:`${Date.now().toString(36)}-${Math.random().toString(36).slice(2,8)}`,label:`${MONTH[mm-1]} ${dd}, ${fmtYear(yy)}`,weekday:d,result:rt,y:yy,m:mm,d:dd};lastLookupRef.current=s;slo(rt);scd({y:yy,m:mm,d:dd});ssid(entry.id);if(onAddHistory)onAddHistory(entry);}
+      function runLookup(){const s=li.trim();if(s===lastLookupRef.current)return;const match=/^(\d{1,2})\/(\d{1,2})\/(\d{1,5})$/.exec(s);if(!match){slo("Enter date as month/day/year, e.g. 7/4/1776.");return;}let mm=+match[1],dd=+match[2],yy=+match[3];if(yy<1||yy>10000){slo("Year must be between 1 and 10000.");return;}if(mm<1||mm>12){slo("Month must be 1–12.");return;}const maxd=dimL(yy,mm);if(dd<1||dd>maxd){slo(`Day must be 1–${maxd} for ${MONTH[mm-1]}.`);return;}const d=DAY[wdayL(yy,mm,dd)];const rt=`${MONTH[mm-1]} ${dd}, ${yy} is a ${d}.`;const entry={id:`${Date.now().toString(36)}-${Math.random().toString(36).slice(2,8)}`,label:`${MONTH[mm-1]} ${dd}, ${yy}`,weekday:d,result:rt,y:yy,m:mm,d:dd};lastLookupRef.current=s;slo(rt);scd({y:yy,m:mm,d:dd});ssid(entry.id);if(onAddHistory)onAddHistory(entry);}
       function clearLookup(){sli("");if(document.activeElement)document.activeElement.blur();slo("");scd(null);ssid(null);sco(false);lastLookupRef.current=null;}
       const entries=Array.isArray(history)?history:[];
       React.useEffect(()=>{if(!sid)return;if(!entries.some(e=>e.id===sid)){ssid(null);scd(null);slo("");sco(false);}},[entries,sid]);
@@ -714,7 +727,7 @@
               <button type="button" onClick={clearLookup} className="px-4 py-2 rounded-xl bg-zinc-700 text-white text-sm font-medium">Clear</button>
             </div>
             {lo&&<div className="text-sm text-purple-100/90">{lo}</div>}
-            <ul className="text-xs text-purple-100/90 space-y-1 list-disc list-inside"><li>Format: <b>month/day/year</b> (e.g., <b>7/4/1776</b>)</li><li>BC years: leading minus (e.g., <b>-1</b> = 1 BC). No year 0.</li><li>Range: <b>−10000…10000</b></li></ul>
+            <p className="text-xs text-purple-100/90">Format: <b>month/day/year</b> — e.g. <b>7/4/1776</b>. AD dates only, 1–10000.</p>
           </div>
           <div className="rounded-2xl panel p-4 space-y-4">
             <div className="flex items-center justify-between text-[11px] uppercase tracking-wide text-purple-200/70"><span>History</span>{entries.length>0&&(<button type="button" onClick={clearHist} className="text-purple-200/70 font-medium">Clear History</button>)}</div>
