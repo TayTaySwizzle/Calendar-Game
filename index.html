@@ -97,8 +97,9 @@
       const outerRef=useRef(null);
       const innerRef=useRef(null);
       const prevOpenRef=useRef(open);
-      React.useLayoutEffect(()=>{
+      useEffect(()=>{
         const el=outerRef.current;if(el&&!open)el.style.maxHeight="0px";
+      // eslint-disable-next-line react-hooks/exhaustive-deps
       },[]);
       useEffect(()=>{
         const el=outerRef.current;if(!el)return;
@@ -569,7 +570,7 @@
       return(
         <div className="mx-auto px-4 py-5 w-full max-w-[480px]">
           <div className="flex items-center justify-between gap-4">
-            <h1 className="text-xl font-semibold leading-none">Calendar Game</h1>
+            <h1 className="text-xl font-semibold leading-none">Calendar Game <span className="text-[10px] font-normal text-purple-300/40 ml-1">4/6 16:46</span></h1>
             <div className="relative">
               <select ref={modeSelectRef} value={mode} onChange={e=>{setMode(e.target.value);e.target.blur();const root=document.getElementById('root');if(root){root.style.pointerEvents='none';setTimeout(()=>root.style.pointerEvents='',400);}}} className="panel rounded-xl px-2.5 py-2 pr-9 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 appearance-none">
                 <option value="classic">Classic</option><option value="aox">AoX</option><option value="deduction">Deduction</option><option value="blitz">Blitz</option><option value="sudden">Sudden Death</option><option value="flash">Flash</option><option value="lookup">Lookup</option><option value="guide">How to Play</option>
