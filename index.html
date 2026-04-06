@@ -99,6 +99,8 @@
     }
     function guardedClick(fn){return function(...args){if(isTouch&&performance.now()-lastTouchTimeRef.current<350)return;fn(...args);};}
     function guardedClickE(fn){return function(e,...args){if(isTouch&&performance.now()-lastTouchTimeRef.current<350)return;fn(e,...args);};}
+
+    function Expander({open,instant,children}){
       const innerRef=useRef(null);
       const [maxH,setMaxH]=useState("0px");
       const prevOpenRef=useRef(open);
