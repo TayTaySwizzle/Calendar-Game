@@ -94,22 +94,23 @@
     const blockMinusBI=e=>{if(e.data&&e.data.includes("-"))e.preventDefault();};
 
     function Expander({open,instant,children}){
+      const outerRef=useRef(null);
       const innerRef=useRef(null);
-      const [maxH,setMaxH]=useState("0px");
       const prevOpenRef=useRef(open);
       useEffect(()=>{
+        const el=outerRef.current;if(!el)return;
         const wasOpen=prevOpenRef.current;prevOpenRef.current=open;
         if(open){
-          setMaxH((innerRef.current?.scrollHeight??0)+16+"px");
+          el.style.maxHeight=(innerRef.current?.scrollHeight??0)+16+"px";
         }else if(instant||!wasOpen){
-          setMaxH("0px");
+          el.style.maxHeight="0px";
         }else{
-          // Two-frame close: first pin to current height, then on next frame set to 0
-          setMaxH((innerRef.current?.scrollHeight??0)+"px");
-          requestAnimationFrame(()=>requestAnimationFrame(()=>setMaxH("0px")));
+          el.style.maxHeight=el.scrollHeight+"px";
+          el.getBoundingClientRect();
+          el.style.maxHeight="0px";
         }
       },[open,instant]);
-      return(<div className="expander" style={{maxHeight:maxH}}><div ref={innerRef}>{children}</div></div>);
+      return(<div ref={outerRef} className="expander" style={{maxHeight:"0px"}}><div ref={innerRef}>{children}</div></div>);
     }
 
     const Stat=({label,value,disabled,onClick,pressed})=>{
@@ -434,9 +435,11 @@
       function override(){
         if(canOverrideCorrect&&prevStatsSnapshotRef.current){
           const u=prevStatsSnapshotRef.current;
-          updateStats(c=>{c.played=u.played;c.good=u.good;c.streak=u.streak;c.best=u.best;c.times=c.times.slice(0,u.timesLen);});
-          if(mode==="blitz")setBlitzRoundStats(p=>({...p,played:u.blitzPlayed,good:u.blitzGood}));
+          // Count as wrong: restore played/good/streak to pre-answer values, then add played+1 and reset streak
+          updateStats(c=>{c.played=u.played+1;c.good=u.good;c.streak=0;c.best=u.best;c.times=c.times.slice(0,u.timesLen);});
+          if(mode==="blitz")setBlitzRoundStats(p=>({...p,played:u.blitzPlayed+1,good:u.blitzGood}));
           prevStatsSnapshotRef.current=null;wrongTimeRef.current=null;setCanOverrideCorrect(false);
+          setCountedWrong(true);
           pushAndNext();return;
         }
         if(!countedWrong)return;
@@ -548,7 +551,10 @@
       const handleCalcOpenChange=next=>{if(next)applyCalcPenalty();setCalcOpen(next);calcOpenStatesRef.current.set(mode,next);};
       const showStatsAndRange=mode!=="lookup"&&mode!=="guide"&&mode!=="aox";
       const sAvg=calcAvg(S.times),sLast=calcLast(S.times),sMed=calcMed(S.times);
-      const ThemePanel=()=>(<div className="mt-2 rounded-2xl panel p-3 space-y-3"><div className="flex items-center justify-between"><span className="text-sm text-purple-200/80">Use System Settings</span><button type="button" onClick={()=>setUseSystem(v=>!v)} className={`px-3 py-1 rounded-xl text-xs font-medium border ${useSystem?"btn-solid border-purple-500":"surface-toggle border-purple-800/60 text-purple-100/80"}`}>{useSystem?"On":"Off"}</button></div>{useSystem?(<><div className="flex items-center gap-3"><span className="text-xs text-purple-200/80 w-10 shrink-0">Dark:</span><select value={darkTheme} onChange={e=>setDarkTheme(e.target.value)} className="panel rounded-xl px-2 py-1 text-sm flex-1 focus:outline-none focus:ring-2 focus:ring-purple-400 appearance-none">{THEMES.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></div><div className="h-px bg-purple-500/20 my-1"></div><div className="flex items-center gap-3"><span className="text-xs text-purple-200/80 w-10 shrink-0">Light:</span><select value={lightTheme} onChange={e=>setLightTheme(e.target.value)} className="panel rounded-xl px-2 py-1 text-sm flex-1 focus:outline-none focus:ring-2 focus:ring-purple-400 appearance-none">{THEMES.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></div></>):(<div className="flex items-center gap-3"><span className="text-xs text-purple-200/80 w-10 shrink-0">Theme:</span><select value={manualTheme} onChange={e=>setManualTheme(e.target.value)} className="panel rounded-xl px-2 py-1 text-sm flex-1 focus:outline-none focus:ring-2 focus:ring-purple-400 appearance-none">{THEMES.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></div>)}</div>);
+      const DARK_THEMES=[{id:'dusk',name:'Dusk'},{id:'midnight',name:'Midnight'},{id:'nebula',name:'Nebula'}];
+      const LIGHT_THEMES=[{id:'light',name:'Light'},{id:'parchment',name:'Parchment'}];
+      const ALL_THEMES_LABELED=[{id:'dusk',name:'Dusk (dark)'},{id:'midnight',name:'Midnight (dark)'},{id:'nebula',name:'Nebula (dark)'},{id:'light',name:'Light (light)'},{id:'parchment',name:'Parchment (light)'}];
+      const ThemePanel=()=>(<div className="mt-2 rounded-2xl panel p-3 space-y-3"><div className="flex items-center justify-between"><span className="text-sm text-purple-200/80">Use System Settings</span><button type="button" onClick={()=>setUseSystem(v=>!v)} className={`px-3 py-1 rounded-xl text-xs font-medium border ${useSystem?"btn-solid border-purple-500":"surface-toggle border-purple-800/60 text-purple-100/80"}`}>{useSystem?"On":"Off"}</button></div>{useSystem?(<><div className="flex items-center gap-3"><span className="text-xs text-purple-200/80 w-10 shrink-0">Dark:</span><select value={darkTheme} onChange={e=>setDarkTheme(e.target.value)} className="panel rounded-xl px-2 py-1 text-sm flex-1 focus:outline-none focus:ring-2 focus:ring-purple-400 appearance-none">{DARK_THEMES.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></div><div className="flex items-center gap-3"><span className="text-xs text-purple-200/80 w-10 shrink-0">Light:</span><select value={lightTheme} onChange={e=>setLightTheme(e.target.value)} className="panel rounded-xl px-2 py-1 text-sm flex-1 focus:outline-none focus:ring-2 focus:ring-purple-400 appearance-none">{LIGHT_THEMES.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></div></>):(<div className="flex items-center gap-3"><span className="text-xs text-purple-200/80 w-10 shrink-0">Theme:</span><select value={manualTheme} onChange={e=>setManualTheme(e.target.value)} className="panel rounded-xl px-2 py-1 text-sm flex-1 focus:outline-none focus:ring-2 focus:ring-purple-400 appearance-none">{ALL_THEMES_LABELED.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></div>)}</div>);
       return(
         <div className="mx-auto px-4 py-5 w-full max-w-[480px]">
           <div className="flex items-center justify-between gap-4">
