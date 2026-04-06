@@ -97,6 +97,9 @@
       const outerRef=useRef(null);
       const innerRef=useRef(null);
       const prevOpenRef=useRef(open);
+      React.useLayoutEffect(()=>{
+        const el=outerRef.current;if(el&&!open)el.style.maxHeight="0px";
+      },[]);
       useEffect(()=>{
         const el=outerRef.current;if(!el)return;
         const wasOpen=prevOpenRef.current;prevOpenRef.current=open;
@@ -110,7 +113,7 @@
           el.style.maxHeight="0px";
         }
       },[open,instant]);
-      return(<div ref={outerRef} className="expander" style={{maxHeight:"0px"}}><div ref={innerRef}>{children}</div></div>);
+      return(<div ref={outerRef} className="expander"><div ref={innerRef}>{children}</div></div>);
     }
 
     const Stat=({label,value,disabled,onClick,pressed})=>{
@@ -435,9 +438,15 @@
       function override(){
         if(canOverrideCorrect&&prevStatsSnapshotRef.current){
           const u=prevStatsSnapshotRef.current;
-          // Count as wrong: restore played/good/streak to pre-answer values, then add played+1 and reset streak
-          updateStats(c=>{c.played=u.played+1;c.good=u.good;c.streak=0;c.best=u.best;c.times=c.times.slice(0,u.timesLen);});
-          if(mode==="blitz")setBlitzRoundStats(p=>({...p,played:u.blitzPlayed+1,good:u.blitzGood}));
+          if(u.wasWrong){
+            // Wrong-then-correct: give full first-try credit (undo wrong, add correct)
+            updateStats(c=>{c.played=u.played+1;c.good=u.good+1;c.streak=u.streak+1;if(c.streak>c.best)c.best=c.streak;c.times=c.times.slice(0,u.timesLen);if(wrongTimeRef.current!=null&&trackingOn())c.times=[...c.times,wrongTimeRef.current];});
+            if(mode==="blitz")setBlitzRoundStats(p=>({...p,played:u.blitzPlayed+1,good:u.blitzGood+1}));
+          }else{
+            // Pure correct: count as wrong instead
+            updateStats(c=>{c.played=u.played+1;c.good=u.good;c.streak=0;c.best=u.best;c.times=c.times.slice(0,u.timesLen);});
+            if(mode==="blitz")setBlitzRoundStats(p=>({...p,played:u.blitzPlayed+1,good:u.blitzGood}));
+          }
           prevStatsSnapshotRef.current=null;wrongTimeRef.current=null;setCanOverrideCorrect(false);
           setCountedWrong(true);
           pushAndNext();return;
@@ -454,14 +463,15 @@
         if(isTimer(mode)&&!active){setMsg("Press Begin to start.");return;}if(locked)return;
         if(idx===wday(date.y,date.m,date.d)){
           setFlash({type:"good",idx});setTimeout(()=>setFlash(null),550);
-          if(!countedWrong){prevStatsSnapshotRef.current={played:S.played,good:S.good,streak:S.streak,best:S.best,timesLen:S.times.length,blitzPlayed:blitzRoundStats.played,blitzGood:blitzRoundStats.good};setCanOverrideCorrect(true);if(tStartRef.current&&trackingOn()){const dt=(performance.now()-tStartRef.current)/1000;updateStats(c=>{c.times=[...c.times,dt];});}}
+          if(!countedWrong){prevStatsSnapshotRef.current={played:S.played,good:S.good,streak:S.streak,best:S.best,timesLen:S.times.length,blitzPlayed:blitzRoundStats.played,blitzGood:blitzRoundStats.good,wasWrong:false};setCanOverrideCorrect(true);if(tStartRef.current&&trackingOn()){const dt=(performance.now()-tStartRef.current)/1000;updateStats(c=>{c.times=[...c.times,dt];});}}
+          else if(countedWrong&&prevStatsSnapshotRef.current){setCanOverrideCorrect(true);}// wrong-then-correct: keep pre-wrong snapshot
           if(!statsOff&&!countedWrong)updateStats(c=>{c.played+=1;c.good+=1;c.streak+=1;if(c.streak>c.best)c.best=c.streak;});
           if(mode==="blitz"&&!countedWrong)setBlitzRoundStats(p=>({...p,played:p.played+1,good:p.good+1}));
           if(mode==="sudden"){const now=performance.now();qDeadlineRef.current=now+qSec*1000;qPausedAccRef.current=0;qPausedAtRef.current=null;setQRemain(qSec);}
           if(mode==="flash"){clearTimeout(flashTimerRef.current);flashTimerRef.current=null;setFlashPhase("dash");setActive(false);flashDeadlineRef.current=null;setFlashRemainMs(flashMs);resetFlashBar();}
           pushAndNext();
         }else{
-          if(!countedWrong){wrongTimeRef.current=tStartRef.current?(performance.now()-tStartRef.current)/1000:null;prevStatsSnapshotRef.current=null;}
+          if(!countedWrong){wrongTimeRef.current=tStartRef.current?(performance.now()-tStartRef.current)/1000:null;prevStatsSnapshotRef.current={played:S.played,good:S.good,streak:S.streak,best:S.best,timesLen:S.times.length,blitzPlayed:blitzRoundStats.played,blitzGood:blitzRoundStats.good,wasWrong:true};}
           if(mode==="sudden")setGuesses([DAY[idx]]);else setGuesses(g=>g.includes(DAY[idx])?g:[...g,DAY[idx]]);
           if(!statsOff&&!countedWrong)updateStats(c=>{c.played+=1;c.streak=0;});
           if(mode==="blitz"&&!countedWrong)setBlitzRoundStats(p=>({...p,played:p.played+1}));
@@ -503,9 +513,9 @@
         if(!ded||locked)return;
         const sctn=()=>{setDedStack(s=>ded?[...s,ded]:s);spawnDed();setMsg("");setGuesses([]);setCountedWrong(false);setCanOverrideCorrect(false);setLocked(false);setRevealed(false);wrongTimeRef.current=null;prevStatsSnapshotRef.current=null;};
         const sw=label=>{if(!countedWrong){wrongTimeRef.current=tStartRef.current?(performance.now()-tStartRef.current)/1000:null;prevStatsSnapshotRef.current=null;}setGuesses(g=>g.includes(label)?g:[...g,label]);setCountedWrong(true);setCanOverrideCorrect(false);};
-        if(ded.type==="year"){const ok=(+val)===ded.y;flashDed("year",index,ok);if(ok){if(!countedWrong){prevStatsSnapshotRef.current={played:S.played,good:S.good,streak:S.streak,best:S.best,timesLen:S.times.length,blitzPlayed:blitzRoundStats.played,blitzGood:blitzRoundStats.good};setCanOverrideCorrect(true);if(tStartRef.current){const dt=(performance.now()-tStartRef.current)/1000;updateStats(c=>{c.times=[...c.times,dt];});}}if(!statsOff&&!countedWrong)updateStats(c=>{c.played+=1;c.good+=1;c.streak+=1;if(c.streak>c.best)c.best=c.streak;});sctn();}else{if(!statsOff)updateStats(c=>{c.played+=1;c.streak=0;});sw(fmtYear(+val));}}
-        if(ded.type==="month"){const ok=(+val)===ded.m;flashDed("month",index,ok);if(ok){if(!countedWrong){prevStatsSnapshotRef.current={played:S.played,good:S.good,streak:S.streak,best:S.best,timesLen:S.times.length,blitzPlayed:blitzRoundStats.played,blitzGood:blitzRoundStats.good};setCanOverrideCorrect(true);if(tStartRef.current){const dt=(performance.now()-tStartRef.current)/1000;updateStats(c=>{c.times=[...c.times,dt];});}}if(!statsOff&&!countedWrong)updateStats(c=>{c.played+=1;c.good+=1;c.streak+=1;if(c.streak>c.best)c.best=c.streak;});sctn();}else{if(!statsOff)updateStats(c=>{c.played+=1;c.streak=0;});sw(MONTH[+val-1]);}}
-        if(ded.type==="day"){const ok=(+val)===ded.d;flashDed("day",index,ok);if(ok){if(!countedWrong){prevStatsSnapshotRef.current={played:S.played,good:S.good,streak:S.streak,best:S.best,timesLen:S.times.length,blitzPlayed:blitzRoundStats.played,blitzGood:blitzRoundStats.good};setCanOverrideCorrect(true);if(tStartRef.current){const dt=(performance.now()-tStartRef.current)/1000;updateStats(c=>{c.times=[...c.times,dt];});}}if(!statsOff&&!countedWrong)updateStats(c=>{c.played+=1;c.good+=1;c.streak+=1;if(c.streak>c.best)c.best=c.streak;});sctn();}else{if(!statsOff)updateStats(c=>{c.played+=1;c.streak=0;});sw(String(+val));}}
+        if(ded.type==="year"){const ok=(+val)===ded.y;flashDed("year",index,ok);if(ok){if(!countedWrong){prevStatsSnapshotRef.current={played:S.played,good:S.good,streak:S.streak,best:S.best,timesLen:S.times.length,blitzPlayed:blitzRoundStats.played,blitzGood:blitzRoundStats.good,wasWrong:false};setCanOverrideCorrect(true);if(tStartRef.current){const dt=(performance.now()-tStartRef.current)/1000;updateStats(c=>{c.times=[...c.times,dt];});}}if(!statsOff&&!countedWrong)updateStats(c=>{c.played+=1;c.good+=1;c.streak+=1;if(c.streak>c.best)c.best=c.streak;});sctn();}else{if(!statsOff)updateStats(c=>{c.played+=1;c.streak=0;});sw(fmtYear(+val));}}
+        if(ded.type==="month"){const ok=(+val)===ded.m;flashDed("month",index,ok);if(ok){if(!countedWrong){prevStatsSnapshotRef.current={played:S.played,good:S.good,streak:S.streak,best:S.best,timesLen:S.times.length,blitzPlayed:blitzRoundStats.played,blitzGood:blitzRoundStats.good,wasWrong:false};setCanOverrideCorrect(true);if(tStartRef.current){const dt=(performance.now()-tStartRef.current)/1000;updateStats(c=>{c.times=[...c.times,dt];});}}if(!statsOff&&!countedWrong)updateStats(c=>{c.played+=1;c.good+=1;c.streak+=1;if(c.streak>c.best)c.best=c.streak;});sctn();}else{if(!statsOff)updateStats(c=>{c.played+=1;c.streak=0;});sw(MONTH[+val-1]);}}
+        if(ded.type==="day"){const ok=(+val)===ded.d;flashDed("day",index,ok);if(ok){if(!countedWrong){prevStatsSnapshotRef.current={played:S.played,good:S.good,streak:S.streak,best:S.best,timesLen:S.times.length,blitzPlayed:blitzRoundStats.played,blitzGood:blitzRoundStats.good,wasWrong:false};setCanOverrideCorrect(true);if(tStartRef.current){const dt=(performance.now()-tStartRef.current)/1000;updateStats(c=>{c.times=[...c.times,dt];});}}if(!statsOff&&!countedWrong)updateStats(c=>{c.played+=1;c.good+=1;c.streak+=1;if(c.streak>c.best)c.best=c.streak;});sctn();}else{if(!statsOff)updateStats(c=>{c.played+=1;c.streak=0;});sw(String(+val));}}
       }
       useEffect(()=>{arm();setGuesses([]);setStack([]);setDedStack([]);setMsg("");setLocked(false);setRevealed(false);setCanOverrideCorrect(false);wrongTimeRef.current=null;prevStatsSnapshotRef.current=null;if(mode==="deduction"){setFlashPhase("dash");pendingDedSwitchRef.current=null;setSavedDedByType(blankDedTypeStore());setDed(null);}},[mode]);
       useEffect(()=>{
