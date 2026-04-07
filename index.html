@@ -93,7 +93,7 @@
     const blockMinus=e=>{if(e.key==="-"||e.key==="Subtract"||e.key==="Minus")e.preventDefault();};
     const blockMinusBI=e=>{if(e.data&&e.data.includes("-"))e.preventDefault();};
 
-    function Expander({open,instant,children}){
+    function Expander({open,instant,children,onClosed}){
       const outerRef=useRef(null);
       const innerRef=useRef(null);
       const prevOpenRef=useRef(open);
@@ -104,12 +104,15 @@
           el.style.maxHeight=(innerRef.current?.scrollHeight??0)+16+"px";
         }else if(instant||!wasOpen){
           el.style.maxHeight="0px";
+          if(onClosed)onClosed();
         }else{
           el.style.maxHeight=el.scrollHeight+"px";
           el.getBoundingClientRect();
           el.style.maxHeight="0px";
+          const handler=()=>{el.removeEventListener("transitionend",handler);if(onClosed)onClosed();};
+          el.addEventListener("transitionend",handler,{once:true});
         }
-      },[open,instant]);
+      },[open,instant,onClosed]);
       return(<div ref={outerRef} className="expander"><div ref={innerRef}>{children}</div></div>);
     }
 
@@ -234,8 +237,8 @@
           </div>
           {extStats&&(<div className="mt-2 flex justify-evenly"><div className="w-1/4"><Stat label="Last Time (Correct)" value={fmtTime(calcLast(times))}/></div><div className="w-1/4"><Stat label="Median Time (Correct)" value={fmtTime(calcMed(times))}/></div></div>)}
           <div className="mt-3 flex gap-2 flex-wrap">
-            <button type="button" className={`px-2.5 py-1 rounded-xl text-xs font-medium border ${extStats?"surface-button border-purple-500/70 text-purple-100":"surface-toggle border-purple-800/60 text-purple-100/80"}`} onClick={()=>setExtStats(v=>!v)}>More Stats</button>
-            <button type="button" className={`px-2.5 py-1 rounded-xl text-xs font-medium border ${themeOpen?"surface-button border-purple-500/70 text-purple-100":"surface-toggle border-purple-800/60 text-purple-100/80"}`} onClick={()=>setThemeOpen(v=>!v)}>Theme</button>
+            <button type="button" className={`px-2.5 py-1 rounded-xl text-xs font-medium border ${extStats?"btn-solid border-purple-500":"surface-button text-purple-100/80"}`} onClick={()=>setExtStats(v=>!v)}>More Stats</button>
+            <button type="button" className={`px-2.5 py-1 rounded-xl text-xs font-medium border ${themeOpen?"btn-solid border-purple-500":"surface-button text-purple-100/80"}`} onClick={()=>setThemeOpen(v=>!v)}>Theme</button>
           </div>
           <div className="mt-3 rounded-2xl panel p-3">
             <div className="flex items-center gap-2 flex-nowrap">
@@ -588,7 +591,7 @@
       return(
         <div className="mx-auto px-4 py-5 w-full max-w-[480px]">
           <div className="flex items-center justify-between gap-4">
-            <h1 className="text-xl font-semibold leading-none">Calendar Game <span className="text-[10px] font-normal text-purple-300/40 ml-1">4/6 21:21</span></h1>
+            <h1 className="text-xl font-semibold leading-none">Calendar Game <span className="text-[10px] font-normal text-purple-300/40 ml-1">4/6 21:33</span></h1>
             <div className="relative">
               <select ref={modeSelectRef} value={mode} onChange={e=>{setMode(e.target.value);e.target.blur();const root=document.getElementById('root');if(root){root.style.pointerEvents='none';setTimeout(()=>root.style.pointerEvents='',400);}}} className="panel rounded-xl px-2.5 py-2 pr-9 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 appearance-none">
                 <option value="classic">Classic</option><option value="aox">AoX</option><option value="deduction">Deduction</option><option value="blitz">Blitz</option><option value="sudden">Sudden Death</option><option value="flash">Flash</option><option value="lookup">Lookup</option><option value="guide">How to Play</option>
@@ -606,8 +609,8 @@
             {extStats&&(<div className="mt-2 flex justify-evenly"><div className="w-1/4"><Stat label="Last Time (Correct)" value={fmtTime(sLast)} disabled={lastVisOff} onClick={toggleTimingVis} pressed={!lastVisOff}/></div><div className="w-1/4"><Stat label="Median Time (Correct)" value={fmtTime(sMed)} disabled={medVisOff} onClick={toggleTimingVis} pressed={!medVisOff}/></div></div>)}
             <div className="mt-3 flex gap-2 flex-wrap items-center">
               <button type="button" className="px-2.5 py-1.5 rounded-xl btn-solid text-xs font-medium" onClick={handleResetStats}>Reset Stats</button>
-              <button type="button" className={`px-2.5 py-1.5 rounded-xl text-xs font-medium border ${extStats?"surface-button border-purple-500/70 text-purple-100":"surface-toggle border-purple-800/60 text-purple-100/80"}`} onClick={()=>setExtStats(v=>!v)}>More Stats</button>
-              <button type="button" className={`px-2.5 py-1.5 rounded-xl text-xs font-medium border ${themeOpen?"surface-button border-purple-500/70 text-purple-100":"surface-toggle border-purple-800/60 text-purple-100/80"}`} onClick={()=>setThemeOpen(v=>!v)}>Theme</button>
+              <button type="button" className={`px-2.5 py-1.5 rounded-xl text-xs font-medium border ${extStats?"btn-solid border-purple-500":"surface-button text-purple-100/80"}`} onClick={()=>setExtStats(v=>!v)}>More Stats</button>
+              <button type="button" className={`px-2.5 py-1.5 rounded-xl text-xs font-medium border ${themeOpen?"btn-solid border-purple-500":"surface-button text-purple-100/80"}`} onClick={()=>setThemeOpen(v=>!v)}>Theme</button>
               {timerSettingControl&&<div className="ml-auto">{timerSettingControl}</div>}
             </div>
             {themeOpen&&<ThemePanel/>}
@@ -752,19 +755,18 @@
       const isControlled=typeof controlledOpen==="boolean"&&typeof onOpenChange==="function";
       const [internalOpen,setInternalOpen]=React.useState(false);
       const [frozenDate,setFrozenDate]=React.useState(date);
+      const latestDateRef=React.useRef(date);
+      latestDateRef.current=date;
       const key=date?`${date.y}-${date.m}-${date.d}`:"";
       React.useEffect(()=>{if(!isControlled)setInternalOpen(false);},[key,isControlled]);
       const hasDate=!!date;
       React.useEffect(()=>{if(hasDate)return;if(isControlled){if(controlledOpen)onOpenChange(false);}else setInternalOpen(false);},[hasDate,isControlled,controlledOpen,onOpenChange]);
       const open=hasDate?(isControlled?controlledOpen:internalOpen):false;
       const toggle=()=>{if(!hasDate)return;if(isControlled)onOpenChange(!open);else setInternalOpen(v=>!v);};
-      // Only update displayed date when panel is open or about to open — freeze it while closing
+      // Update frozen date immediately when open, or when panel finishes closing (via onClosed)
       React.useEffect(()=>{if(open&&date)setFrozenDate(date);},[open,date]);
-      const animDuration=280;// matches .expander transition duration in ms
-      React.useEffect(()=>{
-        if(!open){const t=setTimeout(()=>{if(date)setFrozenDate(date);},animDuration);return()=>clearTimeout(t);}
-      },[open,date]);
-      return(<div className={className??"mt-5"}><button type="button" onClick={toggle} className={`w-full px-4 py-2 rounded-xl btn-solid text-sm font-medium${!hasDate?" opacity-60 cursor-not-allowed pointer-events-none":""}`} aria-disabled={!hasDate}>{open?"Hide Codes":"Show Codes"}</button><Expander open={open&&hasDate} instant={!!instant}><div className={contentClassName??"mt-3 rounded-2xl panel p-4 pb-1"}><MethodExplanation date={frozenDate}/></div></Expander></div>);
+      const handleClosed=React.useCallback(()=>{if(latestDateRef.current)setFrozenDate(latestDateRef.current);},[]);
+      return(<div className={className??"mt-5"}><button type="button" onClick={toggle} className={`w-full px-4 py-2 rounded-xl btn-solid text-sm font-medium${!hasDate?" opacity-60 cursor-not-allowed pointer-events-none":""}`} aria-disabled={!hasDate}>{open?"Hide Codes":"Show Codes"}</button><Expander open={open&&hasDate} instant={!!instant} onClosed={handleClosed}><div className={contentClassName??"mt-3 rounded-2xl panel p-4 pb-1"}><MethodExplanation date={frozenDate}/></div></Expander></div>);
     }
 
     function LookupCard({history=[],onAddHistory,onClearHistory,inputValue="",onInputChange,outputValue="",onOutputChange,calcDate,onCalcDateChange,selectedHistoryId,onSelectedHistoryIdChange,calcOpen=false,onCalcOpenChange}){
