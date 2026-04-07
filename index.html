@@ -591,7 +591,7 @@
       return(
         <div className="mx-auto px-4 py-5 w-full max-w-[480px]">
           <div className="flex items-center justify-between gap-4">
-            <h1 className="text-xl font-semibold leading-none">Calendar Game <span className="text-[10px] font-normal text-purple-300/40 ml-1">4/6 21:33</span></h1>
+            <h1 className="text-xl font-semibold leading-none">Calendar Game <span className="text-[10px] font-normal text-purple-300/40 ml-1">4/6 21:41</span></h1>
             <div className="relative">
               <select ref={modeSelectRef} value={mode} onChange={e=>{setMode(e.target.value);e.target.blur();const root=document.getElementById('root');if(root){root.style.pointerEvents='none';setTimeout(()=>root.style.pointerEvents='',400);}}} className="panel rounded-xl px-2.5 py-2 pr-9 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 appearance-none">
                 <option value="classic">Classic</option><option value="aox">AoX</option><option value="deduction">Deduction</option><option value="blitz">Blitz</option><option value="sudden">Sudden Death</option><option value="flash">Flash</option><option value="lookup">Lookup</option><option value="guide">How to Play</option>
@@ -757,15 +757,21 @@
       const [frozenDate,setFrozenDate]=React.useState(date);
       const latestDateRef=React.useRef(date);
       latestDateRef.current=date;
+      const pendingUpdateRef=React.useRef(false);
       const key=date?`${date.y}-${date.m}-${date.d}`:"";
       React.useEffect(()=>{if(!isControlled)setInternalOpen(false);},[key,isControlled]);
       const hasDate=!!date;
       React.useEffect(()=>{if(hasDate)return;if(isControlled){if(controlledOpen)onOpenChange(false);}else setInternalOpen(false);},[hasDate,isControlled,controlledOpen,onOpenChange]);
       const open=hasDate?(isControlled?controlledOpen:internalOpen):false;
       const toggle=()=>{if(!hasDate)return;if(isControlled)onOpenChange(!open);else setInternalOpen(v=>!v);};
-      // Update frozen date immediately when open, or when panel finishes closing (via onClosed)
-      React.useEffect(()=>{if(open&&date)setFrozenDate(date);},[open,date]);
-      const handleClosed=React.useCallback(()=>{if(latestDateRef.current)setFrozenDate(latestDateRef.current);},[]);
+      React.useEffect(()=>{
+        if(!date)return;
+        if(!open){setFrozenDate(date);pendingUpdateRef.current=false;}
+        else{pendingUpdateRef.current=true;}
+      },[date,open]);
+      const handleClosed=React.useCallback(()=>{
+        if(pendingUpdateRef.current&&latestDateRef.current){setFrozenDate(latestDateRef.current);pendingUpdateRef.current=false;}
+      },[]);
       return(<div className={className??"mt-5"}><button type="button" onClick={toggle} className={`w-full px-4 py-2 rounded-xl btn-solid text-sm font-medium${!hasDate?" opacity-60 cursor-not-allowed pointer-events-none":""}`} aria-disabled={!hasDate}>{open?"Hide Codes":"Show Codes"}</button><Expander open={open&&hasDate} instant={!!instant} onClosed={handleClosed}><div className={contentClassName??"mt-3 rounded-2xl panel p-4 pb-1"}><MethodExplanation date={frozenDate}/></div></Expander></div>);
     }
 
