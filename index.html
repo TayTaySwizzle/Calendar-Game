@@ -37,7 +37,7 @@
     .chip{background:var(--chip-bg);border:1px solid var(--chip-bd);padding:.25rem .5rem;border-radius:.75rem;font-size:12px}
     .bar{height:6px;border-radius:6px;overflow:hidden;background:var(--bar-bg);border:1px solid var(--bar-bd)}
     .bar>span{display:block;height:100%;background:linear-gradient(90deg,#a855f7,#7c3aed)}
-    .expander{transition:max-height .28s ease-in-out;overflow:hidden;will-change:max-height}
+    .expander{max-height:0;transition:max-height .28s ease-in-out;overflow:hidden;will-change:max-height}
     @keyframes fadeSlideIn{0%{opacity:0;transform:translateY(-6px)}100%{opacity:1;transform:translateY(0)}}
     .anim-in{animation:fadeSlideIn .2s ease-out}
     [data-theme="parchment"] .text-purple-50,[data-theme="light"] .text-purple-50{color:var(--body-color)!important}
@@ -94,24 +94,25 @@
     const blockMinusBI=e=>{if(e.data&&e.data.includes("-"))e.preventDefault();};
 
     function Expander({open,instant,children}){
+      const outerRef=useRef(null);
       const innerRef=useRef(null);
-      const [maxH,setMaxH]=useState("0px");
       const prevOpenRef=useRef(open);
-      const prevMaxHRef=useRef("0px");
       useEffect(()=>{
+        const el=outerRef.current;if(!el)return;
         const wasOpen=prevOpenRef.current;prevOpenRef.current=open;
         if(open){
-          const h=(innerRef.current?.scrollHeight??0)+16+"px";
-          prevMaxHRef.current=h;setMaxH(h);
+          el.style.maxHeight=(innerRef.current?.scrollHeight??0)+16+"px";
         }else if(instant||!wasOpen){
-          prevMaxHRef.current="0px";setMaxH("0px");
+          el.style.maxHeight="0px";
         }else{
-          const cur=prevMaxHRef.current;
-          setMaxH(cur);
-          requestAnimationFrame(()=>{prevMaxHRef.current="0px";setMaxH("0px");});
+          // Pin to current rendered height, force reflow, then animate to 0
+          el.style.maxHeight=el.scrollHeight+"px";
+          el.getBoundingClientRect();
+          el.style.maxHeight="0px";
         }
       },[open,instant]);
-      return(<div className="expander" style={{maxHeight:maxH}}><div ref={innerRef}>{children}</div></div>);
+      // No style prop - React never touches maxHeight, DOM writes are sole controller
+      return(<div ref={outerRef} className="expander"><div ref={innerRef}>{children}</div></div>);
     }
 
     const Stat=({label,value,disabled,onClick,pressed})=>{
@@ -536,11 +537,6 @@
         return null;
       })();
       const [rangeOpen,setRangeOpen]=useState(false);
-      const [rangeMaxH,setRangeMaxH]=useState("0px");
-      const rangeContentRef=useRef(null);
-      const updateRangeH=useCallback(()=>{const inner=rangeContentRef.current;if(!inner)return;const s=window.getComputedStyle(inner);const extra=(parseFloat(s.marginTop)||0)+(parseFloat(s.marginBottom)||0);setRangeMaxH(`${inner.scrollHeight+extra}px`);},[]);
-      useEffect(()=>{if(!rangeOpen){setRangeMaxH("0px");return;}updateRangeH();},[rangeOpen,minInputVal,maxInputVal,minY,maxY,updateRangeH]);
-      useEffect(()=>{if(!rangeOpen)return;const onR=()=>updateRangeH();window.addEventListener("resize",onR);return()=>window.removeEventListener("resize",onR);},[rangeOpen,updateRangeH]);
       const shouldShowTimerDate=(!isTimer(mode))||active||showTimerDate;
       const flashHiding=mode==="flash"&&active&&flashPhase==="hide";
       let timerBlocksReveal=false;
@@ -568,7 +564,7 @@
       return(
         <div className="mx-auto px-4 py-5 w-full max-w-[480px]">
           <div className="flex items-center justify-between gap-4">
-            <h1 className="text-xl font-semibold leading-none">Calendar Game <span className="text-[10px] font-normal text-purple-300/40 ml-1">4/6 16:46</span></h1>
+            <h1 className="text-xl font-semibold leading-none">Calendar Game <span className="text-[10px] font-normal text-purple-300/40 ml-1">4/7 12:30</span></h1>
             <div className="relative">
               <select ref={modeSelectRef} value={mode} onChange={e=>{setMode(e.target.value);e.target.blur();const root=document.getElementById('root');if(root){root.style.pointerEvents='none';setTimeout(()=>root.style.pointerEvents='',400);}}} className="panel rounded-xl px-2.5 py-2 pr-9 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 appearance-none">
                 <option value="classic">Classic</option><option value="aox">AoX</option><option value="deduction">Deduction</option><option value="blitz">Blitz</option><option value="sudden">Sudden Death</option><option value="flash">Flash</option><option value="lookup">Lookup</option><option value="guide">How to Play</option>
@@ -596,15 +592,15 @@
                 <span>Year Range: <span className="tabular-nums ml-1">{minY} → {maxY}</span></span>
                 <span className={`text-white/90 text-[7px] leading-none transition-transform ease-in-out ${rangeOpen?"rotate-180":""}`} style={{transitionDuration:"250ms"}}>▼</span>
               </button>
-              <div className="expander" style={{maxHeight:rangeMaxH}}>
-                <div ref={rangeContentRef} className="mt-3 space-y-3 pr-1">
+              <Expander open={rangeOpen}>
+                <div className="mt-3 space-y-3 pr-1">
                   <div className="grid grid-cols-2 gap-3">
                     <div><label htmlFor="min-year-input" className="block text-xs text-purple-200/80 mb-1">Start Year</label><input ref={minInputRef} id="min-year-input" type="text" inputMode="numeric" pattern="[0-9]*" value={minInputVal} onChange={e=>{if(e.target.value===''||/^\d*$/.test(e.target.value))setMinInputVal(e.target.value);}} onBlur={commitMin} onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();commitMin();e.currentTarget.blur();}if(e.key==="Escape"){setMinInputVal(String(minY));e.currentTarget.blur();}blockMinus(e);}} onBeforeInput={blockMinusBI} className="w-full panel rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-400 tabular-nums"/></div>
                     <div><label htmlFor="max-year-input" className="block text-xs text-purple-200/80 mb-1">End Year</label><input ref={maxInputRef} id="max-year-input" type="text" inputMode="numeric" pattern="[0-9]*" value={maxInputVal} onChange={e=>{if(e.target.value===''||/^\d*$/.test(e.target.value))setMaxInputVal(e.target.value);}} onBlur={commitMax} onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();commitMax();e.currentTarget.blur();}if(e.key==="Escape"){setMaxInputVal(String(maxY));e.currentTarget.blur();}blockMinus(e);}} onBeforeInput={blockMinusBI} className="w-full panel rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-400 tabular-nums"/></div>
                   </div>
                   <p className="text-xs text-purple-300/70">AD dates only, 1–10000.</p>
                 </div>
-              </div>
+              </Expander>
             </div>
           </>)}
           <AoxMode minY={minY} maxY={maxY} visible={mode==="aox"} extStats={extStats} setExtStats={setExtStats} themeOpen={themeOpen} setThemeOpen={setThemeOpen}/>
