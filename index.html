@@ -56,7 +56,7 @@
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script type="text/babel" data-presets="env,react">
-    const {useEffect,useMemo,useRef,useState,useCallback} = React;
+    const {useEffect,useMemo,useRef,useState,useCallback,useLayoutEffect} = React;
     const MONTH=["January","February","March","April","May","June","July","August","September","October","November","December"];
     const MONTH_ABBR=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
     const DAY=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
@@ -97,7 +97,7 @@
       const outerRef=useRef(null);
       const innerRef=useRef(null);
       const prevOpenRef=useRef(open);
-      useEffect(()=>{
+      useLayoutEffect(()=>{
         const el=outerRef.current;if(!el)return;
         const wasOpen=prevOpenRef.current;prevOpenRef.current=open;
         if(open){
@@ -105,13 +105,11 @@
         }else if(instant||!wasOpen){
           el.style.maxHeight="0px";
         }else{
-          // Pin to current rendered height, force reflow, then animate to 0
           el.style.maxHeight=el.scrollHeight+"px";
           el.getBoundingClientRect();
           el.style.maxHeight="0px";
         }
       },[open,instant]);
-      // No style prop - React never touches maxHeight, DOM writes are sole controller
       return(<div ref={outerRef} className="expander"><div ref={innerRef}>{children}</div></div>);
     }
 
@@ -326,6 +324,7 @@
       const [revealed,setRevealed]=useState(false);
       const [countedWrong,setCountedWrong]=useState(false);
       const [canOverrideCorrect,setCanOverrideCorrect]=useState(false);
+      const [pendingWrongOverride,setPendingWrongOverride]=useState(null);
       const [calcOpen,setCalcOpen]=useState(false);
       const [calcPenaltyActive,setCalcPenaltyActive]=useState(false);
       const calcOpenStatesRef=useRef(new Map());
@@ -404,15 +403,19 @@
         raf=requestAnimationFrame(loop);return()=>cancelAnimationFrame(raf);
       },[mode,blitzSec,qSec,blitzRunning,active,flashPhase]);
       const trackingOn=()=>["classic","blitz","sudden","flash","deduction"].includes(mode);
-      const arm=()=>{setActive(false);setShowTimerDate(false);setMsg("");setGuesses([]);setFlash(null);setLocked(false);setRevealed(false);setCountedWrong(false);setCanOverrideCorrect(false);setBlitzRemain(blitzSec);blitzRemainRef.current=blitzSec;blitzStartRef.current=null;blitzPausedAtRef.current=null;blitzPausedAccRef.current=0;setBlitzRunning(false);if(mode==="blitz")setBlitzRoundStats(blankStats());qDeadlineRef.current=null;qPausedAtRef.current=null;qPausedAccRef.current=0;setQRemain(qSec);clearTimeout(flashTimerRef.current);flashTimerRef.current=null;setFlashPhase("dash");flashDeadlineRef.current=null;setFlashRemainMs(flashMs);resetFlashBar();tStartRef.current=null;wrongTimeRef.current=null;prevStatsSnapshotRef.current=null;if(blitzBarRef.current)blitzBarRef.current.style.width="100%";if(blitzTimeRef.current)blitzTimeRef.current.textContent=blitzSec+"s";if(suddenBarRef.current)suddenBarRef.current.style.width="100%";if(suddenTimeRef.current)suddenTimeRef.current.textContent=qSec+"s";};
+      const arm=()=>{setActive(false);setShowTimerDate(false);setMsg("");setGuesses([]);setFlash(null);setLocked(false);setRevealed(false);setCountedWrong(false);setCanOverrideCorrect(false);setPendingWrongOverride(null);setBlitzRemain(blitzSec);blitzRemainRef.current=blitzSec;blitzStartRef.current=null;blitzPausedAtRef.current=null;blitzPausedAccRef.current=0;setBlitzRunning(false);if(mode==="blitz")setBlitzRoundStats(blankStats());qDeadlineRef.current=null;qPausedAtRef.current=null;qPausedAccRef.current=0;setQRemain(qSec);clearTimeout(flashTimerRef.current);flashTimerRef.current=null;setFlashPhase("dash");flashDeadlineRef.current=null;setFlashRemainMs(flashMs);resetFlashBar();tStartRef.current=null;wrongTimeRef.current=null;prevStatsSnapshotRef.current=null;if(blitzBarRef.current)blitzBarRef.current.style.width="100%";if(blitzTimeRef.current)blitzTimeRef.current.textContent=blitzSec+"s";if(suddenBarRef.current)suddenBarRef.current.style.width="100%";if(suddenTimeRef.current)suddenTimeRef.current.textContent=qSec+"s";};
       const begin=()=>{setActive(true);setShowTimerDate(false);setMsg("");setLocked(false);setRevealed(false);setCountedWrong(false);setCanOverrideCorrect(false);if(mode==="blitz"){blitzStartRef.current=performance.now();blitzPausedAccRef.current=0;blitzPausedAtRef.current=null;setBlitzRunning(true);setBlitzRemain(blitzSec);blitzRemainRef.current=blitzSec;setBlitzRoundStats(blankStats());}if(mode==="sudden"){const now=performance.now();qDeadlineRef.current=now+qSec*1000;qPausedAccRef.current=0;qPausedAtRef.current=null;setQRemain(qSec);}if(mode==="flash"){setFlashPhase("show");clearTimeout(flashTimerRef.current);const now=performance.now();flashDeadlineRef.current=now+flashMs;setFlashRemainMs(flashMs);flashTimerRef.current=setTimeout(endFlashPhase,Math.max(50,flashMs));startFlashBar(flashMs);}tStartRef.current=performance.now();pushAndNext();};
       function runDeductionRound(){setDedStack(s=>ded?[...s,ded]:s);spawnDed();setMsg("");setRevealed(false);setLocked(false);setGuesses([]);setCountedWrong(false);setCanOverrideCorrect(false);setCalcPenalty(false);wrongTimeRef.current=null;prevStatsSnapshotRef.current=null;}
       function pushAndNext(){
         if(["classic","flash","blitz","sudden"].includes(mode)){
           setStack(s=>[...s,{...date}]);setDate(randomDate(minY,maxY));
-          setGuesses([]);setRevealed(false);setLocked(false);setCountedWrong(false);setMsg("");setCalcPenalty(false);
+          setGuesses([]);setRevealed(false);setLocked(false);setMsg("");setCalcPenalty(false);
           setCalcOpen(false);calcOpenStatesRef.current.set(mode,false);
           setCalcInstantClose(true);
+          // If moving past a wrong answer, save it so override can undo it on next question
+          if(countedWrong){setPendingWrongOverride(wrongTimeRef.current);}
+          else{setPendingWrongOverride(null);}
+          setCountedWrong(false);
           wrongTimeRef.current=null;
           // prevStatsSnapshotRef intentionally NOT cleared here so override-after-correct works across the question boundary
           if(isTimer(mode)&&active)tStartRef.current=performance.now();else if(mode==="classic")tStartRef.current=performance.now();
@@ -438,34 +441,45 @@
         setStack(s=>s.slice(0,-1));setDate(prev);setMsg(`Answer: ${DAY[wday(prev.y,prev.m,prev.d)]}.`);setGuesses([]);setLocked(true);setRevealed(true);setCanOverrideCorrect(false);wrongTimeRef.current=null;prevStatsSnapshotRef.current=null;
       }
       function override(){
+        // Case 1: override after correct answer
         if(canOverrideCorrect&&prevStatsSnapshotRef.current){
           const u=prevStatsSnapshotRef.current;
           if(u.wasWrong){
-            // Wrong-then-correct: give first-try credit with pre-wrong time
             updateStats(c=>{c.played=u.played+1;c.good=u.good+1;c.streak=u.streak+1;if(c.streak>c.best)c.best=c.streak;c.times=c.times.slice(0,u.timesLen);if(wrongTimeRef.current!=null&&trackingOn())c.times=[...c.times,wrongTimeRef.current];});
             if(mode==="blitz")setBlitzRoundStats(p=>({...p,played:u.blitzPlayed+1,good:u.blitzGood+1}));
           }else{
-            // Pure correct fat-finger: count as wrong, don't touch best
             updateStats(c=>{c.played=u.played+1;c.good=u.good;c.streak=0;c.times=c.times.slice(0,u.timesLen);});
             if(mode==="blitz")setBlitzRoundStats(p=>({...p,played:u.blitzPlayed+1,good:u.blitzGood}));
           }
-          prevStatsSnapshotRef.current=null;wrongTimeRef.current=null;setCanOverrideCorrect(false);
-          setCountedWrong(true);
+          prevStatsSnapshotRef.current=null;wrongTimeRef.current=null;setCanOverrideCorrect(false);setCountedWrong(true);
+          if(!avgVisOff)pushAndNext();
+          else{setGuesses([]);setMsg("");setLocked(false);setRevealed(false);setCalcPenalty(false);setCalcOpen(false);calcOpenStatesRef.current.set(mode,false);}
+          return;
+        }
+        // Case 2: override after wrong on current question
+        if(countedWrong){
+          updateStats(c=>{c.good+=1;c.streak+=1;if(c.streak>c.best)c.best=c.streak;if(wrongTimeRef.current!=null&&trackingOn())c.times=[...c.times,wrongTimeRef.current];});
+          wrongTimeRef.current=null;prevStatsSnapshotRef.current=null;
+          if(mode==="blitz")setBlitzRoundStats(p=>({...p,good:p.good+1}));
+          setCountedWrong(false);setCanOverrideCorrect(false);setGuesses([]);setMsg("");setLocked(false);setRevealed(false);setCalcPenalty(false);setCalcOpen(false);calcOpenStatesRef.current.set(mode,false);calcPenaltyStatesRef.current.set(mode,false);
+          if(isTimer(mode)){setActive(true);setShowTimerDate(false);if(mode==="blitz"){blitzStartRef.current=performance.now()-((blitzSec-blitzRemainRef.current)*1000);blitzPausedAccRef.current=0;setBlitzRunning(true);}if(mode==="sudden"){const now=performance.now();qDeadlineRef.current=now+qSec*1000;qPausedAccRef.current=0;qPausedAtRef.current=null;setQRemain(qSec);}if(mode==="flash"){setFlashPhase("show");clearTimeout(flashTimerRef.current);const now=performance.now();flashDeadlineRef.current=now+flashMs;setFlashRemainMs(flashMs);flashTimerRef.current=setTimeout(endFlashPhase,Math.max(50,flashMs));startFlashBar(flashMs);}}
           pushAndNext();return;
         }
-        if(!countedWrong)return;
-        updateStats(c=>{c.good+=1;c.streak+=1;if(c.streak>c.best)c.best=c.streak;if(wrongTimeRef.current!=null&&trackingOn())c.times=[...c.times,wrongTimeRef.current];});
-        wrongTimeRef.current=null;prevStatsSnapshotRef.current=null;
-        if(mode==="blitz")setBlitzRoundStats(p=>({...p,good:p.good+1}));
-        setCountedWrong(false);setCanOverrideCorrect(false);setGuesses([]);setMsg("");setLocked(false);setRevealed(false);setCalcPenalty(false);setCalcOpen(false);calcOpenStatesRef.current.set(mode,false);calcPenaltyStatesRef.current.set(mode,false);
-        if(isTimer(mode)){setActive(true);setShowTimerDate(false);if(mode==="blitz"){blitzStartRef.current=performance.now()-((blitzSec-blitzRemainRef.current)*1000);blitzPausedAccRef.current=0;setBlitzRunning(true);}if(mode==="sudden"){const now=performance.now();qDeadlineRef.current=now+qSec*1000;qPausedAccRef.current=0;qPausedAtRef.current=null;setQRemain(qSec);}if(mode==="flash"){setFlashPhase("show");clearTimeout(flashTimerRef.current);const now=performance.now();flashDeadlineRef.current=now+flashMs;setFlashRemainMs(flashMs);flashTimerRef.current=setTimeout(endFlashPhase,Math.max(50,flashMs));startFlashBar(flashMs);}}
-        pushAndNext();
+        // Case 3: override after wrong on PREVIOUS question (e.g. Show Codes then New)
+        if(pendingWrongOverride!=null){
+          const wt=pendingWrongOverride;
+          updateStats(c=>{c.good+=1;c.streak+=1;if(c.streak>c.best)c.best=c.streak;if(wt!=null&&trackingOn())c.times=[...c.times,wt];});
+          setPendingWrongOverride(null);
+          if(mode==="blitz")setBlitzRoundStats(p=>({...p,good:p.good+1}));
+          if(!avgVisOff)pushAndNext();
+          return;
+        }
       }
       function submitDoW(idx){
         if(isTimer(mode)&&!active){setMsg("Press Begin to start.");return;}if(locked)return;
         if(idx===wday(date.y,date.m,date.d)){
           setFlash({type:"good",idx});setTimeout(()=>setFlash(null),550);
-          if(!countedWrong){prevStatsSnapshotRef.current={played:S.played,good:S.good,streak:S.streak,best:S.best,timesLen:S.times.length,blitzPlayed:blitzRoundStats.played,blitzGood:blitzRoundStats.good,wasWrong:false};setCanOverrideCorrect(true);if(tStartRef.current&&trackingOn()){const dt=(performance.now()-tStartRef.current)/1000;updateStats(c=>{c.times=[...c.times,dt];});}}
+          if(!countedWrong){prevStatsSnapshotRef.current={played:S.played,good:S.good,streak:S.streak,best:S.best,timesLen:S.times.length,blitzPlayed:blitzRoundStats.played,blitzGood:blitzRoundStats.good,wasWrong:false};setCanOverrideCorrect(true);setPendingWrongOverride(null);if(tStartRef.current&&trackingOn()){const dt=(performance.now()-tStartRef.current)/1000;updateStats(c=>{c.times=[...c.times,dt];});}}
           else if(countedWrong&&prevStatsSnapshotRef.current){setCanOverrideCorrect(true);}// wrong-then-correct: keep pre-wrong snapshot
           if(!statsOff&&!countedWrong)updateStats(c=>{c.played+=1;c.good+=1;c.streak+=1;if(c.streak>c.best)c.best=c.streak;});
           if(mode==="blitz"&&!countedWrong)setBlitzRoundStats(p=>({...p,played:p.played+1,good:p.good+1}));
@@ -473,7 +487,7 @@
           if(mode==="flash"){clearTimeout(flashTimerRef.current);flashTimerRef.current=null;setFlashPhase("dash");setActive(false);flashDeadlineRef.current=null;setFlashRemainMs(flashMs);resetFlashBar();}
           pushAndNext();
         }else{
-          if(!countedWrong){wrongTimeRef.current=tStartRef.current?(performance.now()-tStartRef.current)/1000:null;prevStatsSnapshotRef.current={played:S.played,good:S.good,streak:S.streak,best:S.best,timesLen:S.times.length,blitzPlayed:blitzRoundStats.played,blitzGood:blitzRoundStats.good,wasWrong:true};}
+          if(!countedWrong){wrongTimeRef.current=tStartRef.current?(performance.now()-tStartRef.current)/1000:null;prevStatsSnapshotRef.current={played:S.played,good:S.good,streak:S.streak,best:S.best,timesLen:S.times.length,blitzPlayed:blitzRoundStats.played,blitzGood:blitzRoundStats.good,wasWrong:true};}setPendingWrongOverride(null);
           if(mode==="sudden")setGuesses([DAY[idx]]);else setGuesses(g=>g.includes(DAY[idx])?g:[...g,DAY[idx]]);
           if(!statsOff&&!countedWrong)updateStats(c=>{c.played+=1;c.streak=0;});
           if(mode==="blitz"&&!countedWrong)setBlitzRoundStats(p=>({...p,played:p.played+1}));
@@ -544,7 +558,7 @@
       if(isTimer(mode)){if(mode==="flash"){if(!showTimerDate){if(!active||flashPhase==="dash")timerBlocksReveal=true;else if(flashPhase==="show")timerBlocksReveal=true;else if(flashHiding)timerBlocksReveal=false;}}else timerBlocksReveal=!shouldShowTimerDate;}
       const revealDisabled=locked||calcOpen||calcPenaltyActive||timerBlocksReveal;
       const timerBusy=isTimer(mode)&&active;
-      const overrideAvail=(countedWrong||canOverrideCorrect);
+      const overrideAvail=(countedWrong||canOverrideCorrect||pendingWrongOverride!=null);
       const calcTarget=useMemo(()=>{if(mode==="lookup"||mode==="guide"||mode==="aox")return null;if(mode==="deduction")return ded?{y:ded.y,m:ded.m,d:ded.d}:null;return date;},[mode,date?.y,date?.m,date?.d,ded?.y,ded?.m,ded?.d]);
       const calcTargetKey=calcTarget?`${calcTarget.y}-${calcTarget.m}-${calcTarget.d}`:"none";
       const lookupCalcTargetKey=lookupCalcDate?`${lookupCalcDate.y}-${lookupCalcDate.m}-${lookupCalcDate.d}`:"none";
@@ -566,7 +580,7 @@
       return(
         <div className="mx-auto px-4 py-5 w-full max-w-[480px]">
           <div className="flex items-center justify-between gap-4">
-            <h1 className="text-xl font-semibold leading-none">Calendar Game <span className="text-[10px] font-normal text-purple-300/40 ml-1">4/6 17:32</span></h1>
+            <h1 className="text-xl font-semibold leading-none">Calendar Game <span className="text-[10px] font-normal text-purple-300/40 ml-1">4/6 18:01</span></h1>
             <div className="relative">
               <select ref={modeSelectRef} value={mode} onChange={e=>{setMode(e.target.value);e.target.blur();const root=document.getElementById('root');if(root){root.style.pointerEvents='none';setTimeout(()=>root.style.pointerEvents='',400);}}} className="panel rounded-xl px-2.5 py-2 pr-9 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 appearance-none">
                 <option value="classic">Classic</option><option value="aox">AoX</option><option value="deduction">Deduction</option><option value="blitz">Blitz</option><option value="sudden">Sudden Death</option><option value="flash">Flash</option><option value="lookup">Lookup</option><option value="guide">How to Play</option>
