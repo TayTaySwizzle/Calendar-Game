@@ -171,6 +171,7 @@
       const prevTimesSnapRef=useRef(null);
       const prevStreakSnapRef=useRef(null);
       const bestRef=useRef({});
+      const [pendingWrongCredit,setPendingWrongCredit]=useState(null);
       const [questionCounted,setQuestionCounted]=useState(false);
       const correct=useMemo(()=>wday(date.y,date.m,date.d),[date]);
       const n=Math.max(2,Math.min(1000,parseInt(aoxN)||10));
@@ -184,7 +185,7 @@
       const revealLocked=!isRunning||isLocked||codesOpen||(oneByOne&&!shown)||inBackMode;
       const backDisabled=aoxStack.length===0||runPhase==="idle"||runPhase==="failed";
       const overrideAvail=!inBackMode&&(
-        (isRunning&&(guesses.length>0||codesOpen||msg!==""||canOverrideCorrect))||
+        (isRunning&&(guesses.length>0||codesOpen||msg!==""||canOverrideCorrect||pendingWrongCredit!=null))||
         (runPhase==="failed")||
         (runPhase==="done"&&canOverrideCorrect)
       );
@@ -192,21 +193,20 @@
       const optionsDisabled=isLocked||codesOpen||(oneByOne&&!shown&&!inBackMode)||runPhase==="idle"||inBackMode;
       const baseBtn="w-full rounded-2xl border px-4 py-3 text-base transition shadow-sm select-none";
 
-      function reset(){setRunPhase("idle");setDisplayN(n);setShown(false);setInBackMode(false);setAoxStack([]);setTimes([]);setStreak(0);setBestStreak(0);setAttempts(0);setGuesses([]);setMsg("");setFlash(null);setCodesOpen(false);setCanOverrideCorrect(false);setQuestionCounted(false);setDate(randomDate(minY,maxY));tStartRef.current=null;wrongTimeRef.current=null;prevTimesSnapRef.current=null;prevStreakSnapRef.current=null;}
+      function reset(){setRunPhase("idle");setDisplayN(n);setShown(false);setInBackMode(false);setAoxStack([]);setTimes([]);setStreak(0);setBestStreak(0);setAttempts(0);setGuesses([]);setMsg("");setFlash(null);setCodesOpen(false);setCanOverrideCorrect(false);setQuestionCounted(false);setPendingWrongCredit(null);setDate(randomDate(minY,maxY));tStartRef.current=null;wrongTimeRef.current=null;prevTimesSnapRef.current=null;prevStreakSnapRef.current=null;}
       function startOrContinue(){
         if(runPhase==="idle"){setRunPhase("running");setDisplayN(n);setShown(true);tStartRef.current=performance.now();}
-        else if(inBackMode){setInBackMode(false);const nd=randomDate(minY,maxY);setDate(nd);setMsg("");setGuesses([]);setCodesOpen(false);wrongTimeRef.current=null;setCanOverrideCorrect(false);setQuestionCounted(false);if(oneByOne){setShown(false);tStartRef.current=null;}else{setShown(true);tStartRef.current=performance.now();}}
-        else if(isRunning&&!shown){setShown(true);setGuesses([]);setMsg("");tStartRef.current=performance.now();wrongTimeRef.current=null;setCanOverrideCorrect(false);setQuestionCounted(false);}
+        else if(inBackMode){setInBackMode(false);const nd=randomDate(minY,maxY);setDate(nd);setMsg("");setGuesses([]);setCodesOpen(false);wrongTimeRef.current=null;setCanOverrideCorrect(false);setQuestionCounted(false);setPendingWrongCredit(null);if(oneByOne){setShown(false);tStartRef.current=null;}else{setShown(true);tStartRef.current=performance.now();}}
+        else if(isRunning&&!shown){setShown(true);setGuesses([]);setMsg("");tStartRef.current=performance.now();wrongTimeRef.current=null;setCanOverrideCorrect(false);setQuestionCounted(false);setPendingWrongCredit(null);}
       }
       function goBackAox(){if(backDisabled)return;const prev=aoxStack[aoxStack.length-1];setAoxStack(s=>s.slice(0,-1));setDate({...prev});setInBackMode(true);setCanOverrideCorrect(false);setMsg(`Answer: ${DAY[wday(prev.y,prev.m,prev.d)]}.`);setGuesses([]);setCodesOpen(false);}
 
       function advanceDate(newTimes,newStreak,newBest){
         const completing=newTimes.length>=displayN;
         wrongTimeRef.current=null;
-        if(!completing){prevTimesSnapRef.current=null;prevStreakSnapRef.current=null;}
+        // do NOT clear prevTimesSnapRef/prevStreakSnapRef here — they must survive to next date for override-after-correct
         setDate(randomDate(minY,maxY));setGuesses([]);setMsg("");setCodesOpen(false);
         setQuestionCounted(false);
-        // canOverrideCorrect stays true after correct; only reset it here on wrong-override path
         setStreak(newStreak);setBestStreak(newBest);
         if(oneByOne){setShown(false);tStartRef.current=null;}else tStartRef.current=performance.now();
         if(completing){
@@ -221,10 +221,15 @@
       function handleCorrect(idx){
         setFlash({type:"good",idx});setTimeout(()=>setFlash(null),550);
         if(questionCounted){
-          // already counted wrong — just advance, no score credit, no time recorded
-          setCanOverrideCorrect(false);setAoxStack(s=>[...s,{...date}]);
-          const ns=streak,nb=bestStreak;advanceDate(times,ns,nb);return;
+          // wrong first — no score credit; store wrongTime so override can give credit
+          setPendingWrongCredit({wrongTime:wrongTimeRef.current});
+          setCanOverrideCorrect(false);
+          prevTimesSnapRef.current=null;prevStreakSnapRef.current=null;
+          setAoxStack(s=>[...s,{...date}]);
+          advanceDate(times,streak,bestStreak);return;
         }
+        // first-try correct
+        setPendingWrongCredit(null);
         const dt=(performance.now()-(tStartRef.current??performance.now()))/1000;
         prevTimesSnapRef.current=[...times];prevStreakSnapRef.current={streak,bestStreak};setCanOverrideCorrect(true);
         const newTimes=[...times,dt];setTimes(newTimes);
@@ -236,36 +241,54 @@
         wrongTimeRef.current=(performance.now()-(tStartRef.current??performance.now()))/1000;
         if(!questionCounted)setAttempts(a=>a+1);
         setQuestionCounted(true);
-        setStreak(0);setCanOverrideCorrect(false);prevTimesSnapRef.current=null;
+        setStreak(0);setCanOverrideCorrect(false);
+        prevTimesSnapRef.current=null;prevStreakSnapRef.current=null;setPendingWrongCredit(null);
         if(!mistakesOk){setMsg(`Wrong! Answer: ${DAY[correct]}. Run failed.`);setRunPhase("failed");}
         else setGuesses(g=>g.includes(DAY[idx])?g:[...g,DAY[idx]]);
       }
       function submitDoW(idx){if(!isRunning||isLocked||codesOpen||inBackMode)return;if(oneByOne&&!shown)return;if(idx===correct)handleCorrect(idx);else handleWrong(idx);}
-      function revealAnswer(){if(revealLocked)return;wrongTimeRef.current=(performance.now()-(tStartRef.current??performance.now()))/1000;setMsg(`Answer: ${DAY[correct]}.`);setStreak(0);setCanOverrideCorrect(false);prevTimesSnapRef.current=null;if(!questionCounted)setAttempts(a=>a+1);setQuestionCounted(true);if(!mistakesOk)setRunPhase("failed");}
+      function revealAnswer(){if(revealLocked)return;wrongTimeRef.current=(performance.now()-(tStartRef.current??performance.now()))/1000;setMsg(`Answer: ${DAY[correct]}.`);setStreak(0);setCanOverrideCorrect(false);prevTimesSnapRef.current=null;prevStreakSnapRef.current=null;setPendingWrongCredit(null);if(!questionCounted)setAttempts(a=>a+1);setQuestionCounted(true);if(!mistakesOk)setRunPhase("failed");}
       function openCodes(){
         if(inBackMode){setCodesOpen(v=>!v);return;}if(codesDisabled)return;
-        if(!codesOpen){wrongTimeRef.current=(performance.now()-(tStartRef.current??performance.now()))/1000;setCanOverrideCorrect(false);prevTimesSnapRef.current=null;setStreak(0);if(!mistakesOk)setRunPhase("failed");if(!questionCounted)setAttempts(a=>a+1);setQuestionCounted(true);setMsg(`Answer: ${DAY[correct]}.`);}
+        if(!codesOpen){wrongTimeRef.current=(performance.now()-(tStartRef.current??performance.now()))/1000;setCanOverrideCorrect(false);prevTimesSnapRef.current=null;prevStreakSnapRef.current=null;setPendingWrongCredit(null);setStreak(0);if(!mistakesOk)setRunPhase("failed");if(!questionCounted)setAttempts(a=>a+1);setQuestionCounted(true);setMsg(`Answer: ${DAY[correct]}.`);}
         setCodesOpen(v=>!v);
       }
 
       function handleOverride(){
         if(inBackMode)return;
-        // Override after correct
+        // Override after first-try correct: undo credit
         if(canOverrideCorrect&&prevTimesSnapRef.current!=null){
           setTimes(prevTimesSnapRef.current);setAttempts(a=>Math.max(0,a-1));
           if(prevStreakSnapRef.current){setStreak(prevStreakSnapRef.current.streak);setBestStreak(prevStreakSnapRef.current.bestStreak);}
-          prevTimesSnapRef.current=null;prevStreakSnapRef.current=null;setCanOverrideCorrect(false);setQuestionCounted(false);
+          prevTimesSnapRef.current=null;prevStreakSnapRef.current=null;setCanOverrideCorrect(false);setQuestionCounted(false);setPendingWrongCredit(null);
           setRunPhase("running");
           setAoxStack(s=>s.slice(0,-1));const nd=randomDate(minY,maxY);setDate(nd);setGuesses([]);setMsg("");setCodesOpen(false);wrongTimeRef.current=null;
           if(oneByOne){setShown(false);tStartRef.current=null;}else tStartRef.current=performance.now();return;
         }
-        // Override after wrong (running or failed)
+        // Override after wrong→correct: give credit retroactively (like Classic pendingWrongOverride)
+        if(pendingWrongCredit!=null){
+          const{wrongTime}=pendingWrongCredit;setPendingWrongCredit(null);
+          const dt=wrongTime??0;
+          const newTimes=[...times,dt];setTimes(newTimes);
+          // attempts already counted; don't increment again
+          const ns=streak+1,nb=Math.max(bestStreak,ns);setStreak(ns);setBestStreak(nb);
+          prevTimesSnapRef.current=[...times];prevStreakSnapRef.current={streak,bestStreak};setCanOverrideCorrect(true);
+          // if this completes the run, record best
+          if(newTimes.length>=displayN){
+            const avg=newTimes.reduce((a,b)=>a+b,0)/newTimes.length;const med=calcMed(newTimes);
+            const prev=bestRef.current[bestKey]||{avg:null,med:null};
+            bestRef.current[bestKey]={avg:prev.avg==null||avg<prev.avg?avg:prev.avg,med:prev.med==null||med<prev.med?med:prev.med};
+            setMsg(`${aoLabel} complete!`);setRunPhase("done");
+          }
+          return;
+        }
+        // Override after wrong (still on same date, running or failed)
         if(runPhase==="running"||runPhase==="failed"){
           const dt=wrongTimeRef.current??((performance.now()-(tStartRef.current??performance.now()))/1000);
-          wrongTimeRef.current=null;prevTimesSnapRef.current=null;
+          wrongTimeRef.current=null;prevTimesSnapRef.current=null;prevStreakSnapRef.current=null;
           const newTimes=[...times,dt];setTimes(newTimes);
           const ns=streak+1,nb=Math.max(bestStreak,ns);
-          setCodesOpen(false);setGuesses([]);setMsg("");setCanOverrideCorrect(false);setAoxStack(s=>[...s,{...date}]);
+          setCodesOpen(false);setGuesses([]);setMsg("");setCanOverrideCorrect(false);setPendingWrongCredit(null);setAoxStack(s=>[...s,{...date}]);
           if(runPhase==="failed")setRunPhase("running");
           advanceDate(newTimes,ns,nb);
         }
