@@ -30,8 +30,9 @@
     button,input,select{-webkit-tap-highlight-color:transparent}
     button{touch-action:manipulation}
     button:focus,select:focus{outline:none}
-    @keyframes flashGood{0%,60%{background:rgba(34,197,94,.85);box-shadow:0 0 0 2px rgba(22,163,74,.95)}100%{background:transparent;box-shadow:none}}
-    @keyframes flashBad{0%,60%{background:rgba(239,68,68,.88);box-shadow:0 0 0 2px rgba(185,28,28,.95)}100%{background:transparent;box-shadow:none}}
+    /* #7 — darker flash colors */
+    @keyframes flashGood{0%,60%{background:rgba(21,128,61,.95);box-shadow:0 0 0 2px rgba(20,83,45,1)}100%{background:transparent;box-shadow:none}}
+    @keyframes flashBad{0%,60%{background:rgba(185,28,28,.95);box-shadow:0 0 0 2px rgba(127,29,29,1)}100%{background:transparent;box-shadow:none}}
     .flash-good{animation:flashGood .55s ease-out forwards}
     .flash-bad{animation:flashBad .55s ease-out forwards}
     .chip{background:var(--chip-bg);border:1px solid var(--chip-bd);padding:.25rem .5rem;border-radius:.75rem;font-size:12px}
@@ -44,6 +45,7 @@
     [data-theme="parchment"] .text-purple-100,[data-theme="light"] .text-purple-100{color:var(--sec-color)!important}
     [data-theme="parchment"] .text-purple-100\/80,[data-theme="light"] .text-purple-100\/80,[data-theme="parchment"] .text-purple-100\/90,[data-theme="light"] .text-purple-100\/90,[data-theme="parchment"] .text-purple-100\/85,[data-theme="light"] .text-purple-100\/85{color:var(--sec-color)!important}
     [data-theme="parchment"] .text-purple-200\/80,[data-theme="light"] .text-purple-200\/80,[data-theme="parchment"] .text-purple-200\/70,[data-theme="light"] .text-purple-200\/70,[data-theme="parchment"] .text-purple-200\/90,[data-theme="light"] .text-purple-200\/90,[data-theme="parchment"] .text-purple-300\/80,[data-theme="light"] .text-purple-300\/80{color:var(--mut-color)!important}
+    /* #8 — timestamp color: text-purple-300/60 now has light-theme overrides */
     [data-theme="parchment"] .text-purple-300\/60,[data-theme="light"] .text-purple-300\/60,[data-theme="parchment"] .text-purple-300\/70,[data-theme="light"] .text-purple-300\/70{color:var(--fnt-color)!important}
     [data-theme="parchment"] .text-white\/90,[data-theme="light"] .text-white\/90{color:var(--mut-color)!important}
     [data-theme="parchment"] .bg-purple-500\/20,[data-theme="light"] .bg-purple-500\/20{background-color:rgba(120,53,175,.2)!important}
@@ -156,14 +158,18 @@
       const bestKey=`${n}|${mistakesOk}`;
       const bestData=bestRef.current[bestKey]||{avg:null,med:null};
       const aoLabel=`Ao${n}`;
-      const scoreN=runPhase==="idle"?n:displayN;
       const doneCount=times.length;
       const isRunning=runPhase==="running";
       const isLocked=runPhase==="done"||runPhase==="failed";
       const dateVisible=runPhase==="failed"||(isRunning&&(!oneByOne||shown))||inBackMode;
       const revealLocked=!isRunning||isLocked||codesOpen||(oneByOne&&!shown)||inBackMode;
       const backDisabled=aoxStack.length===0||isLocked||runPhase==="idle";
-      const overrideAvail=isRunning&&!inBackMode&&(guesses.length>0||codesOpen||msg!==""||canOverrideCorrect)&&!isLocked;
+      // #2 & #5 — override available when: running with activity, failed (wrong override), or done with canOverrideCorrect
+      const overrideAvail=!inBackMode&&(
+        (isRunning&&(guesses.length>0||codesOpen||msg!==""||canOverrideCorrect))||
+        (runPhase==="failed")||
+        (runPhase==="done"&&canOverrideCorrect)
+      );
       const codesDisabled=runPhase==="idle"||(oneByOne&&!shown&&!inBackMode&&!isLocked)||isLocked;
       const optionsDisabled=isLocked||codesOpen||(oneByOne&&!shown&&!inBackMode)||runPhase==="idle"||inBackMode;
       const baseBtn="w-full rounded-2xl border px-4 py-3 text-base transition shadow-sm select-none";
@@ -175,12 +181,17 @@
         else if(isRunning&&!shown){setShown(true);setGuesses([]);setMsg("");tStartRef.current=performance.now();wrongTimeRef.current=null;setCanOverrideCorrect(false);}
       }
       function goBackAox(){if(backDisabled)return;const prev=aoxStack[aoxStack.length-1];setAoxStack(s=>s.slice(0,-1));setDate({...prev});setInBackMode(true);setCanOverrideCorrect(false);setMsg(`Answer: ${DAY[wday(prev.y,prev.m,prev.d)]}.`);setGuesses([]);setCodesOpen(false);}
+
+      // #2 — advanceDate: when completing, keep refs so override-after-correct can un-complete
       function advanceDate(newTimes,newStreak,newBest){
-        wrongTimeRef.current=null;prevTimesSnapRef.current=null;prevStreakSnapRef.current=null;
-        setDate(randomDate(minY,maxY));setGuesses([]);setMsg("");setCodesOpen(false);setCanOverrideCorrect(false);
+        const completing=newTimes.length>=displayN;
+        wrongTimeRef.current=null;
+        if(!completing){prevTimesSnapRef.current=null;prevStreakSnapRef.current=null;}
+        setDate(randomDate(minY,maxY));setGuesses([]);setMsg("");setCodesOpen(false);
+        if(!completing)setCanOverrideCorrect(false);
         setStreak(newStreak);setBestStreak(newBest);
         if(oneByOne){setShown(false);tStartRef.current=null;}else tStartRef.current=performance.now();
-        if(newTimes.length>=displayN){
+        if(completing){
           const avg=newTimes.reduce((a,b)=>a+b,0)/newTimes.length;
           const med=calcMed(newTimes);
           const prev=bestRef.current[bestKey]||{avg:null,med:null};
@@ -188,6 +199,7 @@
           setMsg(`${aoLabel} complete!`);setRunPhase("done");
         }
       }
+
       function handleCorrect(idx){
         setFlash({type:"good",idx});setTimeout(()=>setFlash(null),550);
         const dt=(performance.now()-(tStartRef.current??performance.now()))/1000;
@@ -209,29 +221,44 @@
         if(!codesOpen){wrongTimeRef.current=(performance.now()-(tStartRef.current??performance.now()))/1000;setCanOverrideCorrect(false);prevTimesSnapRef.current=null;setStreak(0);if(!mistakesOk)setRunPhase("failed");else setAttempts(a=>a+1);setMsg(`Answer: ${DAY[correct]}.`);}
         setCodesOpen(v=>!v);
       }
+
+      // #2 & #5 — override rewritten
       function handleOverride(){
-        if(!isRunning||inBackMode)return;
+        if(inBackMode)return;
+        // Case: override after correct (run may be completed or still running)
         if(canOverrideCorrect&&prevTimesSnapRef.current!=null){
           setTimes(prevTimesSnapRef.current);setAttempts(a=>Math.max(0,a-1));
           if(prevStreakSnapRef.current){setStreak(prevStreakSnapRef.current.streak);setBestStreak(prevStreakSnapRef.current.bestStreak);}
           prevTimesSnapRef.current=null;prevStreakSnapRef.current=null;setCanOverrideCorrect(false);
+          setRunPhase("running");// un-complete if run had finished
           setAoxStack(s=>s.slice(0,-1));const nd=randomDate(minY,maxY);setDate(nd);setGuesses([]);setMsg("");setCodesOpen(false);wrongTimeRef.current=null;
           if(oneByOne){setShown(false);tStartRef.current=null;}else tStartRef.current=performance.now();return;
         }
-        const dt=wrongTimeRef.current??((performance.now()-(tStartRef.current??performance.now()))/1000);
-        wrongTimeRef.current=null;prevTimesSnapRef.current=null;
-        const newTimes=[...times,dt];setTimes(newTimes);setAttempts(a=>a+1);
-        const ns=streak+1,nb=Math.max(bestStreak,ns);
-        setCodesOpen(false);setGuesses([]);setMsg("");setCanOverrideCorrect(false);setAoxStack(s=>[...s,{...date}]);advanceDate(newTimes,ns,nb);
+        // Case: override after wrong (running or failed)
+        if(runPhase==="running"||runPhase==="failed"){
+          const dt=wrongTimeRef.current??((performance.now()-(tStartRef.current??performance.now()))/1000);
+          wrongTimeRef.current=null;prevTimesSnapRef.current=null;
+          const newTimes=[...times,dt];setTimes(newTimes);
+          // Do NOT increment attempts — the wrong answer already did
+          const ns=streak+1,nb=Math.max(bestStreak,ns);
+          setCodesOpen(false);setGuesses([]);setMsg("");setCanOverrideCorrect(false);setAoxStack(s=>[...s,{...date}]);
+          if(runPhase==="failed")setRunPhase("running");// un-fail before advanceDate
+          advanceDate(newTimes,ns,nb);
+        }
       }
 
       const primaryBtn=runPhase==="idle"?(<button type="button" className="col-span-1 px-3 py-2 rounded-xl btn-solid text-sm font-medium" onClick={startOrContinue}>Begin</button>):isLocked?(<button type="button" className="col-span-1 px-3 py-2 rounded-xl bg-rose-600/90 text-white text-sm font-medium" onClick={reset}>Reset</button>):inBackMode||(!shown&&oneByOne)?(<button type="button" className="col-span-1 px-3 py-2 rounded-xl btn-solid text-sm font-medium" onClick={startOrContinue}>Continue</button>):(<button type="button" className="col-span-1 px-3 py-2 rounded-xl bg-rose-600/90 text-white text-sm font-medium" onClick={reset}>Reset</button>);
 
+      // #1 — score: correct/total_attempts (like Classic). Show correct/n when idle.
+      const scoreDisplay=runPhase==="idle"?`${doneCount}/${n}`:`${doneCount}/${attempts}`;
+      // #3 — accuracy: dash until first attempt
+      const accuracyDisplay=attempts>0?`${(doneCount/attempts*100).toFixed(1)}%`:"—";
+
       return(
         <div style={{display:visible?"block":"none"}}>
           <div className="mt-4 grid grid-cols-4 gap-2">
-            <Stat label="Score" value={`${doneCount}/${scoreN}`}/>
-            <Stat label="Accuracy" value={attempts>0?`${(doneCount/attempts*100).toFixed(1)}%`:"0.0%"}/>
+            <Stat label="Score" value={scoreDisplay}/>
+            <Stat label="Accuracy" value={accuracyDisplay}/>
             <StatTwo label="Streak / Longest" left={streak} right={bestStreak}/>
             <Stat label="Avg Time (Correct)" value={fmtTime(calcAvg(times))}/>
           </div>
@@ -293,7 +320,8 @@
         const meta=document.querySelector("meta[name='theme-color']");
         if(meta&&tc)meta.content=tc;
       },[activeTheme]);
-      const [extStats,setExtStats]=useState(false);
+      // #4 — More Stats on by default
+      const [extStats,setExtStats]=useState(true);
       const [statsOffByMode,setStatsOffByMode]=useState({});
       const [avgVisOffByMode,setAvgVisOffByMode]=useState({classic:true,deduction:true});
       const [lastVisOffByMode,setLastVisOffByMode]=useState({classic:true,deduction:true});
@@ -308,7 +336,6 @@
         setAvgVisOffByMode(p=>({...p,[mode]:next}));
         setLastVisOffByMode(p=>({...p,[mode]:next}));
         setMedVisOffByMode(p=>({...p,[mode]:next}));
-        // When re-enabling timing, clear old times so only new times count, then generate new date
         if(!next){
           setStatsByMode(prev=>{const ms={...(prev[mode]||blankStatsByEra())};const es={...(ms.AD||blankStats()),times:[]};return{...prev,[mode]:{...ms,AD:es}};});
           doNew({skipInactiveMessage:true});
@@ -372,8 +399,8 @@
       const [lookupCalcDate,setLookupCalcDate]=useState(null);
       const [lookupSelectedHistoryId,setLookupSelectedHistoryId]=useState(null);
       const [lookupCalcOpen,setLookupCalcOpen]=useState(false);
-      const prevLookupCalcKeyRef=useRef("none");
-      useEffect(()=>{const pk=prevLookupCalcKeyRef.current,nk=lookupCalcDate?`${lookupCalcDate.y}-${lookupCalcDate.m}-${lookupCalcDate.d}`:"none";if(pk!==nk){if(pk!=="none")setLookupCalcOpen(false);prevLookupCalcKeyRef.current=nk;}},[lookupCalcDate]);
+      // #6 — removed prevLookupCalcKeyRef and its effect; lookup Show Codes now only closes
+      // when runLookup() fires a new result or the user manually closes it.
       const pendingDedSwitchRef=useRef(null);
       const prevModeRef=useRef(mode);
       useEffect(()=>{setShowTimerDate(false);},[mode]);
@@ -416,12 +443,10 @@
           setGuesses([]);setRevealed(false);setLocked(false);setMsg("");setCalcPenalty(false);
           setCalcOpen(false);calcOpenStatesRef.current.set(mode,false);
           setCalcInstantClose(true);
-          // If moving past a wrong answer, save it so override can undo it on next question
           if(countedWrong){setPendingWrongOverride({wrongTime:wrongTimeRef.current,snapshot:preCalcPenaltySnapshotRef.current});}
           else{setPendingWrongOverride(null);}
           setCountedWrong(false);
           wrongTimeRef.current=null;
-          // prevStatsSnapshotRef intentionally NOT cleared here so override-after-correct works across the question boundary
           if(isTimer(mode)&&active)tStartRef.current=performance.now();else if(mode==="classic")tStartRef.current=performance.now();
         }
         if(mode==="deduction")runDeductionRound();
@@ -445,7 +470,6 @@
         setStack(s=>s.slice(0,-1));setDate(prev);setMsg(`Answer: ${DAY[wday(prev.y,prev.m,prev.d)]}.`);setGuesses([]);setLocked(true);setRevealed(true);setCanOverrideCorrect(false);wrongTimeRef.current=null;prevStatsSnapshotRef.current=null;
       }
       function override(){
-        // Case 1: override after correct answer
         if(canOverrideCorrect&&prevStatsSnapshotRef.current){
           const u=prevStatsSnapshotRef.current;
           if(u.wasWrong){
@@ -460,7 +484,6 @@
           else{setGuesses([]);setMsg("");setLocked(false);setRevealed(false);setCalcPenalty(false);setCalcOpen(false);calcOpenStatesRef.current.set(mode,false);}
           return;
         }
-        // Case 2: override after wrong on current question
         if(countedWrong){
           updateStats(c=>{c.good+=1;c.streak+=1;if(c.streak>c.best)c.best=c.streak;if(wrongTimeRef.current!=null&&trackingOn())c.times=[...c.times,wrongTimeRef.current];});
           wrongTimeRef.current=null;prevStatsSnapshotRef.current=null;
@@ -469,15 +492,12 @@
           if(isTimer(mode)){setActive(true);setShowTimerDate(false);if(mode==="blitz"){blitzStartRef.current=performance.now()-((blitzSec-blitzRemainRef.current)*1000);blitzPausedAccRef.current=0;setBlitzRunning(true);}if(mode==="sudden"){const now=performance.now();qDeadlineRef.current=now+qSec*1000;qPausedAccRef.current=0;qPausedAtRef.current=null;setQRemain(qSec);}if(mode==="flash"){setFlashPhase("show");clearTimeout(flashTimerRef.current);const now=performance.now();flashDeadlineRef.current=now+flashMs;setFlashRemainMs(flashMs);flashTimerRef.current=setTimeout(endFlashPhase,Math.max(50,flashMs));startFlashBar(flashMs);}}
           pushAndNext();return;
         }
-        // Case 3: override after wrong on PREVIOUS question (e.g. Show Codes then New)
         if(pendingWrongOverride!=null){
           const {wrongTime,snapshot}=pendingWrongOverride;
           if(snapshot){
-            // Undo the wrong, give first-try credit
             updateStats(c=>{c.played=snapshot.played+1;c.good=snapshot.good+1;c.streak=snapshot.streak+1;if(c.streak>c.best)c.best=c.streak;c.times=c.times.slice(0,snapshot.timesLen);if(wrongTime!=null&&trackingOn())c.times=[...c.times,wrongTime];});
             if(mode==="blitz")setBlitzRoundStats(p=>({...p,played:snapshot.blitzPlayed+1,good:snapshot.blitzGood+1}));
           }else{
-            // No snapshot — just give good credit on top of current stats
             updateStats(c=>{c.good+=1;c.streak+=1;if(c.streak>c.best)c.best=c.streak;if(wrongTime!=null&&trackingOn())c.times=[...c.times,wrongTime];});
             if(mode==="blitz")setBlitzRoundStats(p=>({...p,good:p.good+1}));
           }
@@ -491,7 +511,7 @@
         if(idx===wday(date.y,date.m,date.d)){
           setFlash({type:"good",idx});setTimeout(()=>setFlash(null),550);
           if(!countedWrong){prevStatsSnapshotRef.current={played:S.played,good:S.good,streak:S.streak,best:S.best,timesLen:S.times.length,blitzPlayed:blitzRoundStats.played,blitzGood:blitzRoundStats.good,wasWrong:false};setCanOverrideCorrect(true);setPendingWrongOverride(null);if(tStartRef.current&&trackingOn()){const dt=(performance.now()-tStartRef.current)/1000;updateStats(c=>{c.times=[...c.times,dt];});}}
-          else if(countedWrong&&prevStatsSnapshotRef.current){setCanOverrideCorrect(true);}// wrong-then-correct: keep pre-wrong snapshot
+          else if(countedWrong&&prevStatsSnapshotRef.current){setCanOverrideCorrect(true);}
           if(!statsOff&&!countedWrong)updateStats(c=>{c.played+=1;c.good+=1;c.streak+=1;if(c.streak>c.best)c.best=c.streak;});
           if(mode==="blitz"&&!countedWrong)setBlitzRoundStats(p=>({...p,played:p.played+1,good:p.good+1}));
           if(mode==="sudden"){const now=performance.now();qDeadlineRef.current=now+qSec*1000;qPausedAccRef.current=0;qPausedAtRef.current=null;setQRemain(qSec);}
@@ -591,7 +611,8 @@
       return(
         <div className="mx-auto px-4 py-5 w-full max-w-[480px]">
           <div className="flex items-center justify-between gap-4">
-            <h1 className="text-xl font-semibold leading-none">Calendar Game <span className="text-[10px] font-normal text-purple-300/40 ml-1">4/6 21:46</span></h1>
+            {/* #8 — timestamp uses text-purple-300/60 which has light-theme CSS overrides */}
+            <h1 className="text-xl font-semibold leading-none">Calendar Game <span className="text-[10px] font-normal text-purple-300/60 ml-1">4/7 21:48</span></h1>
             <div className="relative">
               <select ref={modeSelectRef} value={mode} onChange={e=>{setMode(e.target.value);e.target.blur();const root=document.getElementById('root');if(root){root.style.pointerEvents='none';setTimeout(()=>root.style.pointerEvents='',400);}}} className="panel rounded-xl px-2.5 py-2 pr-9 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 appearance-none">
                 <option value="classic">Classic</option><option value="aox">AoX</option><option value="deduction">Deduction</option><option value="blitz">Blitz</option><option value="sudden">Sudden Death</option><option value="flash">Flash</option><option value="lookup">Lookup</option><option value="guide">How to Play</option>
@@ -602,7 +623,8 @@
           {showStatsAndRange&&(<>
             <div className="mt-4 grid grid-cols-4 gap-2">
               <Stat label={mode==="blitz"?"Score (Round)":"Score"} value={mode==="blitz"?`${blitzRoundStats.good}/${blitzRoundStats.played}`:`${S.good}/${S.played}`} disabled={statsOff} onClick={toggleStatsOff} pressed={!statsOff}/>
-              <Stat label="Accuracy" value={`${S.played?(S.good/S.played*100).toFixed(1):"0.0"}%`} disabled={statsOff} onClick={toggleStatsOff} pressed={!statsOff}/>
+              {/* #3 — accuracy shows dash until first attempt */}
+              <Stat label="Accuracy" value={S.played?`${(S.good/S.played*100).toFixed(1)}%`:"—"} disabled={statsOff} onClick={toggleStatsOff} pressed={!statsOff}/>
               <StatTwo label="Streak / Longest" left={S.streak} right={S.best} disabled={statsOff} onClick={toggleStatsOff} pressed={!statsOff}/>
               <Stat label="Avg Time (Correct)" value={fmtTime(sAvg)} disabled={avgVisOff} onClick={toggleTimingVis} pressed={!avgVisOff}/>
             </div>
@@ -714,8 +736,8 @@
             <p><b>Show Codes</b> — reveals the calculation codes for the current date. Counts as wrong if you haven't already answered incorrectly. In AoX without Allow Mistakes, opening Show Codes ends the run.</p>
           </GuideSection>
           <GuideSection id="stats" title="Stats" openId={open} onToggle={toggle}>
-            <p><b>Score</b> — correct first-try answers out of total attempts.</p>
-            <p><b>Accuracy</b> — percentage of questions answered correctly on the first try.</p>
+            <p><b>Score</b> — correct first-try answers out of total attempts. In AoX, shows correct answers out of total attempts; the run ends once correct answers reach the set number.</p>
+            <p><b>Accuracy</b> — percentage of questions answered correctly on the first try. Shows — until your first attempt.</p>
             <p><b>Streak / Longest</b> — your current consecutive correct streak and your all-time longest in this mode.</p>
             <p><b>Avg Time (Correct)</b> — average time across all first-try correct answers. Always tracked. Tap to hide.</p>
             <p><b>Last Time (Correct)</b> — your most recent first-try correct answer time.</p>
@@ -727,18 +749,18 @@
           <Divider label="Modes"/>
           <GuideSection id="classic" title="Classic" openId={open} onToggle={toggle}><p>The main practice mode with no time pressure. Answer at your own pace. Override works after both wrong and correct answers.</p></GuideSection>
           <GuideSection id="aox" title="AoX" openId={open} onToggle={toggle}>
-            <p>Average your times over a set number of solves (2–1000). Press Begin to start a run.</p>
-            <p><b>Allow Mistakes</b> — wrong answers don't end the run but don't count toward your average.</p>
+            <p>Average your times over a set number of correct solves (2–1000). The score shows correct answers out of total attempts; the run ends when correct answers reach your target. Press Begin to start a run.</p>
+            <p><b>Allow Mistakes</b> — wrong answers don't end the run but don't count toward your score.</p>
             <p><b>One-By-One</b> — hides the date between solves. Press Continue to reveal each new date.</p>
             <p><b>Back</b> — review the previous date without affecting the run. Press Continue to resume.</p>
-            <p><b>Override</b> — after wrong: gives credit with time recorded. After correct: undoes the credit.</p>
+            <p><b>Override</b> — after wrong: gives credit with time recorded. After correct (including after a completed run): undoes the credit and continues.</p>
             <p>Best Avg and Best Median are saved per n and Allow Mistakes setting. The score display freezes when a run ends and only resets after pressing Reset.</p>
           </GuideSection>
           <GuideSection id="deduction" title="Deduction" openId={open} onToggle={toggle}><p>Identify the missing piece of a date given the rest plus the weekday. Choose Day, Month, or Year mode. Each question has exactly one correct answer. Switch subtypes anytime — progress in each is preserved.</p></GuideSection>
           <GuideSection id="blitz" title="Blitz" openId={open} onToggle={toggle}><p>Answer as many dates as possible within the time limit (default 60s, adjustable). Score shown is for the current round only.</p></GuideSection>
           <GuideSection id="sudden" title="Sudden Death" openId={open} onToggle={toggle}><p>Each question has its own countdown (default 7s, adjustable). A wrong answer or running out of time ends the run immediately.</p></GuideSection>
           <GuideSection id="flash" title="Flash" openId={open} onToggle={toggle}><p>The date is briefly revealed (50ms–3000ms, default 1200ms) then hidden. Answer from memory.</p></GuideSection>
-          <GuideSection id="lookup" title="Lookup" openId={open} onToggle={toggle}><p>Enter any AD date as month/day/year (e.g. 7/4/1776) to instantly see its weekday. Supports years 1–10000. Show Codes is available for all results.</p></GuideSection>
+          <GuideSection id="lookup" title="Lookup" openId={open} onToggle={toggle}><p>Enter any AD date as month/day/year (e.g. 7/4/1776) to instantly see its weekday. Supports years 1–10000. Show Codes is available for all results and stays open as you browse your history — it only closes when you manually hide it or submit a new lookup.</p></GuideSection>
         </div>
       );
     }
@@ -766,14 +788,18 @@
       const toggle=()=>{if(!hasDate)return;if(isControlled)onOpenChange(!open);else setInternalOpen(v=>!v);};
       React.useEffect(()=>{
         if(!date)return;
-        if(open){wasOpenRef.current=true;return;}
+        if(open){
+          wasOpenRef.current=true;
+          // #6 — update frozenDate immediately when panel is open and date changes
+          // (safe for game modes because calcOpen is set false before date changes there)
+          setFrozenDate(date);
+          return;
+        }
         if(wasOpenRef.current){
-          // Panel was open, now closing — wait for animation to finish
           wasOpenRef.current=false;
           const t=setTimeout(()=>setFrozenDate(latestDateRef.current),310);
           return()=>clearTimeout(t);
         }else{
-          // Panel was already closed — update immediately
           setFrozenDate(date);
         }
       },[open,date]);
@@ -792,10 +818,25 @@
       function isLeapL(y){y=y>0?y:1-Math.abs(y);return y%400===0||(y%4===0&&y%100!==0);}
       function dimL(y,m){return m===2?(isLeapL(y)?29:28):[4,6,9,11].includes(m)?30:31;}
       function wdayL(y,m,d){function jdn(y,m,d){const a=Math.floor((14-m)/12),y2=y+4800-a,m2=m-3+12*a;return d+Math.floor((153*m2+2)/5)+365*y2+Math.floor(y2/4)-Math.floor(y2/100)+Math.floor(y2/400)-32045;}return((jdn(y>0?y:1-Math.abs(y),m,d)+1)%7+7)%7;}
-      function runLookup(){const s=li.trim();if(s===lastLookupRef.current)return;const match=/^(\d{1,2})\/(\d{1,2})\/(\d{1,5})$/.exec(s);if(!match){slo("Enter date as month/day/year, e.g. 7/4/1776.");return;}let mm=+match[1],dd=+match[2],yy=+match[3];if(yy<1||yy>10000){slo("Year must be between 1 and 10000.");return;}if(mm<1||mm>12){slo("Month must be 1–12.");return;}const maxd=dimL(yy,mm);if(dd<1||dd>maxd){slo(`Day must be 1–${maxd} for ${MONTH[mm-1]}.`);return;}const d=DAY[wdayL(yy,mm,dd)];const rt=`${MONTH[mm-1]} ${dd}, ${yy} is a ${d}.`;const entry={id:`${Date.now().toString(36)}-${Math.random().toString(36).slice(2,8)}`,label:`${MONTH[mm-1]} ${dd}, ${yy}`,weekday:d,result:rt,y:yy,m:mm,d:dd};lastLookupRef.current=s;slo(rt);scd({y:yy,m:mm,d:dd});ssid(entry.id);if(onAddHistory)onAddHistory(entry);}
+      function runLookup(){
+        const s=li.trim();if(s===lastLookupRef.current)return;
+        const match=/^(\d{1,2})\/(\d{1,2})\/(\d{1,5})$/.exec(s);
+        if(!match){slo("Enter date as month/day/year, e.g. 7/4/1776.");return;}
+        let mm=+match[1],dd=+match[2],yy=+match[3];
+        if(yy<1||yy>10000){slo("Year must be between 1 and 10000.");return;}
+        if(mm<1||mm>12){slo("Month must be 1–12.");return;}
+        const maxd=dimL(yy,mm);
+        if(dd<1||dd>maxd){slo(`Day must be 1–${maxd} for ${MONTH[mm-1]}.`);return;}
+        const d=DAY[wdayL(yy,mm,dd)];
+        const rt=`${MONTH[mm-1]} ${dd}, ${yy} is a ${d}.`;
+        const entry={id:`${Date.now().toString(36)}-${Math.random().toString(36).slice(2,8)}`,label:`${MONTH[mm-1]} ${dd}, ${yy}`,weekday:d,result:rt,y:yy,m:mm,d:dd};
+        // #6 — close Show Codes on new lookup submission
+        lastLookupRef.current=s;slo(rt);scd({y:yy,m:mm,d:dd});ssid(entry.id);sco(false);if(onAddHistory)onAddHistory(entry);
+      }
       function clearLookup(){sli("");if(document.activeElement)document.activeElement.blur();slo("");scd(null);ssid(null);sco(false);lastLookupRef.current=null;}
       const entries=Array.isArray(history)?history:[];
       React.useEffect(()=>{if(!sid)return;if(!entries.some(e=>e.id===sid)){ssid(null);scd(null);slo("");sco(false);}},[entries,sid]);
+      // #6 — selEntry does NOT call sco(false), keeping Show Codes open when browsing history
       const selEntry=entry=>{if(!entry)return;ssid(entry.id);slo(entry?.result||"");if(entry&&typeof entry.y==="number")scd({y:entry.y,m:entry.m,d:entry.d});if(document.activeElement)document.activeElement.blur();};
       const clearHist=()=>{if(onClearHistory)onClearHistory();ssid(null);scd(null);slo("");sco(false);lastLookupRef.current=null;};
       return(
