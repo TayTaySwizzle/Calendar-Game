@@ -220,10 +220,15 @@
 
       function handleCorrect(idx){
         setFlash({type:"good",idx});setTimeout(()=>setFlash(null),550);
+        if(questionCounted){
+          // already counted wrong — just advance, no score credit, no time recorded
+          setCanOverrideCorrect(false);setAoxStack(s=>[...s,{...date}]);
+          const ns=streak,nb=bestStreak;advanceDate(times,ns,nb);return;
+        }
         const dt=(performance.now()-(tStartRef.current??performance.now()))/1000;
         prevTimesSnapRef.current=[...times];prevStreakSnapRef.current={streak,bestStreak};setCanOverrideCorrect(true);
         const newTimes=[...times,dt];setTimes(newTimes);
-        if(!questionCounted)setAttempts(a=>a+1);
+        setAttempts(a=>a+1);
         const ns=streak+1,nb=Math.max(bestStreak,ns);setAoxStack(s=>[...s,{...date}]);advanceDate(newTimes,ns,nb);
       }
       function handleWrong(idx){
@@ -478,11 +483,12 @@
       function reveal(){
         if(locked)return;
         if(mode==="deduction"){if(!ded)return;if(!statsOff)updateStats(c=>{c.played+=1;c.streak=0;});const ans=ded.type==="year"?fmtYear(ded.y):ded.type==="month"?MONTH[ded.m-1]:String(ded.d);setMsg(`Answer: ${ans}.`);setLocked(true);setRevealed(true);setCountedWrong(true);setCanOverrideCorrect(false);return;}
+        const roundOver=(mode==="blitz"||mode==="sudden")&&!active;
         if(!countedWrong){wrongTimeRef.current=tStartRef.current?(performance.now()-tStartRef.current)/1000:null;prevStatsSnapshotRef.current=null;}
-        if(!statsOff&&!countedWrong)updateStats(c=>{c.played+=1;c.streak=0;});
-        if(mode==="blitz"&&!countedWrong)setBlitzRoundStats(p=>({...p,played:p.played+1}));
+        if(!statsOff&&!countedWrong&&!roundOver)updateStats(c=>{c.played+=1;c.streak=0;});
+        if(mode==="blitz"&&!countedWrong&&!roundOver)setBlitzRoundStats(p=>({...p,played:p.played+1}));
         setCountedWrong(true);setCanOverrideCorrect(false);
-        if(isTimer(mode)){setActive(false);setShowTimerDate(true);if(mode==="blitz"){setBlitzRunning(false);blitzStartRef.current=null;blitzPausedAtRef.current=null;blitzPausedAccRef.current=0;}if(mode==="sudden"){qDeadlineRef.current=null;qPausedAtRef.current=null;qPausedAccRef.current=0;}if(mode==="flash"){clearTimeout(flashTimerRef.current);flashTimerRef.current=null;setFlashPhase("dash");flashDeadlineRef.current=null;}}
+        if(isTimer(mode)&&active){setActive(false);setShowTimerDate(true);if(mode==="blitz"){setBlitzRunning(false);blitzStartRef.current=null;blitzPausedAtRef.current=null;blitzPausedAccRef.current=0;}if(mode==="sudden"){qDeadlineRef.current=null;qPausedAtRef.current=null;qPausedAccRef.current=0;}if(mode==="flash"){clearTimeout(flashTimerRef.current);flashTimerRef.current=null;setFlashPhase("dash");flashDeadlineRef.current=null;}}
         setMsg(`Answer: ${DAY[correct]}.`);setLocked(true);setRevealed(true);
       }
       function goBack(){
@@ -620,7 +626,7 @@
       const calcKeyForScroll=mode==="lookup"?lookupCalcTargetKey:calcTargetKey;
       useEffect(()=>{const cancel=()=>{if(calcScrollRafRef.current!=null){cancelAnimationFrame(calcScrollRafRef.current);calcScrollRafRef.current=null;}if(calcScrollTimeoutRef.current!=null){clearTimeout(calcScrollTimeoutRef.current);calcScrollTimeoutRef.current=null;}};if(!calcOpenForScroll){cancel();return cancel;}cancel();calcScrollRafRef.current=requestAnimationFrame(()=>{calcScrollRafRef.current=null;calcScrollTimeoutRef.current=window.setTimeout(()=>{calcScrollTimeoutRef.current=null;window.scrollTo({top:document.documentElement.scrollHeight,behavior:"smooth"});},60);});return cancel;},[calcOpenForScroll,calcKeyForScroll,mode]);
       const handleResetStats=()=>{resetStatsCurrent();if(!avgVisOff)doNew({skipInactiveMessage:true});};
-      const applyCalcPenalty=()=>{setCalcPenalty(true);const fp=!countedWrong&&!revealed;if(fp){wrongTimeRef.current=tStartRef.current?(performance.now()-tStartRef.current)/1000:null;prevStatsSnapshotRef.current=null;preCalcPenaltySnapshotRef.current={played:S.played,good:S.good,streak:S.streak,best:S.best,timesLen:S.times.length,blitzPlayed:blitzRoundStats.played,blitzGood:blitzRoundStats.good};if(!statsOff)updateStats(c=>{c.played+=1;c.streak=0;});if(mode==="blitz")setBlitzRoundStats(p=>({...p,played:p.played+1}));}let am=null;if(mode==="deduction"&&ded){const ans=ded.type==="year"?fmtYear(ded.y):ded.type==="month"?MONTH[ded.m-1]:String(ded.d);am=`Answer: ${ans}.`;}else if(mode!=="deduction")am=`Answer: ${DAY[correct]}.`;if(am)setMsg(am);if(isTimer(mode)){setActive(false);setShowTimerDate(true);if(mode==="blitz"){setBlitzRunning(false);blitzStartRef.current=null;blitzPausedAtRef.current=null;blitzPausedAccRef.current=0;}if(mode==="sudden"){qDeadlineRef.current=null;qPausedAtRef.current=null;qPausedAccRef.current=0;}if(mode==="flash"){clearTimeout(flashTimerRef.current);flashTimerRef.current=null;setFlashPhase("dash");flashDeadlineRef.current=null;}}if(!revealed)setRevealed(true);if(!countedWrong){setCountedWrong(true);setCanOverrideCorrect(false);}};
+      const applyCalcPenalty=()=>{setCalcPenalty(true);const roundOver=(mode==="blitz"||mode==="sudden")&&!active;const fp=!countedWrong&&!revealed;if(fp&&!roundOver){wrongTimeRef.current=tStartRef.current?(performance.now()-tStartRef.current)/1000:null;prevStatsSnapshotRef.current=null;preCalcPenaltySnapshotRef.current={played:S.played,good:S.good,streak:S.streak,best:S.best,timesLen:S.times.length,blitzPlayed:blitzRoundStats.played,blitzGood:blitzRoundStats.good};if(!statsOff)updateStats(c=>{c.played+=1;c.streak=0;});if(mode==="blitz")setBlitzRoundStats(p=>({...p,played:p.played+1}));}let am=null;if(mode==="deduction"&&ded){const ans=ded.type==="year"?fmtYear(ded.y):ded.type==="month"?MONTH[ded.m-1]:String(ded.d);am=`Answer: ${ans}.`;}else if(mode!=="deduction")am=`Answer: ${DAY[correct]}.`;if(am)setMsg(am);if(isTimer(mode)&&active){setActive(false);setShowTimerDate(true);if(mode==="blitz"){setBlitzRunning(false);blitzStartRef.current=null;blitzPausedAtRef.current=null;blitzPausedAccRef.current=0;}if(mode==="sudden"){qDeadlineRef.current=null;qPausedAtRef.current=null;qPausedAccRef.current=0;}if(mode==="flash"){clearTimeout(flashTimerRef.current);flashTimerRef.current=null;setFlashPhase("dash");flashDeadlineRef.current=null;}}if(!revealed)setRevealed(true);if(!countedWrong){setCountedWrong(true);setCanOverrideCorrect(false);}};
       const handleCalcOpenChange=next=>{if(next)applyCalcPenalty();setCalcOpen(next);};
       const showStatsAndRange=mode!=="lookup"&&mode!=="guide"&&mode!=="aox";
       const sAvg=calcAvg(S.times),sLast=calcLast(S.times),sMed=calcMed(S.times);
@@ -632,7 +638,7 @@
         <div className="mx-auto px-4 py-5 w-full max-w-[480px]">
           <div className="flex items-center justify-between gap-4">
             {/* #8 — timestamp uses text-purple-300/60 which has light-theme CSS overrides */}
-            <h1 className="text-xl font-semibold leading-none">Calendar Game <span className="text-[10px] font-normal text-purple-300/60 ml-1">4/8/26 13:25</span></h1>
+            <h1 className="text-xl font-semibold leading-none">Calendar Game <span className="text-[10px] font-normal text-purple-300/60 ml-1">4/8/26 15:49</span></h1>
             <div className="relative">
               <select ref={modeSelectRef} value={mode} onChange={e=>{setMode(e.target.value);e.target.blur();const root=document.getElementById('root');if(root){root.style.pointerEvents='none';setTimeout(()=>root.style.pointerEvents='',400);}}} className="panel rounded-xl px-2.5 py-2 pr-9 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 appearance-none">
                 <option value="classic">Classic</option><option value="aox">AoX</option><option value="deduction">Deduction</option><option value="flash">Flash</option><option value="blitz">Blitz</option><option value="sudden">Sudden Death</option><option value="lookup">Lookup</option><option value="guide">How to Play</option>
