@@ -267,13 +267,14 @@
           setGuesses([]);setMsg("");setCodesOpen(false);wrongTimeRef.current=null;
           tStartRef.current=performance.now();return;
         }
-        // Override after wrong→correct (pendingWrongCredit): give retroactive credit
+        // Override after wrong→correct (pendingWrongCredit): give retroactive credit, no further override
         if(pendingWrongCredit!=null){
           const{wrongTime}=pendingWrongCredit;setPendingWrongCredit(null);
           const dt=wrongTime??0;
           const newTimes=[...times,dt];setTimes(newTimes);
           const ns=streak+1,nb=Math.max(bestStreak,ns);setStreak(ns);setBestStreak(nb);
-          prevTimesSnapRef.current=[...times];prevStreakSnapRef.current={streak,bestStreak};setCanOverrideCorrect(true);
+          // do NOT set canOverrideCorrect or prevTimesSnapRef — one override per question
+          setCanOverrideCorrect(false);prevTimesSnapRef.current=null;prevStreakSnapRef.current=null;
           if(newTimes.length>=displayN){
             const avg=newTimes.reduce((a,b)=>a+b,0)/newTimes.length;const med=calcMed(newTimes);
             const prev=bestRef.current[bestKey]||{avg:null,med:null};
@@ -282,12 +283,15 @@
           }
           return;
         }
-        // Override after wrong (same date, running or failed): just advance, no credit — wrong already counted
+        // Override after wrong (same date, running or failed): give credit, advance
         if(runPhase==="running"||runPhase==="failed"){
-          wrongTimeRef.current=null;
+          const dt=wrongTimeRef.current??((performance.now()-(tStartRef.current??performance.now()))/1000);
+          wrongTimeRef.current=null;prevTimesSnapRef.current=null;prevStreakSnapRef.current=null;
+          const newTimes=[...times,dt];setTimes(newTimes);
+          const ns=streak+1,nb=Math.max(bestStreak,ns);
           setCodesOpen(false);setGuesses([]);setMsg("");setCanOverrideCorrect(false);setPendingWrongCredit(null);setAoxStack(s=>[...s,{...date}]);
           if(runPhase==="failed")setRunPhase("running");
-          advanceDate(times,streak,bestStreak);
+          advanceDate(newTimes,ns,nb);
         }
       }
 
@@ -658,7 +662,7 @@
         <div className="mx-auto px-4 py-5 w-full max-w-[480px]">
           <div className="flex items-center justify-between gap-4">
             {/* #8 — timestamp uses text-purple-300/60 which has light-theme CSS overrides */}
-            <h1 className="text-xl font-semibold leading-none">Calendar Game <span className="text-[10px] font-normal text-purple-300/60 ml-1">4/8/26 15:49</span></h1>
+            <h1 className="text-xl font-semibold leading-none">Calendar Game <span className="text-[10px] font-normal text-purple-300/60 ml-1">4/8/26 16:23</span></h1>
             <div className="relative">
               <select ref={modeSelectRef} value={mode} onChange={e=>{setMode(e.target.value);e.target.blur();const root=document.getElementById('root');if(root){root.style.pointerEvents='none';setTimeout(()=>root.style.pointerEvents='',400);}}} className="panel rounded-xl px-2.5 py-2 pr-9 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 appearance-none">
                 <option value="classic">Classic</option><option value="aox">AoX</option><option value="deduction">Deduction</option><option value="flash">Flash</option><option value="blitz">Blitz</option><option value="sudden">Sudden Death</option><option value="lookup">Lookup</option><option value="guide">How to Play</option>
