@@ -99,8 +99,21 @@
       const outerRef=useRef(null);
       const innerRef=useRef(null);
       const prevOpenRef=useRef(open);
+      const mountedRef=useRef(false);
       useLayoutEffect(()=>{
         const el=outerRef.current;if(!el)return;
+        if(!mountedRef.current){
+          mountedRef.current=true;
+          prevOpenRef.current=open;
+          if(open){
+            el.style.transition='none';
+            el.style.maxHeight=(innerRef.current?.scrollHeight??0)+16+"px";
+            requestAnimationFrame(()=>{if(el)el.style.transition='';});
+          }else{
+            el.style.maxHeight="0px";
+          }
+          return;
+        }
         const wasOpen=prevOpenRef.current;prevOpenRef.current=open;
         if(open){
           el.style.maxHeight=(innerRef.current?.scrollHeight??0)+16+"px";
@@ -163,7 +176,7 @@
       const isLocked=runPhase==="done"||runPhase==="failed";
       const dateVisible=runPhase==="failed"||(isRunning&&(!oneByOne||shown))||inBackMode;
       const revealLocked=!isRunning||isLocked||codesOpen||(oneByOne&&!shown)||inBackMode;
-      const backDisabled=aoxStack.length===0||isLocked||runPhase==="idle";
+      const backDisabled=aoxStack.length===0||runPhase==="idle"||runPhase==="failed";
       // #2 & #5 — override available when: running with activity, failed (wrong override), or done with canOverrideCorrect
       const overrideAvail=!inBackMode&&(
         (isRunning&&(guesses.length>0||codesOpen||msg!==""||canOverrideCorrect))||
@@ -177,6 +190,7 @@
       function reset(){setRunPhase("idle");setDisplayN(n);setShown(false);setInBackMode(false);setAoxStack([]);setTimes([]);setStreak(0);setBestStreak(0);setAttempts(0);setGuesses([]);setMsg("");setFlash(null);setCodesOpen(false);setCanOverrideCorrect(false);setDate(randomDate(minY,maxY));tStartRef.current=null;wrongTimeRef.current=null;prevTimesSnapRef.current=null;prevStreakSnapRef.current=null;}
       function startOrContinue(){
         if(runPhase==="idle"){setRunPhase("running");setDisplayN(n);setShown(true);tStartRef.current=performance.now();}
+        else if(runPhase==="done"&&inBackMode){setInBackMode(false);}
         else if(inBackMode){setInBackMode(false);const nd=randomDate(minY,maxY);setDate(nd);setMsg("");setGuesses([]);setCodesOpen(false);wrongTimeRef.current=null;setCanOverrideCorrect(false);if(oneByOne){setShown(false);tStartRef.current=null;}else{setShown(true);tStartRef.current=performance.now();}}
         else if(isRunning&&!shown){setShown(true);setGuesses([]);setMsg("");tStartRef.current=performance.now();wrongTimeRef.current=null;setCanOverrideCorrect(false);}
       }
@@ -247,10 +261,9 @@
         }
       }
 
-      const primaryBtn=runPhase==="idle"?(<button type="button" className="col-span-1 px-3 py-2 rounded-xl btn-solid text-sm font-medium" onClick={startOrContinue}>Begin</button>):isLocked?(<button type="button" className="col-span-1 px-3 py-2 rounded-xl bg-rose-600/90 text-white text-sm font-medium" onClick={reset}>Reset</button>):inBackMode||(!shown&&oneByOne)?(<button type="button" className="col-span-1 px-3 py-2 rounded-xl btn-solid text-sm font-medium" onClick={startOrContinue}>Continue</button>):(<button type="button" className="col-span-1 px-3 py-2 rounded-xl bg-rose-600/90 text-white text-sm font-medium" onClick={reset}>Reset</button>);
+      const primaryBtn=runPhase==="idle"?(<button type="button" className="col-span-1 px-3 py-2 rounded-xl btn-solid text-sm font-medium" onClick={startOrContinue}>Begin</button>):runPhase==="done"&&inBackMode?(<button type="button" className="col-span-1 px-3 py-2 rounded-xl btn-solid text-sm font-medium" onClick={startOrContinue}>Results</button>):isLocked?(<button type="button" className="col-span-1 px-3 py-2 rounded-xl bg-rose-600/90 text-white text-sm font-medium" onClick={reset}>Reset</button>):inBackMode||(!shown&&oneByOne)?(<button type="button" className="col-span-1 px-3 py-2 rounded-xl btn-solid text-sm font-medium" onClick={startOrContinue}>Continue</button>):(<button type="button" className="col-span-1 px-3 py-2 rounded-xl bg-rose-600/90 text-white text-sm font-medium" onClick={reset}>Reset</button>);
 
-      // #1 — score: correct/total_attempts (like Classic). Show correct/n when idle.
-      const scoreDisplay=runPhase==="idle"?`${doneCount}/${n}`:`${doneCount}/${attempts}`;
+      const scoreDisplay=runPhase==="idle"?"0/0":`${doneCount}/${attempts}`;
       // #3 — accuracy: dash until first attempt
       const accuracyDisplay=attempts>0?`${(doneCount/attempts*100).toFixed(1)}%`:"—";
 
@@ -320,8 +333,10 @@
         const meta=document.querySelector("meta[name='theme-color']");
         if(meta&&tc)meta.content=tc;
       },[activeTheme]);
-      // #4 — More Stats on by default
-      const [extStats,setExtStats]=useState(true);
+      // More Stats: on by default for all modes except classic
+      const [extStatsByMode,setExtStatsByMode]=useState({classic:false});
+      const extStats=extStatsByMode[mode]??true;
+      const setExtStats=v=>setExtStatsByMode(p=>({...p,[mode]:typeof v==="function"?v(extStats):v}));
       const [statsOffByMode,setStatsOffByMode]=useState({});
       const [avgVisOffByMode,setAvgVisOffByMode]=useState({classic:true,deduction:true});
       const [lastVisOffByMode,setLastVisOffByMode]=useState({classic:true,deduction:true});
@@ -612,7 +627,7 @@
         <div className="mx-auto px-4 py-5 w-full max-w-[480px]">
           <div className="flex items-center justify-between gap-4">
             {/* #8 — timestamp uses text-purple-300/60 which has light-theme CSS overrides */}
-            <h1 className="text-xl font-semibold leading-none">Calendar Game <span className="text-[10px] font-normal text-purple-300/60 ml-1">4/7 21:48</span></h1>
+            <h1 className="text-xl font-semibold leading-none">Calendar Game <span className="text-[10px] font-normal text-purple-300/60 ml-1">4/8 01:16</span></h1>
             <div className="relative">
               <select ref={modeSelectRef} value={mode} onChange={e=>{setMode(e.target.value);e.target.blur();const root=document.getElementById('root');if(root){root.style.pointerEvents='none';setTimeout(()=>root.style.pointerEvents='',400);}}} className="panel rounded-xl px-2.5 py-2 pr-9 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 appearance-none">
                 <option value="classic">Classic</option><option value="aox">AoX</option><option value="deduction">Deduction</option><option value="blitz">Blitz</option><option value="sudden">Sudden Death</option><option value="flash">Flash</option><option value="lookup">Lookup</option><option value="guide">How to Play</option>
@@ -752,7 +767,7 @@
             <p>Average your times over a set number of correct solves (2–1000). The score shows correct answers out of total attempts; the run ends when correct answers reach your target. Press Begin to start a run.</p>
             <p><b>Allow Mistakes</b> — wrong answers don't end the run but don't count toward your score.</p>
             <p><b>One-By-One</b> — hides the date between solves. Press Continue to reveal each new date.</p>
-            <p><b>Back</b> — review the previous date without affecting the run. Press Continue to resume.</p>
+            <p><b>Back</b> — review the previous date without affecting the run. Press Continue to resume. After a run completes, Back lets you browse all dates from that run; press Results to return to your results.</p>
             <p><b>Override</b> — after wrong: gives credit with time recorded. After correct (including after a completed run): undoes the credit and continues.</p>
             <p>Best Avg and Best Median are saved per n and Allow Mistakes setting. The score display freezes when a run ends and only resets after pressing Reset.</p>
           </GuideSection>
@@ -852,7 +867,7 @@
           </div>
           <div className="rounded-2xl panel p-4 space-y-4">
             <div className="flex items-center justify-between text-[11px] uppercase tracking-wide text-purple-200/70"><span>History</span>{entries.length>0&&(<button type="button" onClick={clearHist} className="text-purple-200/70 font-medium">Clear History</button>)}</div>
-            {entries.length>0?(<ul className="space-y-2">{entries.map(e=>(<li key={e.id}><button type="button" onClick={()=>selEntry(e)} className={`w-full text-left px-3 py-2 rounded-xl panel flex items-center justify-between gap-3 text-xs transition ${sid===e.id?"ring-2 ring-purple-400/70 !bg-purple-900/60":"hover:bg-purple-900/60"}`}><span className="block text-[13px] font-medium text-purple-100/90">{e.label}</span><span className="text-[12px] font-semibold text-purple-200/80">{e.weekday}</span></button></li>))}</ul>):(<p className="text-sm text-purple-200/70">No lookups yet.</p>)}
+            {entries.length>0?(<ul className="space-y-2">{entries.map(e=>(<li key={e.id}><button type="button" onClick={()=>selEntry(e)} className={`w-full text-left px-3 py-2 rounded-xl panel flex items-center justify-between gap-3 text-xs transition border-l-2 ${sid===e.id?"border-l-purple-400 bg-purple-500/10":"border-l-transparent hover:bg-purple-500/10"}`}><span className="block text-[13px] font-medium text-purple-100/90">{e.label}</span><span className="text-[12px] font-semibold text-purple-200/80">{e.weekday}</span></button></li>))}</ul>):(<p className="text-sm text-purple-200/70">No lookups yet.</p>)}
             <MethodBreakdownSection date={cdv} className="pt-4 border-t border-purple-500/40" contentClassName="mt-3 rounded-xl panel p-3" open={cov} onOpenChange={sco}/>
           </div>
         </div>
