@@ -256,24 +256,24 @@
 
       function handleOverride(){
         if(inBackMode)return;
-        // Override after first-try correct: undo credit
+        // Override after first-try correct: undo credit, keep attempts (now counts as wrong), stay on current date
         if(canOverrideCorrect&&prevTimesSnapRef.current!=null){
-          setTimes(prevTimesSnapRef.current);setAttempts(a=>Math.max(0,a-1));
+          setTimes(prevTimesSnapRef.current);
+          // DO NOT decrement attempts — question was attempted, just wrong now
           if(prevStreakSnapRef.current){setStreak(prevStreakSnapRef.current.streak);setBestStreak(prevStreakSnapRef.current.bestStreak);}
-          prevTimesSnapRef.current=null;prevStreakSnapRef.current=null;setCanOverrideCorrect(false);setQuestionCounted(false);setPendingWrongCredit(null);
+          prevTimesSnapRef.current=null;prevStreakSnapRef.current=null;setCanOverrideCorrect(false);setQuestionCounted(true);setPendingWrongCredit(null);
           setRunPhase("running");
-          setAoxStack(s=>s.slice(0,-1));const nd=randomDate(minY,maxY);setDate(nd);setGuesses([]);setMsg("");setCodesOpen(false);wrongTimeRef.current=null;
-          if(oneByOne){setShown(false);tStartRef.current=null;}else tStartRef.current=performance.now();return;
+          setAoxStack(s=>s.slice(0,-1));
+          setGuesses([]);setMsg("");setCodesOpen(false);wrongTimeRef.current=null;
+          tStartRef.current=performance.now();return;
         }
-        // Override after wrong→correct: give credit retroactively (like Classic pendingWrongOverride)
+        // Override after wrong→correct (pendingWrongCredit): give retroactive credit
         if(pendingWrongCredit!=null){
           const{wrongTime}=pendingWrongCredit;setPendingWrongCredit(null);
           const dt=wrongTime??0;
           const newTimes=[...times,dt];setTimes(newTimes);
-          // attempts already counted; don't increment again
           const ns=streak+1,nb=Math.max(bestStreak,ns);setStreak(ns);setBestStreak(nb);
           prevTimesSnapRef.current=[...times];prevStreakSnapRef.current={streak,bestStreak};setCanOverrideCorrect(true);
-          // if this completes the run, record best
           if(newTimes.length>=displayN){
             const avg=newTimes.reduce((a,b)=>a+b,0)/newTimes.length;const med=calcMed(newTimes);
             const prev=bestRef.current[bestKey]||{avg:null,med:null};
@@ -282,15 +282,12 @@
           }
           return;
         }
-        // Override after wrong (still on same date, running or failed)
+        // Override after wrong (same date, running or failed): just advance, no credit — wrong already counted
         if(runPhase==="running"||runPhase==="failed"){
-          const dt=wrongTimeRef.current??((performance.now()-(tStartRef.current??performance.now()))/1000);
-          wrongTimeRef.current=null;prevTimesSnapRef.current=null;prevStreakSnapRef.current=null;
-          const newTimes=[...times,dt];setTimes(newTimes);
-          const ns=streak+1,nb=Math.max(bestStreak,ns);
+          wrongTimeRef.current=null;
           setCodesOpen(false);setGuesses([]);setMsg("");setCanOverrideCorrect(false);setPendingWrongCredit(null);setAoxStack(s=>[...s,{...date}]);
           if(runPhase==="failed")setRunPhase("running");
-          advanceDate(newTimes,ns,nb);
+          advanceDate(times,streak,bestStreak);
         }
       }
 
