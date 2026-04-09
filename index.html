@@ -321,9 +321,9 @@
           <div className="mt-3 rounded-2xl panel p-3">
             <div className="flex items-center gap-2 flex-nowrap">
               <div className="flex items-center shrink-0"><span className="text-sm text-purple-200/80 leading-none">Ao</span><input type="text" inputMode="numeric" value={aoxN} onChange={e=>setAoxN(e.target.value)} onBlur={()=>setAoxN(String(Math.max(2,Math.min(1000,parseInt(aoxN)||10))))} className="panel rounded-xl px-2 py-1 w-14 text-center tabular-nums text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 shrink-0" disabled={isRunning&&runPhase!=="idle"}/></div>
-              <button type="button" onClick={()=>{if(!isRunning||runPhase==="idle")setMistakesOk(v=>!v);}} className={`px-2 py-1 rounded-xl text-xs font-medium border shrink-0 ${mistakesOk?"btn-solid border-purple-500":"surface-toggle text-purple-100/80"}`}>Allow Mistakes</button>
-              <button type="button" onClick={()=>{if(!isRunning||runPhase==="idle")setOneByOne(v=>!v);}} className={`px-2 py-1 rounded-xl text-xs font-medium border shrink-0 ${oneByOne?"btn-solid border-purple-500":"surface-toggle text-purple-100/80"}`}>One-By-One</button>
-              <button type="button" className={`px-2 py-1 rounded-xl text-xs font-medium border shrink-0 ml-auto ${extStats?"btn-solid border-purple-500":"surface-button text-purple-100/80"}`} onClick={()=>setExtStats(v=>!v)}>Stats +</button>
+              <button type="button" onClick={()=>{if(!isRunning||runPhase==="idle")setMistakesOk(v=>!v);}} className={`px-2 py-1 rounded-xl text-xs font-medium border shrink-0 ${mistakesOk?"btn-solid border-transparent":"surface-toggle text-purple-100/80"}`}>Allow Mistakes</button>
+              <button type="button" onClick={()=>{if(!isRunning||runPhase==="idle")setOneByOne(v=>!v);}} className={`px-2 py-1 rounded-xl text-xs font-medium border shrink-0 ${oneByOne?"btn-solid border-transparent":"surface-toggle text-purple-100/80"}`}>One-By-One</button>
+              <button type="button" className={`px-2 py-1 rounded-xl text-xs font-medium border shrink-0 ml-auto ${extStats?"btn-solid border-transparent":"surface-button text-purple-100/80"}`} onClick={()=>setExtStats(v=>!v)}>Stats +</button>
             </div>
             <div className="mt-2 flex gap-4 text-xs text-purple-300/60">
               <span>Best Average: {bestData.avg!=null?`${bestData.avg.toFixed(2)}s`:"—"}</span>
@@ -671,12 +671,12 @@
         <div className="space-y-2">
           <div className="text-[10px] uppercase tracking-widest text-purple-300/60">Date Format</div>
           <div className="flex gap-2">
-            <button type="button" onClick={()=>setDateOrder('month-first')} className={`flex-1 px-2 py-1.5 rounded-xl text-xs font-medium border ${dateOrder==='month-first'?"btn-solid border-purple-500":"surface-toggle text-purple-100/80"}`}>Month First</button>
-            <button type="button" onClick={()=>setDateOrder('day-first')} className={`flex-1 px-2 py-1.5 rounded-xl text-xs font-medium border ${dateOrder==='day-first'?"btn-solid border-purple-500":"surface-toggle text-purple-100/80"}`}>Day First</button>
+            <button type="button" onClick={()=>setDateOrder('month-first')} className={`flex-1 px-2 py-1.5 rounded-xl text-xs font-medium border ${dateOrder==='month-first'?"btn-solid border-transparent":"surface-toggle text-purple-100/80"}`}>Month First</button>
+            <button type="button" onClick={()=>setDateOrder('day-first')} className={`flex-1 px-2 py-1.5 rounded-xl text-xs font-medium border ${dateOrder==='day-first'?"btn-solid border-transparent":"surface-toggle text-purple-100/80"}`}>Day First</button>
           </div>
           <div className="flex gap-2">
-            <button type="button" onClick={()=>setDateStyle('written')} className={`flex-1 px-2 py-1.5 rounded-xl text-xs font-medium border ${dateStyle==='written'?"btn-solid border-purple-500":"surface-toggle text-purple-100/80"}`}>Written</button>
-            <button type="button" onClick={()=>setDateStyle('numeric')} className={`flex-1 px-2 py-1.5 rounded-xl text-xs font-medium border ${dateStyle==='numeric'?"btn-solid border-purple-500":"surface-toggle text-purple-100/80"}`}>Numeric</button>
+            <button type="button" onClick={()=>setDateStyle('written')} className={`flex-1 px-2 py-1.5 rounded-xl text-xs font-medium border ${dateStyle==='written'?"btn-solid border-transparent":"surface-toggle text-purple-100/80"}`}>Written</button>
+            <button type="button" onClick={()=>setDateStyle('numeric')} className={`flex-1 px-2 py-1.5 rounded-xl text-xs font-medium border ${dateStyle==='numeric'?"btn-solid border-transparent":"surface-toggle text-purple-100/80"}`}>Numeric</button>
           </div>
         </div>
         <div className="space-y-2">
@@ -690,10 +690,10 @@
         </div>
         <div className="space-y-2">
           <div className="text-[10px] uppercase tracking-widest text-purple-300/60">Theme</div>
-          <div className="flex items-center justify-between"><span className="text-xs text-purple-200/80">Use System Settings</span><button type="button" onClick={()=>setUseSystem(v=>!v)} className={`px-3 py-1 rounded-xl text-xs font-medium border ${useSystem?"btn-solid border-purple-500":"surface-toggle border-purple-800/60 text-purple-100/80"}`}>{useSystem?"On":"Off"}</button></div>
+          <div className="flex items-center justify-between"><span className="text-xs text-purple-200/80">Use System Settings</span><button type="button" onClick={()=>setUseSystem(v=>!v)} className={`px-3 py-1 rounded-xl text-xs font-medium border ${useSystem?"btn-solid border-transparent":"surface-toggle border-purple-800/60 text-purple-100/80"}`}>{useSystem?"On":"Off"}</button></div>
           {useSystem?(<><div className="flex items-center gap-3"><span className="text-xs text-purple-200/80 w-10 shrink-0">Dark:</span><select value={darkTheme} onChange={e=>setDarkTheme(e.target.value)} className="panel rounded-xl px-2 py-1 text-sm flex-1 focus:outline-none focus:ring-2 focus:ring-purple-400 appearance-none">{DARK_THEMES.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></div><div className="flex items-center gap-3"><span className="text-xs text-purple-200/80 w-10 shrink-0">Light:</span><select value={lightTheme} onChange={e=>setLightTheme(e.target.value)} className="panel rounded-xl px-2 py-1 text-sm flex-1 focus:outline-none focus:ring-2 focus:ring-purple-400 appearance-none">{LIGHT_THEMES.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></div></>):(<div className="flex items-center gap-3"><span className="text-xs text-purple-200/80 w-10 shrink-0">Theme:</span><select value={manualTheme} onChange={e=>setManualTheme(e.target.value)} className="panel rounded-xl px-2 py-1 text-sm flex-1 focus:outline-none focus:ring-2 focus:ring-purple-400 appearance-none">{ALL_THEMES_LABELED.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></div>)}
         </div>
-        <div className="pt-2 border-t border-purple-500/20 text-[11px] text-purple-300/60">Last Updated: 4/8/26 18:07</div>
+        <div className="pt-2 border-t border-purple-500/20 text-[11px] text-purple-300/60">Last Updated: 4/8/26 18:19</div>
       </div>);
       return(
         <div className="mx-auto px-4 py-5 w-full max-w-[480px]">
@@ -703,7 +703,7 @@
             <div className="flex items-center gap-2 shrink-0">
               {/* gear settings button */}
               <div className="relative">
-                <button type="button" onClick={()=>setSettingsOpen(v=>!v)} className={`px-2.5 py-2 rounded-xl text-sm border ${settingsOpen?"btn-solid border-purple-500":"surface-button text-purple-100/80"}`} aria-label="Settings">⚙</button>
+                <button type="button" onClick={()=>setSettingsOpen(v=>!v)} className={`px-2.5 py-2 rounded-xl text-sm border ${settingsOpen?"btn-solid border-transparent":"surface-button text-purple-100/80"}`} aria-label="Settings">⚙</button>
               </div>
               {/* mode selector */}
               <div className="relative">
@@ -726,8 +726,8 @@
             {extStats&&(<div className="mt-2 flex justify-evenly"><div className="w-1/4"><Stat label="Last Time (Correct)" value={fmtTime(sLast)} disabled={lastVisOff} onClick={toggleTimingVis} pressed={!lastVisOff}/></div><div className="w-1/4"><Stat label="Median Time (Correct)" value={fmtTime(sMed)} disabled={medVisOff} onClick={toggleTimingVis} pressed={!medVisOff}/></div></div>)}
             <div className="mt-3 flex items-center gap-2">
               <button type="button" className="flex-1 px-2.5 py-1.5 rounded-xl btn-solid text-xs font-medium" onClick={handleResetStats}>Reset</button>
-              <button type="button" className={`flex-1 px-2.5 py-1.5 rounded-xl text-xs font-medium border ${extStats?"btn-solid border-purple-500":"surface-button text-purple-100/80"}`} onClick={()=>setExtStats(v=>!v)}>Stats +</button>
-              {timerSettingControl&&<div className="flex-1 min-w-0">{timerSettingControl}</div>}
+              <button type="button" className={`flex-1 px-2.5 py-1.5 rounded-xl text-xs font-medium border ${extStats?"btn-solid border-transparent":"surface-button text-purple-100/80"}`} onClick={()=>setExtStats(v=>!v)}>Stats +</button>
+              {timerSettingControl&&<div className="shrink-0 w-36">{timerSettingControl}</div>}
             </div>
           </>)}
           <AoxMode minY={minY} maxY={maxY} visible={mode==="aox"} extStats={extStats} setExtStats={setExtStats} fmtDate={fmtDate}/>
@@ -762,7 +762,7 @@
           {mode==="deduction"&&(
             <div className="mt-5">
               <div className="flex flex-wrap gap-2 justify-center">
-                {["day","month","year"].map(t=>(<button key={t} type="button" onClick={()=>changeDedType(t)} className={`px-3 py-1.5 rounded-xl text-sm font-medium border ${dedType===t?"btn-solid border-purple-500 text-white":"surface-toggle border-purple-800/60 text-purple-100/80"}`}>{t[0].toUpperCase()+t.slice(1)}</button>))}
+                {["day","month","year"].map(t=>(<button key={t} type="button" onClick={()=>changeDedType(t)} className={`px-3 py-1.5 rounded-xl text-sm font-medium border ${dedType===t?"btn-solid border-transparent text-white":"surface-toggle border-purple-800/60 text-purple-100/80"}`}>{t[0].toUpperCase()+t.slice(1)}</button>))}
               </div>
               <div className="mt-4 rounded-2xl panel p-4">
                 <div className="text-center">
