@@ -80,7 +80,15 @@
     function jdnGregorian(y,m,d){const a=Math.floor((14-m)/12),y2=y+4800-a,m2=m-3+12*a;return d+Math.floor((153*m2+2)/5)+365*y2+Math.floor(y2/4)-Math.floor(y2/100)+Math.floor(y2/400)-32045;}
     const wday=(y,m,d)=>((jdnGregorian(toAstro(y),m,d)+1)%7+7)%7;
     const fmtYear=y=>y>0?String(y):`${Math.abs(y)} BC`;
-    const fmt=(y,m,d)=>`${MONTH[m-1]} ${d}, ${fmtYear(y)}`;
+    const fmt=(y,m,d,order='month-first',style='written')=>{
+      const yr=fmtYear(y);
+      if(style==='numeric'){
+        if(order==='month-first')return`${m}/${d}/${yr}`;
+        return`${d}/${m}/${yr}`;
+      }
+      if(order==='month-first')return`${MONTH[m-1]} ${d}, ${yr}`;
+      return`${d} ${MONTH[m-1]} ${yr}`;
+    };
     const rint=(a,b)=>Math.floor(Math.random()*(b-a+1))+a;
     function randomDate(lo,hi){for(;;){let y=rint(lo,hi);if(y===0)continue;let m=rint(1,12),d=rint(1,dim(y,m));if(d<=dim(y,m))return{y,m,d};}}
     const blankDedTypeStore=()=>({year:null,month:null,day:null});
@@ -147,7 +155,7 @@
       return(<Tag {...props} className={`px-2.5 py-1.5 rounded-xl panel text-center flex flex-col items-center h-full${disabled?" opacity-60":""}${ia?" cursor-pointer hover:bg-purple-900/40 transition-colors":""}`}><div className="text-[11px] text-purple-200/80 leading-tight flex items-center justify-center min-h-[1.65rem]"><span>{label}</span></div><div className="mt-auto pt-0.5 text-base font-semibold tabular-nums">{disabled?"—":`${left}/${right}`}</div></Tag>);
     };
 
-    function AoxMode({minY,maxY,visible,extStats,setExtStats,themeOpen,setThemeOpen}){
+    function AoxMode({minY,maxY,visible,extStats,setExtStats,fmtDate}){
       const [aoxN,setAoxN]=useState("10");
       const [mistakesOk,setMistakesOk]=useState(false);
       const [oneByOne,setOneByOne]=useState(false);
@@ -310,16 +318,12 @@
             <Stat label="Avg Time (Correct)" value={fmtTime(calcAvg(times))}/>
           </div>
           {extStats&&(<div className="mt-2 flex justify-evenly"><div className="w-1/4"><Stat label="Last Time (Correct)" value={fmtTime(calcLast(times))}/></div><div className="w-1/4"><Stat label="Median Time (Correct)" value={fmtTime(calcMed(times))}/></div></div>)}
-          <div className="mt-3 flex gap-2 flex-wrap">
-            <button type="button" className={`px-2.5 py-1 rounded-xl text-xs font-medium border ${extStats?"btn-solid border-purple-500":"surface-button text-purple-100/80"}`} onClick={()=>setExtStats(v=>!v)}>More Stats</button>
-            <button type="button" className={`px-2.5 py-1 rounded-xl text-xs font-medium border ${themeOpen?"btn-solid border-purple-500":"surface-button text-purple-100/80"}`} onClick={()=>setThemeOpen(v=>!v)}>Theme</button>
-          </div>
           <div className="mt-3 rounded-2xl panel p-3">
             <div className="flex items-center gap-2 flex-nowrap">
-              <span className="text-sm text-purple-200/80 shrink-0">{aoLabel}</span>
-              <input type="text" inputMode="numeric" value={aoxN} onChange={e=>setAoxN(e.target.value)} onBlur={()=>setAoxN(String(Math.max(2,Math.min(1000,parseInt(aoxN)||10))))} className="panel rounded-xl px-2 py-1 w-14 text-center tabular-nums text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 shrink-0" disabled={isRunning&&runPhase!=="idle"}/>
+              <div className="flex items-center shrink-0"><span className="text-sm text-purple-200/80 leading-none">Ao</span><input type="text" inputMode="numeric" value={aoxN} onChange={e=>setAoxN(e.target.value)} onBlur={()=>setAoxN(String(Math.max(2,Math.min(1000,parseInt(aoxN)||10))))} className="panel rounded-xl px-2 py-1 w-14 text-center tabular-nums text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 shrink-0" disabled={isRunning&&runPhase!=="idle"}/></div>
               <button type="button" onClick={()=>{if(!isRunning||runPhase==="idle")setMistakesOk(v=>!v);}} className={`px-2 py-1 rounded-xl text-xs font-medium border shrink-0 ${mistakesOk?"btn-solid border-purple-500":"surface-toggle text-purple-100/80"}`}>Allow Mistakes</button>
               <button type="button" onClick={()=>{if(!isRunning||runPhase==="idle")setOneByOne(v=>!v);}} className={`px-2 py-1 rounded-xl text-xs font-medium border shrink-0 ${oneByOne?"btn-solid border-purple-500":"surface-toggle text-purple-100/80"}`}>One-By-One</button>
+              <button type="button" className={`px-2 py-1 rounded-xl text-xs font-medium border shrink-0 ml-auto ${extStats?"btn-solid border-purple-500":"surface-button text-purple-100/80"}`} onClick={()=>setExtStats(v=>!v)}>Stats +</button>
             </div>
             <div className="mt-2 flex gap-4 text-xs text-purple-300/60">
               <span>Best Average: {bestData.avg!=null?`${bestData.avg.toFixed(2)}s`:"—"}</span>
@@ -329,7 +333,7 @@
           <div className="mt-4 rounded-2xl panel p-4">
             <div className="text-center">
               <div className="text-xs uppercase tracking-widest text-purple-100/80">What Day Is This?</div>
-              <div className="mt-1 text-3xl font-bold">{dateVisible?fmt(date.y,date.m,date.d):"—"}</div>
+              <div className="mt-1 text-3xl font-bold">{dateVisible?fmtDate(date.y,date.m,date.d):"—"}</div>
             </div>
             <div className={`mt-4 grid grid-cols-2 gap-3 ${optionsDisabled?"opacity-60 pointer-events-none":""}`}>
               {DAY.map((nm,i)=>{const last=i===DAY.length-1?"col-span-2":"";return(<button key={nm} type="button" onClick={()=>submitDoW(i)} className={`${baseBtn} ${flash&&flash.idx===i?(flash.type==="good"?"flash-good":"flash-bad")+" border-transparent":"surface-button"} ${last}`}>{nm}</button>);})}
@@ -358,7 +362,7 @@
       const [darkTheme,setDarkTheme]=useState("dusk");
       const [lightTheme,setLightTheme]=useState("light");
       const [manualTheme,setManualTheme]=useState("dusk");
-      const [themeOpen,setThemeOpen]=useState(false);
+
       const activeTheme=useSystem?(systemIsDark?darkTheme:lightTheme):manualTheme;
       useEffect(()=>{const mq=window.matchMedia("(prefers-color-scheme: dark)");const h=e=>setSystemIsDark(e.matches);mq.addEventListener("change",h);return()=>mq.removeEventListener("change",h);},[]);
       useEffect(()=>{
@@ -628,12 +632,12 @@
       const optionsDisabled=(isTimer(mode)&&!active)||locked||calcOpen||calcPenaltyActive;
       const centerLastOpt=(index,total)=>{if(total<=0||index!==total-1)return"";return total%3===1?"col-start-2":"";};
       const timerSettingControl=(()=>{
-        if(mode==="blitz")return(<div className="flex items-center gap-2"><span className="text-xs text-purple-300/80 shrink-0">Duration:</span><input type="range" min="10" max="180" step="5" value={blitzSec} onChange={e=>{const v=+e.target.value;setBlitzSec(v);if(!active){setBlitzRemain(v);blitzRemainRef.current=v;if(blitzTimeRef.current)blitzTimeRef.current.textContent=v+"s";if(blitzBarRef.current)blitzBarRef.current.style.width="100%";}}} disabled={active} className="accent-purple-500 w-28 disabled:opacity-40"/><span className="tabular-nums text-xs w-8 shrink-0">{blitzSec}s</span></div>);
-        if(mode==="sudden")return(<div className="flex items-center gap-2"><span className="text-xs text-purple-300/80 shrink-0">Per Q:</span><input type="range" min="3" max="20" step="1" value={qSec} onChange={e=>{const v=+e.target.value;setQSec(v);if(!active){setQRemain(v);if(suddenTimeRef.current)suddenTimeRef.current.textContent=v+"s";if(suddenBarRef.current)suddenBarRef.current.style.width="100%";}}} disabled={active} className="accent-purple-500 w-28 disabled:opacity-40"/><span className="tabular-nums text-xs w-8 shrink-0">{qSec}s</span></div>);
-        if(mode==="flash")return(<div className="flex items-center gap-2"><span className="text-xs text-purple-300/80 shrink-0">Reveal:</span><input type="range" min="50" max="3000" step="50" value={flashMs} onChange={e=>{const v=+e.target.value;setFlashMs(v);if(!active){setFlashRemainMs(v);resetFlashBar();}}} disabled={active} className="accent-purple-500 w-28 disabled:opacity-40"/><span className="tabular-nums text-xs w-16 shrink-0">{flashMs}ms</span></div>);
+        if(mode==="blitz")return(<div className="flex items-center gap-2"><input type="range" min="10" max="180" step="5" value={blitzSec} onChange={e=>{const v=+e.target.value;setBlitzSec(v);if(!active){setBlitzRemain(v);blitzRemainRef.current=v;if(blitzTimeRef.current)blitzTimeRef.current.textContent=v+"s";if(blitzBarRef.current)blitzBarRef.current.style.width="100%";}}} disabled={active} className="accent-purple-500 flex-1 disabled:opacity-40"/><span className="tabular-nums text-xs w-8 shrink-0 text-right">{blitzSec}s</span></div>);
+        if(mode==="sudden")return(<div className="flex items-center gap-2"><input type="range" min="3" max="20" step="1" value={qSec} onChange={e=>{const v=+e.target.value;setQSec(v);if(!active){setQRemain(v);if(suddenTimeRef.current)suddenTimeRef.current.textContent=v+"s";if(suddenBarRef.current)suddenBarRef.current.style.width="100%";}}} disabled={active} className="accent-purple-500 flex-1 disabled:opacity-40"/><span className="tabular-nums text-xs w-8 shrink-0 text-right">{qSec}s</span></div>);
+        if(mode==="flash")return(<div className="flex items-center gap-2"><input type="range" min="50" max="3000" step="50" value={flashMs} onChange={e=>{const v=+e.target.value;setFlashMs(v);if(!active){setFlashRemainMs(v);resetFlashBar();}}} disabled={active} className="accent-purple-500 flex-1 disabled:opacity-40"/><span className="tabular-nums text-xs w-12 shrink-0 text-right">{flashMs}ms</span></div>);
         return null;
       })();
-      const [rangeOpen,setRangeOpen]=useState(false);
+
       const shouldShowTimerDate=(!isTimer(mode))||active||showTimerDate;
       const flashHiding=mode==="flash"&&active&&flashPhase==="hide";
       let timerBlocksReveal=false;
@@ -652,25 +656,66 @@
       const handleResetStats=()=>{resetStatsCurrent();if(!avgVisOff)doNew({skipInactiveMessage:true});};
       const applyCalcPenalty=()=>{setCalcPenalty(true);const roundOver=(mode==="blitz"||mode==="sudden")&&!active;const fp=!countedWrong&&!revealed;if(fp&&!roundOver){wrongTimeRef.current=tStartRef.current?(performance.now()-tStartRef.current)/1000:null;prevStatsSnapshotRef.current=null;preCalcPenaltySnapshotRef.current={played:S.played,good:S.good,streak:S.streak,best:S.best,timesLen:S.times.length,blitzPlayed:blitzRoundStats.played,blitzGood:blitzRoundStats.good};if(!statsOff)updateStats(c=>{c.played+=1;c.streak=0;});if(mode==="blitz")setBlitzRoundStats(p=>({...p,played:p.played+1}));}let am=null;if(mode==="deduction"&&ded){const ans=ded.type==="year"?fmtYear(ded.y):ded.type==="month"?MONTH[ded.m-1]:String(ded.d);am=`Answer: ${ans}.`;}else if(mode!=="deduction")am=`Answer: ${DAY[correct]}.`;if(am)setMsg(am);if(isTimer(mode)&&active){setActive(false);setShowTimerDate(true);if(mode==="blitz"){setBlitzRunning(false);blitzStartRef.current=null;blitzPausedAtRef.current=null;blitzPausedAccRef.current=0;}if(mode==="sudden"){qDeadlineRef.current=null;qPausedAtRef.current=null;qPausedAccRef.current=0;}if(mode==="flash"){clearTimeout(flashTimerRef.current);flashTimerRef.current=null;setFlashPhase("dash");flashDeadlineRef.current=null;}}if(!revealed)setRevealed(true);if(!countedWrong){setCountedWrong(true);setCanOverrideCorrect(false);}};
       const handleCalcOpenChange=next=>{if(next)applyCalcPenalty();setCalcOpen(next);};
-      const showStatsAndRange=mode!=="lookup"&&mode!=="guide"&&mode!=="aox";
+      const showStats=mode!=="lookup"&&mode!=="guide"&&mode!=="aox";
       const sAvg=calcAvg(S.times),sLast=calcLast(S.times),sMed=calcMed(S.times);
+      const [dateOrder,setDateOrder]=useState('month-first');
+      const [dateStyle,setDateStyle]=useState('written');
+      const fmtDate=(y,m,d)=>fmt(y,m,d,dateOrder,dateStyle);
+      const [settingsOpen,setSettingsOpen]=useState(false);
+      const settingsRef=useRef(null);
+      useEffect(()=>{if(!settingsOpen)return;const h=e=>{if(settingsRef.current&&!settingsRef.current.contains(e.target))setSettingsOpen(false);};document.addEventListener('mousedown',h);document.addEventListener('touchstart',h);return()=>{document.removeEventListener('mousedown',h);document.removeEventListener('touchstart',h);};},[settingsOpen]);
       const DARK_THEMES=[{id:'dusk',name:'Dusk'},{id:'midnight',name:'Midnight'},{id:'nebula',name:'Nebula'}];
       const LIGHT_THEMES=[{id:'light',name:'Light'},{id:'parchment',name:'Parchment'}];
       const ALL_THEMES_LABELED=[{id:'dusk',name:'Dusk (dark)'},{id:'midnight',name:'Midnight (dark)'},{id:'nebula',name:'Nebula (dark)'},{id:'light',name:'Light (light)'},{id:'parchment',name:'Parchment (light)'}];
-      const ThemePanel=()=>(<div className="mt-2 rounded-2xl panel p-3 space-y-3"><div className="flex items-center justify-between"><span className="text-sm text-purple-200/80">Use System Settings</span><button type="button" onClick={()=>setUseSystem(v=>!v)} className={`px-3 py-1 rounded-xl text-xs font-medium border ${useSystem?"btn-solid border-purple-500":"surface-toggle border-purple-800/60 text-purple-100/80"}`}>{useSystem?"On":"Off"}</button></div>{useSystem?(<><div className="flex items-center gap-3"><span className="text-xs text-purple-200/80 w-10 shrink-0">Dark:</span><select value={darkTheme} onChange={e=>setDarkTheme(e.target.value)} className="panel rounded-xl px-2 py-1 text-sm flex-1 focus:outline-none focus:ring-2 focus:ring-purple-400 appearance-none">{DARK_THEMES.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></div><div className="flex items-center gap-3"><span className="text-xs text-purple-200/80 w-10 shrink-0">Light:</span><select value={lightTheme} onChange={e=>setLightTheme(e.target.value)} className="panel rounded-xl px-2 py-1 text-sm flex-1 focus:outline-none focus:ring-2 focus:ring-purple-400 appearance-none">{LIGHT_THEMES.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></div></>):(<div className="flex items-center gap-3"><span className="text-xs text-purple-200/80 w-10 shrink-0">Theme:</span><select value={manualTheme} onChange={e=>setManualTheme(e.target.value)} className="panel rounded-xl px-2 py-1 text-sm flex-1 focus:outline-none focus:ring-2 focus:ring-purple-400 appearance-none">{ALL_THEMES_LABELED.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></div>)}</div>);
+      const SettingsPopover=()=>(<div className="absolute right-0 top-full mt-2 z-50 w-72 rounded-2xl card p-4 space-y-4 shadow-xl" style={{maxWidth:'calc(100vw - 2rem)'}}>
+        <div className="space-y-2">
+          <div className="text-[10px] uppercase tracking-widest text-purple-300/60">Date Format</div>
+          <div className="flex gap-2">
+            <button type="button" onClick={()=>setDateOrder('month-first')} className={`flex-1 px-2 py-1.5 rounded-xl text-xs font-medium border ${dateOrder==='month-first'?"btn-solid border-purple-500":"surface-toggle text-purple-100/80"}`}>Month First</button>
+            <button type="button" onClick={()=>setDateOrder('day-first')} className={`flex-1 px-2 py-1.5 rounded-xl text-xs font-medium border ${dateOrder==='day-first'?"btn-solid border-purple-500":"surface-toggle text-purple-100/80"}`}>Day First</button>
+          </div>
+          <div className="flex gap-2">
+            <button type="button" onClick={()=>setDateStyle('written')} className={`flex-1 px-2 py-1.5 rounded-xl text-xs font-medium border ${dateStyle==='written'?"btn-solid border-purple-500":"surface-toggle text-purple-100/80"}`}>Written</button>
+            <button type="button" onClick={()=>setDateStyle('numeric')} className={`flex-1 px-2 py-1.5 rounded-xl text-xs font-medium border ${dateStyle==='numeric'?"btn-solid border-purple-500":"surface-toggle text-purple-100/80"}`}>Numeric</button>
+          </div>
+        </div>
+        <div className="space-y-2">
+          <div className="text-[10px] uppercase tracking-widest text-purple-300/60">Year Range</div>
+          <div className="flex items-center gap-2">
+            <input ref={minInputRef} type="text" inputMode="numeric" pattern="[0-9]*" value={minInputVal} onChange={e=>{if(e.target.value===''||/^\d*$/.test(e.target.value))setMinInputVal(e.target.value);}} onBlur={commitMin} onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();commitMin();e.currentTarget.blur();}if(e.key==="Escape"){setMinInputVal(String(minY));e.currentTarget.blur();}blockMinus(e);}} onBeforeInput={blockMinusBI} className="flex-1 panel rounded-xl px-2 py-1.5 text-sm text-center focus:outline-none focus:ring-2 focus:ring-purple-400 tabular-nums"/>
+            <span className="text-purple-300/60 text-sm shrink-0">→</span>
+            <input ref={maxInputRef} type="text" inputMode="numeric" pattern="[0-9]*" value={maxInputVal} onChange={e=>{if(e.target.value===''||/^\d*$/.test(e.target.value))setMaxInputVal(e.target.value);}} onBlur={commitMax} onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();commitMax();e.currentTarget.blur();}if(e.key==="Escape"){setMaxInputVal(String(maxY));e.currentTarget.blur();}blockMinus(e);}} onBeforeInput={blockMinusBI} className="flex-1 panel rounded-xl px-2 py-1.5 text-sm text-center focus:outline-none focus:ring-2 focus:ring-purple-400 tabular-nums"/>
+          </div>
+          <p className="text-[11px] text-purple-300/60">AD dates only, 1–10000.</p>
+        </div>
+        <div className="space-y-2">
+          <div className="text-[10px] uppercase tracking-widest text-purple-300/60">Theme</div>
+          <div className="flex items-center justify-between"><span className="text-xs text-purple-200/80">Use System Settings</span><button type="button" onClick={()=>setUseSystem(v=>!v)} className={`px-3 py-1 rounded-xl text-xs font-medium border ${useSystem?"btn-solid border-purple-500":"surface-toggle border-purple-800/60 text-purple-100/80"}`}>{useSystem?"On":"Off"}</button></div>
+          {useSystem?(<><div className="flex items-center gap-3"><span className="text-xs text-purple-200/80 w-10 shrink-0">Dark:</span><select value={darkTheme} onChange={e=>setDarkTheme(e.target.value)} className="panel rounded-xl px-2 py-1 text-sm flex-1 focus:outline-none focus:ring-2 focus:ring-purple-400 appearance-none">{DARK_THEMES.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></div><div className="flex items-center gap-3"><span className="text-xs text-purple-200/80 w-10 shrink-0">Light:</span><select value={lightTheme} onChange={e=>setLightTheme(e.target.value)} className="panel rounded-xl px-2 py-1 text-sm flex-1 focus:outline-none focus:ring-2 focus:ring-purple-400 appearance-none">{LIGHT_THEMES.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></div></>):(<div className="flex items-center gap-3"><span className="text-xs text-purple-200/80 w-10 shrink-0">Theme:</span><select value={manualTheme} onChange={e=>setManualTheme(e.target.value)} className="panel rounded-xl px-2 py-1 text-sm flex-1 focus:outline-none focus:ring-2 focus:ring-purple-400 appearance-none">{ALL_THEMES_LABELED.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></div>)}
+        </div>
+        <div className="pt-2 border-t border-purple-500/20 text-[11px] text-purple-300/60">Last Updated: 4/8/26 17:28</div>
+      </div>);
       return(
         <div className="mx-auto px-4 py-5 w-full max-w-[480px]">
-          <div className="flex items-center justify-between gap-4">
-            {/* #8 — timestamp uses text-purple-300/60 which has light-theme CSS overrides */}
-            <h1 className="text-xl font-semibold leading-none">Calendar Game <span className="text-[10px] font-normal text-purple-300/60 ml-1">4/8/26 16:23</span></h1>
-            <div className="relative">
-              <select ref={modeSelectRef} value={mode} onChange={e=>{setMode(e.target.value);e.target.blur();const root=document.getElementById('root');if(root){root.style.pointerEvents='none';setTimeout(()=>root.style.pointerEvents='',400);}}} className="panel rounded-xl px-2.5 py-2 pr-9 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 appearance-none">
-                <option value="classic">Classic</option><option value="aox">AoX</option><option value="deduction">Deduction</option><option value="flash">Flash</option><option value="blitz">Blitz</option><option value="sudden">Sudden Death</option><option value="lookup">Lookup</option><option value="guide">How to Play</option>
-              </select>
-              <div className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 flex flex-col items-center leading-none text-[7px] text-white/90"><span>▲</span><span>▼</span></div>
+        <div className="flex items-center justify-between gap-2">
+            {/* header left: title */}
+            <h1 className="text-xl font-semibold leading-none shrink-0">Calendar Game</h1>
+            <div className="flex items-center gap-2 shrink-0">
+              {/* gear settings button */}
+              <div className="relative" ref={settingsRef}>
+                <button type="button" onClick={()=>setSettingsOpen(v=>!v)} className={`px-2.5 py-2 rounded-xl text-sm border ${settingsOpen?"btn-solid border-purple-500":"surface-button text-purple-100/80"}`} aria-label="Settings">⚙</button>
+                {settingsOpen&&<SettingsPopover/>}
+              </div>
+              {/* mode selector */}
+              <div className="relative">
+                <select ref={modeSelectRef} value={mode} onChange={e=>{setMode(e.target.value);e.target.blur();const root=document.getElementById('root');if(root){root.style.pointerEvents='none';setTimeout(()=>root.style.pointerEvents='',400);}}} className="panel rounded-xl px-2.5 py-2 pr-9 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 appearance-none">
+                  <option value="classic">Classic</option><option value="aox">AoX</option><option value="deduction">Deduction</option><option value="flash">Flash</option><option value="blitz">Blitz</option><option value="sudden">Sudden Death</option><option value="lookup">Lookup</option><option value="guide">How to Play</option>
+                </select>
+                <div className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 flex flex-col items-center leading-none text-[7px] text-white/90"><span>▲</span><span>▼</span></div>
+              </div>
             </div>
           </div>
-          {showStatsAndRange&&(<>
+          {showStats&&(<>
             <div className="mt-4 grid grid-cols-4 gap-2">
               <Stat label={mode==="blitz"||mode==="sudden"?"Score (Round)":"Score"} value={mode==="blitz"?`${blitzRoundStats.good}/${blitzRoundStats.played}`:`${S.good}/${S.played}`} disabled={statsOff} onClick={toggleStatsOff} pressed={!statsOff}/>
               {/* #3 — accuracy shows dash until first attempt */}
@@ -679,32 +724,14 @@
               <Stat label="Avg Time (Correct)" value={fmtTime(sAvg)} disabled={avgVisOff} onClick={toggleTimingVis} pressed={!avgVisOff}/>
             </div>
             {extStats&&(<div className="mt-2 flex justify-evenly"><div className="w-1/4"><Stat label="Last Time (Correct)" value={fmtTime(sLast)} disabled={lastVisOff} onClick={toggleTimingVis} pressed={!lastVisOff}/></div><div className="w-1/4"><Stat label="Median Time (Correct)" value={fmtTime(sMed)} disabled={medVisOff} onClick={toggleTimingVis} pressed={!medVisOff}/></div></div>)}
-            <div className="mt-3 flex gap-2 flex-wrap items-center">
-              <button type="button" className="px-2.5 py-1.5 rounded-xl btn-solid text-xs font-medium" onClick={handleResetStats}>Reset Stats</button>
-              <button type="button" className={`px-2.5 py-1.5 rounded-xl text-xs font-medium border ${extStats?"btn-solid border-purple-500":"surface-button text-purple-100/80"}`} onClick={()=>setExtStats(v=>!v)}>More Stats</button>
-              <button type="button" className={`px-2.5 py-1.5 rounded-xl text-xs font-medium border ${themeOpen?"btn-solid border-purple-500":"surface-button text-purple-100/80"}`} onClick={()=>setThemeOpen(v=>!v)}>Theme</button>
-              {timerSettingControl&&<div className="ml-auto">{timerSettingControl}</div>}
-            </div>
-            {themeOpen&&<ThemePanel/>}
-            <div className="mt-3 rounded-2xl panel p-3">
-              <button type="button" onClick={()=>setRangeOpen(o=>!o)} aria-expanded={rangeOpen} className="w-full text-left text-sm text-purple-200/90 flex items-center justify-between">
-                <span>Year Range: <span className="tabular-nums ml-1">{minY} → {maxY}</span></span>
-                <span className={`text-white/90 text-[7px] leading-none transition-transform ease-in-out ${rangeOpen?"rotate-180":""}`} style={{transitionDuration:"250ms"}}>▼</span>
-              </button>
-              <Expander open={rangeOpen}>
-                <div className="mt-3 space-y-3 pr-1">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div><label htmlFor="min-year-input" className="block text-xs text-purple-200/80 mb-1">Start Year</label><input ref={minInputRef} id="min-year-input" type="text" inputMode="numeric" pattern="[0-9]*" value={minInputVal} onChange={e=>{if(e.target.value===''||/^\d*$/.test(e.target.value))setMinInputVal(e.target.value);}} onBlur={commitMin} onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();commitMin();e.currentTarget.blur();}if(e.key==="Escape"){setMinInputVal(String(minY));e.currentTarget.blur();}blockMinus(e);}} onBeforeInput={blockMinusBI} className="w-full panel rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-400 tabular-nums"/></div>
-                    <div><label htmlFor="max-year-input" className="block text-xs text-purple-200/80 mb-1">End Year</label><input ref={maxInputRef} id="max-year-input" type="text" inputMode="numeric" pattern="[0-9]*" value={maxInputVal} onChange={e=>{if(e.target.value===''||/^\d*$/.test(e.target.value))setMaxInputVal(e.target.value);}} onBlur={commitMax} onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();commitMax();e.currentTarget.blur();}if(e.key==="Escape"){setMaxInputVal(String(maxY));e.currentTarget.blur();}blockMinus(e);}} onBeforeInput={blockMinusBI} className="w-full panel rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-400 tabular-nums"/></div>
-                  </div>
-                  <p className="text-xs text-purple-300/70">AD dates only, 1–10000.</p>
-                </div>
-              </Expander>
+            <div className="mt-3 flex items-center gap-2">
+              <button type="button" className="px-2.5 py-1.5 rounded-xl btn-solid text-xs font-medium shrink-0" onClick={handleResetStats}>Reset</button>
+              <button type="button" className={`px-2.5 py-1.5 rounded-xl text-xs font-medium border shrink-0 ${extStats?"btn-solid border-purple-500":"surface-button text-purple-100/80"}`} onClick={()=>setExtStats(v=>!v)}>Stats +</button>
+              {timerSettingControl&&<div className="flex-1 min-w-0">{timerSettingControl}</div>}
             </div>
           </>)}
-          <AoxMode minY={minY} maxY={maxY} visible={mode==="aox"} extStats={extStats} setExtStats={setExtStats} themeOpen={themeOpen} setThemeOpen={setThemeOpen}/>
-          {themeOpen&&mode==="aox"&&<ThemePanel/>}
-          {mode==="lookup"&&(<div className="mt-5"><LookupCard history={lookupHistory} onAddHistory={pushLookupHistory} onClearHistory={clearLookupHistory} inputValue={lookupInput} onInputChange={setLookupInput} outputValue={lookupOutput} onOutputChange={setLookupOutput} calcDate={lookupCalcDate} onCalcDateChange={setLookupCalcDate} selectedHistoryId={lookupSelectedHistoryId} onSelectedHistoryIdChange={setLookupSelectedHistoryId} calcOpen={lookupCalcOpen} onCalcOpenChange={setLookupCalcOpen}/></div>)}
+          <AoxMode minY={minY} maxY={maxY} visible={mode==="aox"} extStats={extStats} setExtStats={setExtStats} fmtDate={fmtDate}/>
+          {mode==="lookup"&&(<div className="mt-5"><LookupCard history={lookupHistory} onAddHistory={pushLookupHistory} onClearHistory={clearLookupHistory} inputValue={lookupInput} onInputChange={setLookupInput} outputValue={lookupOutput} onOutputChange={setLookupOutput} calcDate={lookupCalcDate} onCalcDateChange={setLookupCalcDate} selectedHistoryId={lookupSelectedHistoryId} onSelectedHistoryIdChange={setLookupSelectedHistoryId} calcOpen={lookupCalcOpen} onCalcOpenChange={setLookupCalcOpen} fmtDate={fmtDate}/></div>)}
           {mode==="guide"&&(<div className="mt-5"><GuidePage/></div>)}
           {["classic","blitz","sudden","flash"].includes(mode)&&(
             <div className="mt-5">
@@ -714,7 +741,7 @@
               <div className="mt-4 rounded-2xl panel p-4">
                 <div className="text-center">
                   <div className="text-xs uppercase tracking-widest text-purple-100/80">What Day Is This?</div>
-                  <div className="mt-1 text-3xl font-bold">{shouldShowTimerDate?((mode==="flash"&&active&&flashPhase==="hide")?"…":fmt(date.y,date.m,date.d)):"—"}</div>
+                  <div className="mt-1 text-3xl font-bold">{shouldShowTimerDate?((mode==="flash"&&active&&flashPhase==="hide")?"…":fmtDate(date.y,date.m,date.d)):"—"}</div>
                 </div>
                 <div className={`mt-4 grid grid-cols-2 gap-3 ${optionsDisabled?"opacity-60 pointer-events-none":""}`}>
                   {DAY.map((n,i)=>{const last=i===DAY.length-1?"col-span-2":"";return(<button key={n} type="button" onClick={()=>{submitDoW(i);if(isTouch)document.activeElement?.blur();}} className={`${baseBtn} ${flash&&flash.idx===i?(flash.type==="good"?"flash-good":"flash-bad")+" border-transparent":idleBtn} ${last}`}>{n}</button>);})}
@@ -792,24 +819,26 @@
             <p><b>Avg Time (Correct)</b> — average time across all first-try correct answers. Always tracked. Tap to hide.</p>
             <p><b>Last Time (Correct)</b> — your most recent first-try correct answer time.</p>
             <p><b>Median Time (Correct)</b> — the middle value of all your correct times when sorted. Less skewed by outliers than the average.</p>
-            <p className="text-purple-300/70 text-[12px]">Tap Score, Accuracy, or Streak to hide all three together. Tap Avg Time, Last Time, or Median Time to toggle each independently. Settings are saved per mode. Use More Stats to show or hide the bottom row.</p>
+            <p className="text-purple-300/70 text-[12px]">Tap Score, Accuracy, or Streak to hide all three together. Tap Avg Time, Last Time, or Median Time to toggle each independently. Settings are saved per mode. Use Stats + to show or hide the bottom row.</p>
           </GuideSection>
-          <GuideSection id="range" title="Year Range" openId={open} onToggle={toggle}><p>Expand to control which years dates are drawn from. Defaults to 1–10000 AD. Changing the range resets the current round.</p></GuideSection>
-          <GuideSection id="theme" title="Theme" openId={open} onToggle={toggle}><p>Five themes: Dusk (default dark navy), Midnight (true black with purple), Nebula (deep purple), Light (clean white), and Parchment (warm cream). Enable Use System Settings to match your device's light/dark mode automatically, with separate theme choices for each. Disable to pick one manually.</p></GuideSection>
+          <GuideSection id="range" title="Year Range" openId={open} onToggle={toggle}><p>Set via the ⚙ settings menu. Controls which years dates are drawn from. Defaults to 1–10000 AD. Changing the range resets the current round.</p></GuideSection>
+          <GuideSection id="theme" title="Theme" openId={open} onToggle={toggle}><p>Five themes: Dusk (default dark navy), Midnight (true black with purple), Nebula (deep purple), Light (clean white), and Parchment (warm cream). Accessible from the ⚙ settings menu in any tab. Enable Use System Settings to match your device's light/dark mode automatically, with separate theme choices for each. Disable to pick one manually.</p></GuideSection>
+          <GuideSection id="dateformat" title="Date Format" openId={open} onToggle={toggle}><p>Set via the ⚙ settings menu. Choose Month First or Day First, and Written (e.g. January 1, 2000) or Numeric (e.g. 1/1/2000). Applies to all game modes and lookup results. The lookup input always uses month/day/year regardless of format.</p></GuideSection>
           <Divider label="Modes"/>
           <GuideSection id="classic" title="Classic" openId={open} onToggle={toggle}><p>The main practice mode with no time pressure. Answer at your own pace. Override works after both wrong and correct answers.</p></GuideSection>
           <GuideSection id="aox" title="AoX" openId={open} onToggle={toggle}>
             <p>Average your times over a set number of correct solves (2–1000). The score shows correct answers out of total attempts; the run ends when correct answers reach your target. Press Begin to start a run.</p>
             <p><b>Allow Mistakes</b> — wrong answers don't end the run but don't count toward your score.</p>
             <p><b>One-By-One</b> — hides the date between solves. Press Continue to reveal each new date.</p>
+            <p><b>Stats +</b> — show or hide the Last Time and Median Time rows.</p>
             <p><b>Back</b> — review the previous date without affecting the run. Press Continue to resume. After a run completes, Back lets you browse all dates from that run; press Results to return to your results.</p>
             <p><b>Override</b> — after wrong: gives credit with time recorded. After correct (including after a completed run): undoes the credit and continues.</p>
             <p>Best Avg and Best Median are saved per n and Allow Mistakes setting. The score display freezes when a run ends and only resets after pressing Reset.</p>
           </GuideSection>
           <GuideSection id="deduction" title="Deduction" openId={open} onToggle={toggle}><p>Identify the missing piece of a date given the rest plus the weekday. Choose Day, Month, or Year mode. Each question has exactly one correct answer. Switch subtypes anytime — progress in each is preserved.</p></GuideSection>
-          <GuideSection id="flash" title="Flash" openId={open} onToggle={toggle}><p>The date is briefly revealed (50ms–3000ms, default 500ms) then hidden. Answer from memory.</p></GuideSection>
-          <GuideSection id="blitz" title="Blitz" openId={open} onToggle={toggle}><p>Answer as many dates as possible within the time limit (10s–180s, default 60s, adjustable). Score shown is for the current round only. Stats reset at the start of each round.</p></GuideSection>
-          <GuideSection id="sudden" title="Sudden Death" openId={open} onToggle={toggle}><p>Each question has its own countdown (3s–20s, default 5s, adjustable). A wrong answer or running out of time ends the run. Score (Round) shows your current run only. Stats reset at the start of each round.</p></GuideSection>
+          <GuideSection id="blitz" title="Blitz" openId={open} onToggle={toggle}><p>Answer as many dates as possible within the time limit (10s–180s, default 60s, adjustable via the slider). Score shown is for the current round only. Stats reset at the start of each round.</p></GuideSection>
+          <GuideSection id="sudden" title="Sudden Death" openId={open} onToggle={toggle}><p>Each question has its own countdown (3s–20s, default 5s, adjustable via the slider). A wrong answer or running out of time ends the run. Score (Round) shows your current run only. Stats reset at the start of each round.</p></GuideSection>
+          <GuideSection id="flash" title="Flash" openId={open} onToggle={toggle}><p>The date is briefly revealed (50ms–3000ms, default 500ms, adjustable via the slider) then hidden. Answer from memory.</p></GuideSection>
           <GuideSection id="lookup" title="Lookup" openId={open} onToggle={toggle}><p>Enter any AD date as month/day/year (e.g. 7/4/1776) to instantly see its weekday. Supports years 1–10000. Show Codes is available for all results and stays open as you browse your history — it only closes when you manually hide it or submit a new lookup.</p></GuideSection>
         </div>
       );
@@ -856,7 +885,7 @@
       return(<div className={className??"mt-5"}><button type="button" onClick={toggle} className={`w-full px-4 py-2 rounded-xl btn-solid text-sm font-medium${!hasDate?" opacity-60 cursor-not-allowed pointer-events-none":""}`} aria-disabled={!hasDate}>{open?"Hide Codes":"Show Codes"}</button><Expander open={open&&hasDate} instant={!!instant}><div className={contentClassName??"mt-3 rounded-2xl panel p-4 pb-1"}><MethodExplanation date={frozenDate}/></div></Expander></div>);
     }
 
-    function LookupCard({history=[],onAddHistory,onClearHistory,inputValue="",onInputChange,outputValue="",onOutputChange,calcDate,onCalcDateChange,selectedHistoryId,onSelectedHistoryIdChange,calcOpen=false,onCalcOpenChange}){
+    function LookupCard({history=[],onAddHistory,onClearHistory,inputValue="",onInputChange,outputValue="",onOutputChange,calcDate,onCalcDateChange,selectedHistoryId,onSelectedHistoryIdChange,calcOpen=false,onCalcOpenChange,fmtDate}){
       const li=typeof inputValue==="string"?inputValue:String(inputValue??"");
       const sli=typeof onInputChange==="function"?onInputChange:()=>{};
       const lo=typeof outputValue==="string"?outputValue:String(outputValue??"");
@@ -878,8 +907,9 @@
         const maxd=dimL(yy,mm);
         if(dd<1||dd>maxd){slo(`Day must be 1–${maxd} for ${MONTH[mm-1]}.`);return;}
         const d=DAY[wdayL(yy,mm,dd)];
-        const rt=`${MONTH[mm-1]} ${dd}, ${yy} is a ${d}.`;
-        const entry={id:`${Date.now().toString(36)}-${Math.random().toString(36).slice(2,8)}`,label:`${MONTH[mm-1]} ${dd}, ${yy}`,weekday:d,result:rt,y:yy,m:mm,d:dd};
+        const displayDate=fmtDate?fmtDate(yy,mm,dd):`${MONTH[mm-1]} ${dd}, ${yy}`;
+        const rt=`${displayDate} is a ${d}.`;
+        const entry={id:`${Date.now().toString(36)}-${Math.random().toString(36).slice(2,8)}`,label:displayDate,weekday:d,result:rt,y:yy,m:mm,d:dd};
         // #6 — close Show Codes on new lookup submission
         lastLookupRef.current=s;slo(rt);scd({y:yy,m:mm,d:dd});ssid(entry.id);sco(false);if(onAddHistory)onAddHistory(entry);
       }
