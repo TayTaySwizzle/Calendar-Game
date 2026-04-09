@@ -693,7 +693,7 @@
           <div className="flex items-center justify-between"><span className="text-xs text-purple-200/80">Use System Settings</span><button type="button" onClick={()=>setUseSystem(v=>!v)} className={`px-3 py-1 rounded-xl text-xs font-medium border ${useSystem?"btn-solid border-transparent":"surface-toggle border-purple-800/60 text-purple-100/80"}`}>{useSystem?"On":"Off"}</button></div>
           {useSystem?(<><div className="flex items-center gap-3"><span className="text-xs text-purple-200/80 w-10 shrink-0">Dark:</span><select value={darkTheme} onChange={e=>setDarkTheme(e.target.value)} className="panel rounded-xl px-2 py-1 text-sm flex-1 focus:outline-none focus:ring-2 focus:ring-purple-400 appearance-none">{DARK_THEMES.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></div><div className="flex items-center gap-3"><span className="text-xs text-purple-200/80 w-10 shrink-0">Light:</span><select value={lightTheme} onChange={e=>setLightTheme(e.target.value)} className="panel rounded-xl px-2 py-1 text-sm flex-1 focus:outline-none focus:ring-2 focus:ring-purple-400 appearance-none">{LIGHT_THEMES.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></div></>):(<div className="flex items-center gap-3"><span className="text-xs text-purple-200/80 w-10 shrink-0">Theme:</span><select value={manualTheme} onChange={e=>setManualTheme(e.target.value)} className="panel rounded-xl px-2 py-1 text-sm flex-1 focus:outline-none focus:ring-2 focus:ring-purple-400 appearance-none">{ALL_THEMES_LABELED.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></div>)}
         </div>
-        <div className="pt-2 border-t border-purple-500/20 text-[11px] text-purple-300/60">Last Updated: 4/8/26 18:19</div>
+        <div className="pt-2 border-t border-purple-500/20 text-[11px] text-purple-300/60">Last Updated: 4/8/26 18:32</div>
       </div>);
       return(
         <div className="mx-auto px-4 py-5 w-full max-w-[480px]">
@@ -725,9 +725,9 @@
             </div>
             {extStats&&(<div className="mt-2 flex justify-evenly"><div className="w-1/4"><Stat label="Last Time (Correct)" value={fmtTime(sLast)} disabled={lastVisOff} onClick={toggleTimingVis} pressed={!lastVisOff}/></div><div className="w-1/4"><Stat label="Median Time (Correct)" value={fmtTime(sMed)} disabled={medVisOff} onClick={toggleTimingVis} pressed={!medVisOff}/></div></div>)}
             <div className="mt-3 flex items-center gap-2">
-              <button type="button" className="flex-1 px-2.5 py-1.5 rounded-xl btn-solid text-xs font-medium" onClick={handleResetStats}>Reset</button>
-              <button type="button" className={`flex-1 px-2.5 py-1.5 rounded-xl text-xs font-medium border ${extStats?"btn-solid border-transparent":"surface-button text-purple-100/80"}`} onClick={()=>setExtStats(v=>!v)}>Stats +</button>
-              {timerSettingControl&&<div className="shrink-0 w-36">{timerSettingControl}</div>}
+              <button type="button" className="shrink-0 px-3 py-1.5 rounded-xl btn-solid border border-transparent text-xs font-medium" onClick={handleResetStats}>Reset</button>
+              <button type="button" className={`shrink-0 px-3 py-1.5 rounded-xl text-xs font-medium border ${extStats?"btn-solid border-transparent":"surface-button text-purple-100/80"}`} onClick={()=>setExtStats(v=>!v)}>Stats +</button>
+              {timerSettingControl&&<div className="flex-1 min-w-0">{timerSettingControl}</div>}
             </div>
           </>)}
           <AoxMode minY={minY} maxY={maxY} visible={mode==="aox"} extStats={extStats} setExtStats={setExtStats} fmtDate={fmtDate}/>
