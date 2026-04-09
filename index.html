@@ -667,7 +667,7 @@
       const DARK_THEMES=[{id:'dusk',name:'Dusk'},{id:'midnight',name:'Midnight'},{id:'nebula',name:'Nebula'}];
       const LIGHT_THEMES=[{id:'light',name:'Light'},{id:'parchment',name:'Parchment'}];
       const ALL_THEMES_LABELED=[{id:'dusk',name:'Dusk (dark)'},{id:'midnight',name:'Midnight (dark)'},{id:'nebula',name:'Nebula (dark)'},{id:'light',name:'Light (light)'},{id:'parchment',name:'Parchment (light)'}];
-      const SettingsPopover=()=>(<div className="absolute right-0 top-full mt-2 z-50 w-72 rounded-2xl card p-4 space-y-4 shadow-xl" style={{maxWidth:'calc(100vw - 2rem)'}}>
+      const SettingsPopover=()=>(<div className="absolute left-0 right-0 top-full mt-2 z-50 rounded-2xl card p-4 space-y-4 shadow-xl">
         <div className="space-y-2">
           <div className="text-[10px] uppercase tracking-widest text-purple-300/60">Date Format</div>
           <div className="flex gap-2">
@@ -682,9 +682,9 @@
         <div className="space-y-2">
           <div className="text-[10px] uppercase tracking-widest text-purple-300/60">Year Range</div>
           <div className="flex items-center gap-2">
-            <input ref={minInputRef} type="text" inputMode="numeric" pattern="[0-9]*" value={minInputVal} onChange={e=>{if(e.target.value===''||/^\d*$/.test(e.target.value))setMinInputVal(e.target.value);}} onBlur={commitMin} onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();commitMin();e.currentTarget.blur();}if(e.key==="Escape"){setMinInputVal(String(minY));e.currentTarget.blur();}blockMinus(e);}} onBeforeInput={blockMinusBI} className="flex-1 panel rounded-xl px-2 py-1.5 text-sm text-center focus:outline-none focus:ring-2 focus:ring-purple-400 tabular-nums"/>
+            <input ref={minInputRef} type="text" inputMode="numeric" pattern="[0-9]*" value={minInputVal} onChange={e=>{if(e.target.value===''||/^\d*$/.test(e.target.value))setMinInputVal(e.target.value);}} onBlur={commitMin} onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();commitMin();e.currentTarget.blur();}if(e.key==="Escape"){setMinInputVal(String(minY));e.currentTarget.blur();}blockMinus(e);}} onBeforeInput={blockMinusBI} className="w-20 panel rounded-xl px-2 py-1.5 text-sm text-center focus:outline-none focus:ring-2 focus:ring-purple-400 tabular-nums"/>
             <span className="text-purple-300/60 text-sm shrink-0">→</span>
-            <input ref={maxInputRef} type="text" inputMode="numeric" pattern="[0-9]*" value={maxInputVal} onChange={e=>{if(e.target.value===''||/^\d*$/.test(e.target.value))setMaxInputVal(e.target.value);}} onBlur={commitMax} onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();commitMax();e.currentTarget.blur();}if(e.key==="Escape"){setMaxInputVal(String(maxY));e.currentTarget.blur();}blockMinus(e);}} onBeforeInput={blockMinusBI} className="flex-1 panel rounded-xl px-2 py-1.5 text-sm text-center focus:outline-none focus:ring-2 focus:ring-purple-400 tabular-nums"/>
+            <input ref={maxInputRef} type="text" inputMode="numeric" pattern="[0-9]*" value={maxInputVal} onChange={e=>{if(e.target.value===''||/^\d*$/.test(e.target.value))setMaxInputVal(e.target.value);}} onBlur={commitMax} onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();commitMax();e.currentTarget.blur();}if(e.key==="Escape"){setMaxInputVal(String(maxY));e.currentTarget.blur();}blockMinus(e);}} onBeforeInput={blockMinusBI} className="w-20 panel rounded-xl px-2 py-1.5 text-sm text-center focus:outline-none focus:ring-2 focus:ring-purple-400 tabular-nums"/>
           </div>
           <p className="text-[11px] text-purple-300/60">AD dates only, 1–10000.</p>
         </div>
@@ -693,18 +693,17 @@
           <div className="flex items-center justify-between"><span className="text-xs text-purple-200/80">Use System Settings</span><button type="button" onClick={()=>setUseSystem(v=>!v)} className={`px-3 py-1 rounded-xl text-xs font-medium border ${useSystem?"btn-solid border-purple-500":"surface-toggle border-purple-800/60 text-purple-100/80"}`}>{useSystem?"On":"Off"}</button></div>
           {useSystem?(<><div className="flex items-center gap-3"><span className="text-xs text-purple-200/80 w-10 shrink-0">Dark:</span><select value={darkTheme} onChange={e=>setDarkTheme(e.target.value)} className="panel rounded-xl px-2 py-1 text-sm flex-1 focus:outline-none focus:ring-2 focus:ring-purple-400 appearance-none">{DARK_THEMES.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></div><div className="flex items-center gap-3"><span className="text-xs text-purple-200/80 w-10 shrink-0">Light:</span><select value={lightTheme} onChange={e=>setLightTheme(e.target.value)} className="panel rounded-xl px-2 py-1 text-sm flex-1 focus:outline-none focus:ring-2 focus:ring-purple-400 appearance-none">{LIGHT_THEMES.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></div></>):(<div className="flex items-center gap-3"><span className="text-xs text-purple-200/80 w-10 shrink-0">Theme:</span><select value={manualTheme} onChange={e=>setManualTheme(e.target.value)} className="panel rounded-xl px-2 py-1 text-sm flex-1 focus:outline-none focus:ring-2 focus:ring-purple-400 appearance-none">{ALL_THEMES_LABELED.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></div>)}
         </div>
-        <div className="pt-2 border-t border-purple-500/20 text-[11px] text-purple-300/60">Last Updated: 4/8/26 17:28</div>
+        <div className="pt-2 border-t border-purple-500/20 text-[11px] text-purple-300/60">Last Updated: 4/8/26 18:07</div>
       </div>);
       return(
         <div className="mx-auto px-4 py-5 w-full max-w-[480px]">
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center justify-between gap-2 relative" ref={settingsRef}>
             {/* header left: title */}
             <h1 className="text-xl font-semibold leading-none shrink-0">Calendar Game</h1>
             <div className="flex items-center gap-2 shrink-0">
               {/* gear settings button */}
-              <div className="relative" ref={settingsRef}>
+              <div className="relative">
                 <button type="button" onClick={()=>setSettingsOpen(v=>!v)} className={`px-2.5 py-2 rounded-xl text-sm border ${settingsOpen?"btn-solid border-purple-500":"surface-button text-purple-100/80"}`} aria-label="Settings">⚙</button>
-                {settingsOpen&&<SettingsPopover/>}
               </div>
               {/* mode selector */}
               <div className="relative">
@@ -714,6 +713,7 @@
                 <div className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 flex flex-col items-center leading-none text-[7px] text-white/90"><span>▲</span><span>▼</span></div>
               </div>
             </div>
+            {settingsOpen&&<SettingsPopover/>}
           </div>
           {showStats&&(<>
             <div className="mt-4 grid grid-cols-4 gap-2">
@@ -725,8 +725,8 @@
             </div>
             {extStats&&(<div className="mt-2 flex justify-evenly"><div className="w-1/4"><Stat label="Last Time (Correct)" value={fmtTime(sLast)} disabled={lastVisOff} onClick={toggleTimingVis} pressed={!lastVisOff}/></div><div className="w-1/4"><Stat label="Median Time (Correct)" value={fmtTime(sMed)} disabled={medVisOff} onClick={toggleTimingVis} pressed={!medVisOff}/></div></div>)}
             <div className="mt-3 flex items-center gap-2">
-              <button type="button" className="px-2.5 py-1.5 rounded-xl btn-solid text-xs font-medium shrink-0" onClick={handleResetStats}>Reset</button>
-              <button type="button" className={`px-2.5 py-1.5 rounded-xl text-xs font-medium border shrink-0 ${extStats?"btn-solid border-purple-500":"surface-button text-purple-100/80"}`} onClick={()=>setExtStats(v=>!v)}>Stats +</button>
+              <button type="button" className="flex-1 px-2.5 py-1.5 rounded-xl btn-solid text-xs font-medium" onClick={handleResetStats}>Reset</button>
+              <button type="button" className={`flex-1 px-2.5 py-1.5 rounded-xl text-xs font-medium border ${extStats?"btn-solid border-purple-500":"surface-button text-purple-100/80"}`} onClick={()=>setExtStats(v=>!v)}>Stats +</button>
               {timerSettingControl&&<div className="flex-1 min-w-0">{timerSettingControl}</div>}
             </div>
           </>)}
