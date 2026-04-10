@@ -7,6 +7,7 @@
   <title>Calendar Game</title>
   <meta name="application-name" content="Calendar Game">
   <meta name="apple-mobile-web-app-title" content="Calendar Game">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <script>(function(){var d=window.matchMedia('(prefers-color-scheme: dark)').matches;document.documentElement.setAttribute('data-theme',d?'dusk':'light');})();</script>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
@@ -17,7 +18,7 @@
     [data-theme="parchment"]{--bg1:#efe6d2;--bg2:#efe6d2;--tc:#efe6d2;--card-bg:rgba(255,252,245,.96);--card-bd:rgba(109,40,217,.2);--panel-bg:rgba(124,58,237,.08);--panel-bd:rgba(109,40,217,.2);--thin-bd:rgba(109,40,217,.16);--sbtn-bg:rgba(124,58,237,.12);--sbtn-bd:rgba(109,40,217,.24);--sbtn-hov:rgba(124,58,237,.2);--stgl-bg:rgba(124,58,237,.08);--stgl-hov:rgba(124,58,237,.16);--chip-bg:rgba(124,58,237,.1);--chip-bd:rgba(109,40,217,.22);--bar-bg:rgba(124,58,237,.1);--bar-bd:rgba(109,40,217,.22);--body-color:#312e81;--sec-color:rgba(49,46,129,.82);--mut-color:rgba(49,46,129,.66);--fnt-color:rgba(49,46,129,.52)}
     [data-theme="light"]{--bg1:#eef2ff;--bg2:#eef2ff;--tc:#eef2ff;--card-bg:rgba(255,255,255,.97);--card-bd:rgba(99,102,241,.2);--panel-bg:rgba(224,231,255,.54);--panel-bd:rgba(99,102,241,.2);--thin-bd:rgba(99,102,241,.17);--sbtn-bg:rgba(224,231,255,.72);--sbtn-bd:rgba(99,102,241,.24);--sbtn-hov:rgba(199,210,254,.86);--stgl-bg:rgba(224,231,255,.5);--stgl-hov:rgba(199,210,254,.7);--chip-bg:rgba(224,231,255,.78);--chip-bd:rgba(99,102,241,.2);--bar-bg:rgba(224,231,255,.8);--bar-bd:rgba(99,102,241,.2);--body-color:#1e1b4b;--sec-color:rgba(30,27,75,.8);--mut-color:rgba(30,27,75,.64);--fnt-color:rgba(30,27,75,.5)}
     html,body,#root{height:100%}
-    body{background:radial-gradient(circle at 15% -20%, rgba(129,140,248,.22), transparent 45%), radial-gradient(circle at 80% 120%, rgba(168,85,247,.16), transparent 40%), var(--bg1);color:var(--body-color);font-feature-settings:"tnum" 1;overflow:hidden}
+    body{background:radial-gradient(circle at 15% -20%, rgba(129,140,248,.22), transparent 45%), radial-gradient(circle at 80% 120%, rgba(168,85,247,.16), transparent 40%), var(--bg1);color:var(--body-color);font-feature-settings:"tnum" 1;overflow:hidden;padding-top:env(safe-area-inset-top);box-sizing:border-box}
     .card{background:var(--card-bg);border:1px solid var(--card-bd);box-shadow:0 10px 28px rgba(2,6,23,.22);backdrop-filter:blur(8px)}
     .panel{background:var(--panel-bg);border:1px solid var(--panel-bd);box-shadow:inset 0 1px 0 rgba(255,255,255,.04)}
     .thin{border:1px solid var(--thin-bd)}
@@ -314,7 +315,8 @@
       const accuracyDisplay=attempts>0?`${(doneCount/attempts*100).toFixed(1)}%`:"—";
 
       return(
-        <div style={{display:visible?"block":"none"}}>
+        <div style={{display:visible?"block":"none"}} className="h-full">
+          <div className={`h-full ${codesOpen?"overflow-y-auto pr-1 pb-4":"overflow-hidden"}`}>
           <div className="mt-4 grid grid-cols-4 gap-2">
             <Stat label="Score" value={scoreDisplay}/>
             <Stat label="Accuracy" value={accuracyDisplay}/>
@@ -353,6 +355,7 @@
             </div>
             <button type="button" className={`w-full px-4 py-2 rounded-xl btn-solid text-sm font-medium ${codesDisabled&&!inBackMode?"opacity-60 pointer-events-none":""}`} onClick={openCodes}>{codesOpen?"Hide Codes":"Show Codes"}</button>
             <Expander open={codesOpen}><div className="pt-2 pb-1 rounded-2xl thin p-4"><MethodExplanation date={date}/></div></Expander>
+          </div>
           </div>
         </div>
       );
@@ -698,7 +701,7 @@
           <div className="flex items-center justify-between"><span className="text-xs text-purple-200/80">Use System Settings</span><button type="button" onClick={()=>setUseSystem(v=>!v)} className={`px-3 py-1 rounded-xl text-xs font-medium border ${useSystem?"btn-solid border-transparent":"surface-toggle border-purple-800/60 text-purple-100/80"}`}>{useSystem?"On":"Off"}</button></div>
           {useSystem?(<><div className="flex items-center gap-3"><span className="text-xs text-purple-200/80 w-10 shrink-0">Dark:</span><select value={darkTheme} onChange={e=>setDarkTheme(e.target.value)} className="panel rounded-xl px-2 py-1 text-sm flex-1 focus:outline-none focus:ring-2 focus:ring-purple-400 appearance-none">{DARK_THEMES.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></div><div className="flex items-center gap-3"><span className="text-xs text-purple-200/80 w-10 shrink-0">Light:</span><select value={lightTheme} onChange={e=>setLightTheme(e.target.value)} className="panel rounded-xl px-2 py-1 text-sm flex-1 focus:outline-none focus:ring-2 focus:ring-purple-400 appearance-none">{LIGHT_THEMES.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></div></>):(<div className="flex items-center gap-3"><span className="text-xs text-purple-200/80 w-10 shrink-0">Theme:</span><select value={manualTheme} onChange={e=>setManualTheme(e.target.value)} className="panel rounded-xl px-2 py-1 text-sm flex-1 focus:outline-none focus:ring-2 focus:ring-purple-400 appearance-none">{ALL_THEMES_LABELED.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></div>)}
         </div>
-        <div className="pt-2 border-t border-purple-500/20 text-[11px] text-purple-300/60">Last Updated: 4/8/26 18:41</div>
+        <div className="pt-2 border-t border-purple-500/20 text-[11px] text-purple-300/60">Last Updated: 4/10/26 20:00 UTC</div>
       </div>);
       return(
         <div className={`mx-auto w-full max-w-[500px] h-[100dvh] px-3 pt-3 pb-2 flex flex-col ${mode==='guide'?'':'overflow-hidden'}`}>
