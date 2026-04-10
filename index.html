@@ -7,25 +7,30 @@
   <title>Calendar Game</title>
   <meta name="application-name" content="Calendar Game">
   <meta name="apple-mobile-web-app-title" content="Calendar Game">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <script>(function(){var d=window.matchMedia('(prefers-color-scheme: dark)').matches;document.documentElement.setAttribute('data-theme',d?'dusk':'light');})();</script>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    :root{--bg1:#0b0714;--bg2:#0b0714;--card-bg:rgba(26,15,43,.85);--card-bd:rgba(120,53,175,.45);--panel-bg:rgba(88,28,135,.25);--panel-bd:rgba(120,53,175,.45);--thin-bd:rgba(120,53,175,.35);--sbtn-bg:rgba(88,28,135,.32);--sbtn-bd:rgba(120,53,175,.52);--sbtn-hov:rgba(88,28,135,.48);--stgl-bg:rgba(88,28,135,.24);--stgl-hov:rgba(88,28,135,.4);--chip-bg:rgba(120,53,175,.25);--chip-bd:rgba(120,53,175,.45);--bar-bg:rgba(120,53,175,.25);--bar-bd:rgba(120,53,175,.45);--body-color:#f5f3ff;--sec-color:rgba(237,233,254,.8);--mut-color:rgba(216,180,254,.7);--fnt-color:rgba(196,181,254,.6);--tc:#0b0714}
-    [data-theme="dusk"]{--bg1:#0d1117;--bg2:#0d1117;--tc:#0d1117;--card-bg:rgba(13,17,23,.92);--card-bd:rgba(99,102,241,.4);--panel-bg:rgba(28,38,68,.35);--panel-bd:rgba(99,102,241,.4);--thin-bd:rgba(99,102,241,.3);--sbtn-bg:rgba(38,48,88,.38);--sbtn-bd:rgba(99,102,241,.5);--sbtn-hov:rgba(38,48,88,.55);--stgl-bg:rgba(28,38,68,.28);--stgl-hov:rgba(28,38,68,.45);--chip-bg:rgba(99,102,241,.2);--chip-bd:rgba(99,102,241,.4);--bar-bg:rgba(99,102,241,.2);--bar-bd:rgba(99,102,241,.4)}
-    [data-theme="midnight"]{--bg1:#000;--bg2:#000;--tc:#000;--card-bg:rgba(4,0,12,.93);--card-bd:rgba(139,92,246,.5);--panel-bg:rgba(45,0,90,.28);--panel-bd:rgba(139,92,246,.5);--thin-bd:rgba(139,92,246,.38);--sbtn-bg:rgba(55,0,110,.35);--sbtn-bd:rgba(139,92,246,.55);--sbtn-hov:rgba(55,0,110,.5);--stgl-bg:rgba(45,0,90,.25);--stgl-hov:rgba(45,0,90,.42);--chip-bg:rgba(139,92,246,.2);--chip-bd:rgba(139,92,246,.45);--bar-bg:rgba(139,92,246,.2);--bar-bd:rgba(139,92,246,.45)}
-    [data-theme="nebula"]{--bg1:#0b0714;--bg2:#0b0714;--tc:#0b0714}
-    [data-theme="parchment"]{--bg1:#f0e8d5;--bg2:#f0e8d5;--tc:#f0e8d5;--card-bg:rgba(255,252,244,.97);--card-bd:rgba(120,53,175,.22);--panel-bg:rgba(120,53,175,.07);--panel-bd:rgba(120,53,175,.22);--thin-bd:rgba(120,53,175,.18);--sbtn-bg:rgba(120,53,175,.1);--sbtn-bd:rgba(120,53,175,.28);--sbtn-hov:rgba(120,53,175,.18);--stgl-bg:rgba(120,53,175,.07);--stgl-hov:rgba(120,53,175,.14);--chip-bg:rgba(120,53,175,.09);--chip-bd:rgba(120,53,175,.22);--bar-bg:rgba(120,53,175,.09);--bar-bd:rgba(120,53,175,.22);--body-color:#2e1065;--sec-color:rgba(46,16,101,.78);--mut-color:rgba(46,16,101,.62);--fnt-color:rgba(46,16,101,.5)}
-    [data-theme="light"]{--bg1:#f2f2f7;--bg2:#f2f2f7;--tc:#f2f2f7;--card-bg:rgba(255,255,255,.98);--card-bd:rgba(120,53,175,.22);--panel-bg:rgba(237,233,254,.48);--panel-bd:rgba(120,53,175,.22);--thin-bd:rgba(120,53,175,.18);--sbtn-bg:rgba(237,233,254,.65);--sbtn-bd:rgba(120,53,175,.28);--sbtn-hov:rgba(237,233,254,.88);--stgl-bg:rgba(237,233,254,.42);--stgl-hov:rgba(237,233,254,.65);--chip-bg:rgba(237,233,254,.75);--chip-bd:rgba(120,53,175,.22);--bar-bg:rgba(237,233,254,.75);--bar-bd:rgba(120,53,175,.22);--body-color:#1e1b4b;--sec-color:rgba(30,27,75,.78);--mut-color:rgba(30,27,75,.62);--fnt-color:rgba(30,27,75,.5)}
-    body{background:var(--bg1);color:var(--body-color)}
-    .card{background:var(--card-bg);border:1px solid var(--card-bd)}
-    .panel{background:var(--panel-bg);border:1px solid var(--panel-bd)}
+    :root{--bg1:#0d1117;--bg2:#0d1117;--card-bg:rgba(17,24,39,.88);--card-bd:rgba(129,140,248,.38);--panel-bg:rgba(30,41,59,.56);--panel-bd:rgba(129,140,248,.32);--thin-bd:rgba(148,163,184,.26);--sbtn-bg:rgba(51,65,85,.5);--sbtn-bd:rgba(129,140,248,.42);--sbtn-hov:rgba(71,85,105,.68);--stgl-bg:rgba(30,41,59,.44);--stgl-hov:rgba(51,65,85,.64);--chip-bg:rgba(99,102,241,.2);--chip-bd:rgba(129,140,248,.38);--bar-bg:rgba(99,102,241,.18);--bar-bd:rgba(129,140,248,.34);--body-color:#f8f7ff;--sec-color:rgba(224,231,255,.86);--mut-color:rgba(199,210,254,.72);--fnt-color:rgba(165,180,252,.58);--tc:#0d1117}
+    [data-theme="dusk"]{--bg1:#0d1117;--bg2:#0d1117;--tc:#0d1117;--card-bg:rgba(15,23,42,.9);--card-bd:rgba(129,140,248,.36);--panel-bg:rgba(30,41,59,.56);--panel-bd:rgba(129,140,248,.3);--thin-bd:rgba(148,163,184,.26);--sbtn-bg:rgba(51,65,85,.5);--sbtn-bd:rgba(129,140,248,.42);--sbtn-hov:rgba(71,85,105,.68);--stgl-bg:rgba(30,41,59,.44);--stgl-hov:rgba(51,65,85,.64);--chip-bg:rgba(99,102,241,.2);--chip-bd:rgba(129,140,248,.38);--bar-bg:rgba(99,102,241,.18);--bar-bd:rgba(129,140,248,.34)}
+    [data-theme="midnight"]{--bg1:#03030a;--bg2:#03030a;--tc:#03030a;--card-bg:rgba(8,6,18,.92);--card-bd:rgba(168,85,247,.45);--panel-bg:rgba(39,18,74,.44);--panel-bd:rgba(168,85,247,.35);--thin-bd:rgba(168,85,247,.3);--sbtn-bg:rgba(58,24,108,.52);--sbtn-bd:rgba(168,85,247,.48);--sbtn-hov:rgba(76,29,149,.68);--stgl-bg:rgba(45,18,85,.45);--stgl-hov:rgba(67,27,125,.63);--chip-bg:rgba(147,51,234,.24);--chip-bd:rgba(192,132,252,.4);--bar-bg:rgba(147,51,234,.2);--bar-bd:rgba(192,132,252,.36)}
+    [data-theme="nebula"]{--bg1:#120b22;--bg2:#120b22;--tc:#120b22;--card-bg:rgba(29,17,54,.9);--card-bd:rgba(167,139,250,.42);--panel-bg:rgba(76,29,149,.38);--panel-bd:rgba(167,139,250,.34);--thin-bd:rgba(167,139,250,.28);--sbtn-bg:rgba(88,40,168,.47);--sbtn-bd:rgba(167,139,250,.45);--sbtn-hov:rgba(109,56,194,.65);--stgl-bg:rgba(76,29,149,.4);--stgl-hov:rgba(98,39,189,.6);--chip-bg:rgba(139,92,246,.24);--chip-bd:rgba(196,181,253,.42);--bar-bg:rgba(139,92,246,.22);--bar-bd:rgba(196,181,253,.38)}
+    [data-theme="parchment"]{--bg1:#efe6d2;--bg2:#efe6d2;--tc:#efe6d2;--card-bg:rgba(255,252,245,.96);--card-bd:rgba(109,40,217,.2);--panel-bg:rgba(124,58,237,.08);--panel-bd:rgba(109,40,217,.2);--thin-bd:rgba(109,40,217,.16);--sbtn-bg:rgba(124,58,237,.12);--sbtn-bd:rgba(109,40,217,.24);--sbtn-hov:rgba(124,58,237,.2);--stgl-bg:rgba(124,58,237,.08);--stgl-hov:rgba(124,58,237,.16);--chip-bg:rgba(124,58,237,.1);--chip-bd:rgba(109,40,217,.22);--bar-bg:rgba(124,58,237,.1);--bar-bd:rgba(109,40,217,.22);--body-color:#312e81;--sec-color:rgba(49,46,129,.82);--mut-color:rgba(49,46,129,.66);--fnt-color:rgba(49,46,129,.52)}
+    [data-theme="light"]{--bg1:#eef2ff;--bg2:#eef2ff;--tc:#eef2ff;--card-bg:rgba(255,255,255,.97);--card-bd:rgba(99,102,241,.2);--panel-bg:rgba(224,231,255,.54);--panel-bd:rgba(99,102,241,.2);--thin-bd:rgba(99,102,241,.17);--sbtn-bg:rgba(224,231,255,.72);--sbtn-bd:rgba(99,102,241,.24);--sbtn-hov:rgba(199,210,254,.86);--stgl-bg:rgba(224,231,255,.5);--stgl-hov:rgba(199,210,254,.7);--chip-bg:rgba(224,231,255,.78);--chip-bd:rgba(99,102,241,.2);--bar-bg:rgba(224,231,255,.8);--bar-bd:rgba(99,102,241,.2);--body-color:#1e1b4b;--sec-color:rgba(30,27,75,.8);--mut-color:rgba(30,27,75,.64);--fnt-color:rgba(30,27,75,.5)}
+    html,body,#root{height:100%}
+    body{background:radial-gradient(circle at 15% -20%, rgba(129,140,248,.22), transparent 45%), radial-gradient(circle at 80% 120%, rgba(168,85,247,.16), transparent 40%), var(--bg1);color:var(--body-color);font-feature-settings:"tnum" 1;overflow:hidden;padding-top:env(safe-area-inset-top);box-sizing:border-box}
+    .card{background:var(--card-bg);border:1px solid var(--card-bd);box-shadow:0 10px 28px rgba(2,6,23,.22);backdrop-filter:blur(8px)}
+    .panel{background:var(--panel-bg);border:1px solid var(--panel-bd);box-shadow:inset 0 1px 0 rgba(255,255,255,.04)}
     .thin{border:1px solid var(--thin-bd)}
-    .surface-button{background:var(--sbtn-bg);border-color:var(--sbtn-bd);transition:background-color .2s}
-    .surface-button:hover{background:var(--sbtn-hov)}
-    .surface-toggle{background:var(--stgl-bg);border-color:var(--sbtn-bd);transition:background-color .2s}
-    .surface-toggle:hover{background:var(--stgl-hov)}
-    .btn-solid{background:#7c3aed;color:#fff;transition:background-color .2s}
-    .btn-solid:hover{background:#6d28d9}
+    .surface-button{background:var(--sbtn-bg);border-color:var(--sbtn-bd);transition:transform .16s ease,background-color .2s,box-shadow .2s}
+    .surface-button:hover{background:var(--sbtn-hov);box-shadow:0 6px 16px rgba(0,0,0,.18)}
+    .surface-button:active{transform:translateY(1px) scale(.99)}
+    .surface-toggle{background:var(--stgl-bg);border-color:var(--sbtn-bd);transition:transform .16s ease,background-color .2s,box-shadow .2s}
+    .surface-toggle:hover{background:var(--stgl-hov);box-shadow:0 6px 16px rgba(0,0,0,.14)}
+    .surface-toggle:active{transform:translateY(1px) scale(.99)}
+    .btn-solid{background:linear-gradient(135deg,#8b5cf6,#7c3aed 58%,#6d28d9);color:#fff;transition:transform .16s ease,filter .2s,box-shadow .2s;box-shadow:0 8px 20px rgba(124,58,237,.35)}
+    .btn-solid:hover{filter:brightness(1.06)}
+    .btn-solid:active{transform:translateY(1px) scale(.99)}
     .btn-solid[aria-disabled="true"],.btn-solid:disabled{opacity:.6;cursor:not-allowed}
     button,input,select{-webkit-tap-highlight-color:transparent}
     button{touch-action:manipulation}
@@ -57,7 +62,7 @@
   </style>
 </head>
 <body class="text-purple-50">
-  <div id="root" class="min-h-screen w-full">Loading…</div>
+  <div id="root" class="h-full w-full">Loading…</div>
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -310,7 +315,8 @@
       const accuracyDisplay=attempts>0?`${(doneCount/attempts*100).toFixed(1)}%`:"—";
 
       return(
-        <div style={{display:visible?"block":"none"}}>
+        <div style={{display:visible?"block":"none"}} className="h-full">
+          <div className={`h-full ${codesOpen?"overflow-y-auto pr-1 pb-4":"overflow-hidden"}`}>
           <div className="mt-4 grid grid-cols-4 gap-2">
             <Stat label="Score" value={scoreDisplay}/>
             <Stat label="Accuracy" value={accuracyDisplay}/>
@@ -349,6 +355,7 @@
             </div>
             <button type="button" className={`w-full px-4 py-2 rounded-xl btn-solid text-sm font-medium ${codesDisabled&&!inBackMode?"opacity-60 pointer-events-none":""}`} onClick={openCodes}>{codesOpen?"Hide Codes":"Show Codes"}</button>
             <Expander open={codesOpen}><div className="pt-2 pb-1 rounded-2xl thin p-4"><MethodExplanation date={date}/></div></Expander>
+          </div>
           </div>
         </div>
       );
@@ -652,7 +659,7 @@
       useEffect(()=>{const pm=prevModeRef.current;if(pm!==mode){prevModeRef.current=mode;return;}setCalcOpen(false);setCalcInstantClose(false);prevModeRef.current=mode;},[calcTargetKey,mode]);
       const calcOpenForScroll=mode==="lookup"?lookupCalcOpen:calcOpen;
       const calcKeyForScroll=mode==="lookup"?lookupCalcTargetKey:calcTargetKey;
-      useEffect(()=>{const cancel=()=>{if(calcScrollRafRef.current!=null){cancelAnimationFrame(calcScrollRafRef.current);calcScrollRafRef.current=null;}if(calcScrollTimeoutRef.current!=null){clearTimeout(calcScrollTimeoutRef.current);calcScrollTimeoutRef.current=null;}};if(!calcOpenForScroll){cancel();return cancel;}cancel();calcScrollRafRef.current=requestAnimationFrame(()=>{calcScrollRafRef.current=null;calcScrollTimeoutRef.current=window.setTimeout(()=>{calcScrollTimeoutRef.current=null;window.scrollTo({top:document.documentElement.scrollHeight,behavior:"smooth"});},60);});return cancel;},[calcOpenForScroll,calcKeyForScroll,mode]);
+      useEffect(()=>{const cancel=()=>{if(calcScrollRafRef.current!=null){cancelAnimationFrame(calcScrollRafRef.current);calcScrollRafRef.current=null;}if(calcScrollTimeoutRef.current!=null){clearTimeout(calcScrollTimeoutRef.current);calcScrollTimeoutRef.current=null;}};if(!calcOpenForScroll||mode!=='guide'){cancel();return cancel;}cancel();calcScrollRafRef.current=requestAnimationFrame(()=>{calcScrollRafRef.current=null;calcScrollTimeoutRef.current=window.setTimeout(()=>{calcScrollTimeoutRef.current=null;window.scrollTo({top:document.documentElement.scrollHeight,behavior:"smooth"});},60);});return cancel;},[calcOpenForScroll,calcKeyForScroll,mode]);
       const handleResetStats=()=>{resetStatsCurrent();if(!avgVisOff)doNew({skipInactiveMessage:true});};
       const applyCalcPenalty=()=>{setCalcPenalty(true);const roundOver=(mode==="blitz"||mode==="sudden")&&!active;const fp=!countedWrong&&!revealed;if(fp&&!roundOver){wrongTimeRef.current=tStartRef.current?(performance.now()-tStartRef.current)/1000:null;prevStatsSnapshotRef.current=null;preCalcPenaltySnapshotRef.current={played:S.played,good:S.good,streak:S.streak,best:S.best,timesLen:S.times.length,blitzPlayed:blitzRoundStats.played,blitzGood:blitzRoundStats.good};if(!statsOff)updateStats(c=>{c.played+=1;c.streak=0;});if(mode==="blitz")setBlitzRoundStats(p=>({...p,played:p.played+1}));}let am=null;if(mode==="deduction"&&ded){const ans=ded.type==="year"?fmtYear(ded.y):ded.type==="month"?MONTH[ded.m-1]:String(ded.d);am=`Answer: ${ans}.`;}else if(mode!=="deduction")am=`Answer: ${DAY[correct]}.`;if(am)setMsg(am);if(isTimer(mode)&&active){setActive(false);setShowTimerDate(true);if(mode==="blitz"){setBlitzRunning(false);blitzStartRef.current=null;blitzPausedAtRef.current=null;blitzPausedAccRef.current=0;}if(mode==="sudden"){qDeadlineRef.current=null;qPausedAtRef.current=null;qPausedAccRef.current=0;}if(mode==="flash"){clearTimeout(flashTimerRef.current);flashTimerRef.current=null;setFlashPhase("dash");flashDeadlineRef.current=null;}}if(!revealed)setRevealed(true);if(!countedWrong){setCountedWrong(true);setCanOverrideCorrect(false);}};
       const handleCalcOpenChange=next=>{if(next)applyCalcPenalty();setCalcOpen(next);};
@@ -664,6 +671,7 @@
       const [settingsOpen,setSettingsOpen]=useState(false);
       const settingsRef=useRef(null);
       useEffect(()=>{if(!settingsOpen)return;const h=e=>{if(settingsRef.current&&!settingsRef.current.contains(e.target))setSettingsOpen(false);};document.addEventListener('mousedown',h);document.addEventListener('touchstart',h);return()=>{document.removeEventListener('mousedown',h);document.removeEventListener('touchstart',h);};},[settingsOpen]);
+      useEffect(()=>{const allowScroll=mode==='guide';document.body.style.overflowY=allowScroll?'auto':'hidden';if(!allowScroll)window.scrollTo(0,0);return()=>{document.body.style.overflowY='';};},[mode]);
       const DARK_THEMES=[{id:'dusk',name:'Dusk'},{id:'midnight',name:'Midnight'},{id:'nebula',name:'Nebula'}];
       const LIGHT_THEMES=[{id:'light',name:'Light'},{id:'parchment',name:'Parchment'}];
       const ALL_THEMES_LABELED=[{id:'dusk',name:'Dusk (dark)'},{id:'midnight',name:'Midnight (dark)'},{id:'nebula',name:'Nebula (dark)'},{id:'light',name:'Light (light)'},{id:'parchment',name:'Parchment (light)'}];
@@ -693,11 +701,11 @@
           <div className="flex items-center justify-between"><span className="text-xs text-purple-200/80">Use System Settings</span><button type="button" onClick={()=>setUseSystem(v=>!v)} className={`px-3 py-1 rounded-xl text-xs font-medium border ${useSystem?"btn-solid border-transparent":"surface-toggle border-purple-800/60 text-purple-100/80"}`}>{useSystem?"On":"Off"}</button></div>
           {useSystem?(<><div className="flex items-center gap-3"><span className="text-xs text-purple-200/80 w-10 shrink-0">Dark:</span><select value={darkTheme} onChange={e=>setDarkTheme(e.target.value)} className="panel rounded-xl px-2 py-1 text-sm flex-1 focus:outline-none focus:ring-2 focus:ring-purple-400 appearance-none">{DARK_THEMES.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></div><div className="flex items-center gap-3"><span className="text-xs text-purple-200/80 w-10 shrink-0">Light:</span><select value={lightTheme} onChange={e=>setLightTheme(e.target.value)} className="panel rounded-xl px-2 py-1 text-sm flex-1 focus:outline-none focus:ring-2 focus:ring-purple-400 appearance-none">{LIGHT_THEMES.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></div></>):(<div className="flex items-center gap-3"><span className="text-xs text-purple-200/80 w-10 shrink-0">Theme:</span><select value={manualTheme} onChange={e=>setManualTheme(e.target.value)} className="panel rounded-xl px-2 py-1 text-sm flex-1 focus:outline-none focus:ring-2 focus:ring-purple-400 appearance-none">{ALL_THEMES_LABELED.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></div>)}
         </div>
-        <div className="pt-2 border-t border-purple-500/20 text-[11px] text-purple-300/60">Last Updated: 4/8/26 18:41</div>
+        <div className="pt-2 border-t border-purple-500/20 text-[11px] text-purple-300/60">Last Updated: 4/10/26 20:00 UTC</div>
       </div>);
       return(
-        <div className="mx-auto px-4 py-5 w-full max-w-[480px]">
-        <div className="flex items-center justify-between gap-2 relative" ref={settingsRef}>
+        <div className={`mx-auto w-full max-w-[500px] h-[100dvh] px-3 pt-3 pb-2 flex flex-col ${mode==='guide'?'':'overflow-hidden'}`}>
+        <div className="flex items-center justify-between gap-2 relative shrink-0" ref={settingsRef}>
             {/* header left: title */}
             <h1 className="text-xl font-semibold leading-none shrink-0">Calendar Game</h1>
             <div className="flex items-center gap-2 shrink-0">
@@ -715,6 +723,7 @@
             </div>
             {settingsOpen&&<SettingsPopover/>}
           </div>
+          <div className={`mt-3 flex-1 ${mode==='guide'?'overflow-y-auto pr-1':'overflow-hidden'} ${mode==='guide'?'pb-6':'pb-1'}`}>
           {showStats&&(<>
             <div className="mt-4 grid grid-cols-4 gap-2">
               <Stat label={mode==="blitz"||mode==="sudden"?"Score (Round)":"Score"} value={mode==="blitz"?`${blitzRoundStats.good}/${blitzRoundStats.played}`:`${S.good}/${S.played}`} disabled={statsOff} onClick={toggleStatsOff} pressed={!statsOff}/>
@@ -790,6 +799,7 @@
               </div>
             </div>
           )}
+          </div>
         </div>
       );
     }
