@@ -328,7 +328,7 @@
               {label:"Last",value:fmtTime(calcLast(times)),off:!extStats,fn:()=>setExtStats(v=>!v)},
               {label:"Avg",value:fmtTime(calcAvg(times)),off:!extStats,fn:()=>setExtStats(v=>!v)},
               {label:"Med",value:fmtTime(calcMed(times)),off:!extStats,fn:()=>setExtStats(v=>!v)},
-            ].map((s,i,arr)=>(<div key={s.label} onClick={s.fn||undefined} className={`flex-1 flex flex-col items-center py-2 gap-0.5${i<arr.length-1?" border-r border-purple-500/20":""}${s.fn?" cursor-pointer":""}`}><span className="text-[10px] text-purple-200/80 leading-none">{s.label}</span><span className={`text-sm font-semibold tabular-nums leading-tight mt-0.5${s.off?" opacity-40":""}`}>{s.off?"—":s.value}</span></div>))}
+            ].map((s,i,arr)=>(<div key={s.label} onClick={s.fn||undefined} className={`flex-1 flex flex-col items-center py-2 gap-0.5${i<arr.length-1?" border-r border-purple-500/20":""}${s.fn?" cursor-pointer":""}`}><span className={`text-[10px] text-purple-200/80 leading-none${s.off?" line-through":""}`}>{s.label}</span><span className="text-sm font-semibold tabular-nums leading-tight mt-0.5">{s.off?"—":s.value}</span></div>))}
           </div>
           <div className="mt-3 rounded-2xl panel p-3">
             <div className="flex items-center gap-2 flex-nowrap">
@@ -430,8 +430,6 @@
       const [calcPenaltyActive,setCalcPenaltyActive]=useState(false);
       const calcPenaltyStatesRef=useRef(new Map());
       const [calcInstantClose,setCalcInstantClose]=useState(false);
-      const calcScrollRafRef=useRef(null);
-      const calcScrollTimeoutRef=useRef(null);
       const rangeRefreshPendingRef=useRef(false);
       const prevStatsSnapshotRef=useRef(null);
       const [savedDedByType,setSavedDedByType]=useState(()=>blankDedTypeStore());
@@ -472,6 +470,7 @@
       // when runLookup() fires a new result or the user manually closes it.
       const pendingDedSwitchRef=useRef(null);
       const prevModeRef=useRef(mode);
+      useEffect(()=>{const el=document.documentElement;if(mode==='guide'){el.style.overflow='';document.body.style.overflow='';}else{el.style.overflow='hidden';document.body.style.overflow='hidden';}return()=>{el.style.overflow='';document.body.style.overflow='';};},[mode]);
       useEffect(()=>{setShowTimerDate(false);},[mode]);
       const updateStats=mutator=>{setStatsByMode(prev=>{const ms={...(prev[mode]||blankStatsByEra())};const es={...(ms.AD||blankStats())};mutator(es);return{...prev,[mode]:{...ms,AD:es}};});};
       const resetStatsCurrent=()=>{setStatsByMode(prev=>{const ms={...(prev[mode]||blankStatsByEra())};return{...prev,[mode]:{...ms,AD:blankStats()}};});};
@@ -522,6 +521,7 @@
         if(mode==="deduction")runDeductionRound();
       }
       const pushLookupHistory=entry=>setLookupHistory(prev=>[entry,...prev].slice(0,20));
+      const moveHistoryEntryToTop=id=>setLookupHistory(prev=>{const idx=prev.findIndex(e=>e.id===id);if(idx<=0)return prev;const entry=prev[idx];return[entry,...prev.slice(0,idx),...prev.slice(idx+1)];});
       const clearLookupHistory=()=>setLookupHistory([]);
       const doNew=(opts={})=>{const{skipInactiveMessage=false}=opts;if(isTimer(mode)&&!active){if(skipInactiveMessage)pushAndNext();else setMsg("Press Begin to start.");return;}pushAndNext();};
       function reveal(){
@@ -669,9 +669,6 @@
       const lookupCalcTargetKey=lookupCalcDate?`${lookupCalcDate.y}-${lookupCalcDate.m}-${lookupCalcDate.d}`:"none";
       useEffect(()=>{if(calcInstantClose){const t=setTimeout(()=>setCalcInstantClose(false),50);return()=>clearTimeout(t);}},[calcInstantClose]);
       useEffect(()=>{const pm=prevModeRef.current;if(pm!==mode){prevModeRef.current=mode;return;}setCalcOpen(false);setCalcInstantClose(false);prevModeRef.current=mode;},[calcTargetKey,mode]);
-      const calcOpenForScroll=mode==="lookup"?lookupCalcOpen:calcOpen;
-      const calcKeyForScroll=mode==="lookup"?lookupCalcTargetKey:calcTargetKey;
-      useEffect(()=>{const cancel=()=>{if(calcScrollRafRef.current!=null){cancelAnimationFrame(calcScrollRafRef.current);calcScrollRafRef.current=null;}if(calcScrollTimeoutRef.current!=null){clearTimeout(calcScrollTimeoutRef.current);calcScrollTimeoutRef.current=null;}};if(!calcOpenForScroll){cancel();return cancel;}cancel();calcScrollRafRef.current=requestAnimationFrame(()=>{calcScrollRafRef.current=null;calcScrollTimeoutRef.current=window.setTimeout(()=>{calcScrollTimeoutRef.current=null;window.scrollTo({top:document.documentElement.scrollHeight,behavior:"smooth"});},60);});return cancel;},[calcOpenForScroll,calcKeyForScroll,mode]);
       const handleResetStats=()=>{resetStatsCurrent();if(!avgVisOff)doNew({skipInactiveMessage:true});};
       const applyCalcPenalty=()=>{setCalcPenalty(true);const roundOver=(mode==="blitz"||mode==="sudden")&&!active;const fp=!countedWrong&&!revealed;if(fp&&!roundOver){wrongTimeRef.current=tStartRef.current?(performance.now()-tStartRef.current)/1000:null;prevStatsSnapshotRef.current=null;preCalcPenaltySnapshotRef.current={played:S.played,good:S.good,streak:S.streak,best:S.best,timesLen:S.times.length,blitzPlayed:blitzRoundStats.played,blitzGood:blitzRoundStats.good};if(!statsOff)updateStats(c=>{c.played+=1;c.streak=0;});if(mode==="blitz")setBlitzRoundStats(p=>({...p,played:p.played+1}));}let am=null;if(mode==="deduction"&&ded){const ans=ded.type==="year"?fmtYear(ded.y):ded.type==="month"?MONTH[ded.m-1]:String(ded.d);am=`Answer: ${ans}.`;}else if(mode!=="deduction")am=`Answer: ${DAY[correct]}.`;if(am)setMsg(am);if(isTimer(mode)&&active){setActive(false);setShowTimerDate(true);if(mode==="blitz"){setBlitzRunning(false);blitzStartRef.current=null;blitzPausedAtRef.current=null;blitzPausedAccRef.current=0;}if(mode==="sudden"){qDeadlineRef.current=null;qPausedAtRef.current=null;qPausedAccRef.current=0;}if(mode==="flash"){clearTimeout(flashTimerRef.current);flashTimerRef.current=null;setFlashPhase("dash");flashDeadlineRef.current=null;}}if(!revealed)setRevealed(true);if(!countedWrong){setCountedWrong(true);setCanOverrideCorrect(false);}};
       const handleCalcOpenChange=next=>{if(next)applyCalcPenalty();setCalcOpen(next);};
@@ -717,7 +714,7 @@
           <div className="flex items-center justify-between"><span className="text-xs text-purple-200/80">Use System Settings</span><button type="button" onClick={()=>setUseSystem(v=>!v)} className={`px-3 py-1 rounded-xl text-xs font-medium border ${useSystem?"btn-solid border-transparent":"surface-toggle border-purple-800/60 text-purple-100/80"}`}>{useSystem?"On":"Off"}</button></div>
           {useSystem?(<><div className="flex items-center gap-3"><span className="text-xs text-purple-200/80 w-10 shrink-0">Dark:</span><select value={darkTheme} onChange={e=>setDarkTheme(e.target.value)} className="panel rounded-xl px-2 py-1 text-sm flex-1 focus:outline-none focus:ring-2 focus:ring-purple-400 appearance-none">{DARK_THEMES.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></div><div className="flex items-center gap-3"><span className="text-xs text-purple-200/80 w-10 shrink-0">Light:</span><select value={lightTheme} onChange={e=>setLightTheme(e.target.value)} className="panel rounded-xl px-2 py-1 text-sm flex-1 focus:outline-none focus:ring-2 focus:ring-purple-400 appearance-none">{LIGHT_THEMES.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></div></>):(<div className="flex items-center gap-3"><span className="text-xs text-purple-200/80 w-10 shrink-0">Theme:</span><select value={manualTheme} onChange={e=>setManualTheme(e.target.value)} className="panel rounded-xl px-2 py-1 text-sm flex-1 focus:outline-none focus:ring-2 focus:ring-purple-400 appearance-none">{ALL_THEMES_LABELED.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></div>)}
         </div>
-        <div className="pt-2 border-t border-purple-500/20 text-[11px] text-purple-300/60">Last Updated: 4/12/26 22:47</div>
+        <div className="pt-2 border-t border-purple-500/20 text-[11px] text-purple-300/60">Last Updated: 4/12/26 23:17</div>
       </div>);
       return(
         <div className="mx-auto px-4 py-5 w-full max-w-[480px]">
@@ -748,17 +745,17 @@
                 {label:"Last",value:fmtTime(sLast),off:avgVisOff,fn:toggleTimingVis},
                 {label:"Avg",value:fmtTime(sAvg),off:avgVisOff,fn:toggleTimingVis},
                 {label:"Med",value:fmtTime(sMed),off:avgVisOff,fn:toggleTimingVis},
-              ].map((s,i,arr)=>(<button key={s.label} type="button" onClick={s.fn} className={`flex-1 flex flex-col items-center py-2 gap-0.5${i<arr.length-1?" border-r border-purple-500/20":""}`}><span className="text-[10px] text-purple-200/80 leading-none">{s.label}</span><span className={`text-sm font-semibold tabular-nums leading-tight mt-0.5${s.off?" opacity-40":""}`}>{s.off?"—":s.value}</span></button>))}
+              ].map((s,i,arr)=>(<button key={s.label} type="button" onClick={s.fn} className={`flex-1 flex flex-col items-center py-2 gap-0.5${i<arr.length-1?" border-r border-purple-500/20":""}`}><span className={`text-[10px] text-purple-200/80 leading-none${s.off?" line-through":""}`}>{s.label}</span><span className="text-sm font-semibold tabular-nums leading-tight mt-0.5">{s.off?"—":s.value}</span></button>))}
             </div>
             <div className="mt-3 flex items-center gap-2">
               <div className="flex flex-1 gap-2">
-                <button type="button" className="flex-1 px-3 py-1.5 rounded-xl btn-solid border border-transparent text-xs font-medium" onClick={handleResetStats}>Reset</button>
+                <button type="button" className="flex-1 px-3 py-1.5 rounded-xl btn-solid border border-transparent text-sm font-medium" onClick={handleResetStats}>Reset Stats</button>
               </div>
               {timerSettingControl&&<div className="flex-1 min-w-0">{timerSettingControl}</div>}
             </div>
           </>)}
           <AoxMode minY={minY} maxY={maxY} visible={mode==="aox"} extStats={extStats} setExtStats={setExtStats} fmtDate={fmtDate} useJulian={useJulian}/>
-          {mode==="lookup"&&(<div className="mt-5"><LookupCard history={lookupHistory} onAddHistory={pushLookupHistory} onClearHistory={clearLookupHistory} inputValue={lookupInput} onInputChange={setLookupInput} outputValue={lookupOutput} onOutputChange={setLookupOutput} calcDate={lookupCalcDate} onCalcDateChange={setLookupCalcDate} selectedHistoryId={lookupSelectedHistoryId} onSelectedHistoryIdChange={setLookupSelectedHistoryId} calcOpen={lookupCalcOpen} onCalcOpenChange={setLookupCalcOpen} fmtDate={fmtDate} dateOrder={dateOrder} useJulian={useJulian}/></div>)}
+          {mode==="lookup"&&(<div className="mt-5"><LookupCard history={lookupHistory} onAddHistory={pushLookupHistory} onMoveHistory={moveHistoryEntryToTop} onClearHistory={clearLookupHistory} inputValue={lookupInput} onInputChange={setLookupInput} outputValue={lookupOutput} onOutputChange={setLookupOutput} calcDate={lookupCalcDate} onCalcDateChange={setLookupCalcDate} selectedHistoryId={lookupSelectedHistoryId} onSelectedHistoryIdChange={setLookupSelectedHistoryId} calcOpen={lookupCalcOpen} onCalcOpenChange={setLookupCalcOpen} fmtDate={fmtDate} dateOrder={dateOrder} useJulian={useJulian}/></div>)}
           {mode==="guide"&&(<div className="mt-5"><GuidePage/></div>)}
           {["classic","blitz","sudden","flash"].includes(mode)&&(
             <div className="mt-5">
@@ -911,7 +908,7 @@
       return(<div className={className??"mt-5"}><button type="button" onClick={toggle} className={`w-full px-4 py-2 rounded-xl btn-solid text-sm font-medium${!hasDate?" opacity-60 cursor-not-allowed pointer-events-none":""}`} aria-disabled={!hasDate}>{open?"Hide Codes":"Show Codes"}</button><Expander open={open&&hasDate} instant={!!instant}><div className={contentClassName??"mt-3 rounded-2xl panel p-4 pb-1"}><MethodExplanation date={frozenDate} useJulian={useJulian}/></div></Expander></div>);
     }
 
-    function LookupCard({history=[],onAddHistory,onClearHistory,inputValue="",onInputChange,outputValue="",onOutputChange,calcDate,onCalcDateChange,selectedHistoryId,onSelectedHistoryIdChange,calcOpen=false,onCalcOpenChange,fmtDate,dateOrder='month-first',useJulian=false}){
+    function LookupCard({history=[],onAddHistory,onMoveHistory,onClearHistory,inputValue="",onInputChange,outputValue="",onOutputChange,calcDate,onCalcDateChange,selectedHistoryId,onSelectedHistoryIdChange,calcOpen=false,onCalcOpenChange,fmtDate,dateOrder='month-first',useJulian=false}){
       const li=typeof inputValue==="string"?inputValue:String(inputValue??"");
       const sli=typeof onInputChange==="function"?onInputChange:()=>{};
       const lo=typeof outputValue==="string"?outputValue:String(outputValue??"");
@@ -924,7 +921,7 @@
       function dimL(y,m,julian=false){const leap=julian?(y%4===0):isLeapL(y);return m===2?(leap?29:28):[4,6,9,11].includes(m)?30:31;}
       function wdayL(y,m,d){function jdn(y,m,d){const a=Math.floor((14-m)/12),y2=y+4800-a,m2=m-3+12*a;return d+Math.floor((153*m2+2)/5)+365*y2+Math.floor(y2/4)-Math.floor(y2/100)+Math.floor(y2/400)-32045;}return((jdn(y>0?y:1-Math.abs(y),m,d)+1)%7+7)%7;}
       function runLookup(){
-        const s=li.trim();if(s===lastLookupRef.current)return;
+        const s=li.trim();
         const dayFirst=dateOrder==='day-first';
         const match=/^(\d{1,2})\/(\d{1,2})\/(\d{1,5})$/.exec(s);
         if(!match){slo(`Enter date as ${dayFirst?'day/month':'month/day'}/year, e.g. ${dayFirst?'4/7':'7/4'}/1776.`);return;}
@@ -933,11 +930,18 @@
         let yy=+match[3];
         if(yy<1||yy>10000){slo("Year must be between 1 and 10000.");return;}
         if(mm<1||mm>12){slo("Month must be 1–12.");return;}
+        const existing=entries.find(e=>e.y===yy&&e.m===mm&&e.d===dd);
+        if(existing){
+          if(onMoveHistory)onMoveHistory(existing.id);
+          slo(existing.result);ssid(existing.id);
+          if(existing.isGap){scd(null);sco(false);}else scd({y:yy,m:mm,d:dd});
+          lastLookupRef.current=s;return;
+        }
         if(isGapDate(yy,mm,dd)){
           const gapMsg="October 5–14, 1582 never existed. When the Gregorian calendar was adopted, 10 days were skipped to correct accumulated calendar drift.";
           const displayDate=`${MONTH[mm-1]} ${dd}, ${yy}`;
           const entry={id:`${Date.now().toString(36)}-${Math.random().toString(36).slice(2,8)}`,label:displayDate,weekday:"Does Not Exist",result:gapMsg,y:yy,m:mm,d:dd,isGap:true};
-          lastLookupRef.current=null;slo(gapMsg);scd(null);ssid(entry.id);sco(false);if(onAddHistory)onAddHistory(entry);return;
+          lastLookupRef.current=s;slo(gapMsg);scd(null);ssid(entry.id);sco(false);if(onAddHistory)onAddHistory(entry);return;
         }
         const julian=useJulian&&isJulianDate(yy,mm,dd);
         const maxd=dimL(yy,mm,julian);
@@ -968,7 +972,7 @@
           </div>
           <div className="rounded-2xl panel p-4 space-y-4">
             <div className="flex items-center justify-between text-[11px] uppercase tracking-wide text-purple-200/70"><span>History</span>{entries.length>0&&(<button type="button" onClick={clearHist} className="text-purple-200/70 font-medium">Clear History</button>)}</div>
-            {entries.length>0?(<ul className="space-y-2">{entries.map(e=>(<li key={e.id}><button type="button" onClick={()=>selEntry(e)} className={`w-full text-left px-3 py-2 rounded-xl panel flex items-center justify-between gap-3 text-xs transition border-l-2 ${sid===e.id?"border-l-purple-400 bg-purple-500/35":"border-l-transparent hover:bg-purple-500/15"}`}><span className="block text-[13px] font-medium text-purple-100/90">{e.label}</span><span className="text-[12px] font-semibold text-purple-200/80">{e.weekday}</span></button></li>))}</ul>):(<p className="text-sm text-purple-200/70">No lookups yet.</p>)}
+            {entries.length>0?(<ul className="space-y-2 overflow-y-auto max-h-52">{entries.map(e=>(<li key={e.id}><button type="button" onClick={()=>selEntry(e)} className={`w-full text-left px-3 py-2 rounded-xl panel flex items-center justify-between gap-3 text-xs transition border-l-2 ${sid===e.id?"border-l-purple-400 bg-purple-500/35":"border-l-transparent hover:bg-purple-500/15"}`}><span className="block text-[13px] font-medium text-purple-100/90">{e.label}</span><span className="text-[12px] font-semibold text-purple-200/80">{e.weekday}</span></button></li>))}</ul>):(<p className="text-sm text-purple-200/70">No lookups yet.</p>)}
             <MethodBreakdownSection date={cdv} className="pt-4 border-t border-purple-500/40" contentClassName="mt-3 rounded-xl panel p-3" open={cov} onOpenChange={sco} useJulian={useJulian}/>
           </div>
         </div>
