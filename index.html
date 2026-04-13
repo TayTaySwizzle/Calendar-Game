@@ -10,8 +10,8 @@
   <script>(function(){var d=window.matchMedia('(prefers-color-scheme: dark)').matches;document.documentElement.setAttribute('data-theme',d?'dusk':'light');})();</script>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    :root{--bg1:#0b0714;--bg2:#0b0714;--card-bg:rgba(26,15,43,.85);--card-bd:rgba(120,53,175,.45);--panel-bg:rgba(88,28,135,.25);--panel-bd:rgba(120,53,175,.45);--thin-bd:rgba(120,53,175,.35);--sbtn-bg:rgba(88,28,135,.32);--sbtn-bd:rgba(120,53,175,.52);--sbtn-hov:rgba(88,28,135,.48);--stgl-bg:rgba(88,28,135,.24);--stgl-hov:rgba(88,28,135,.4);--chip-bg:rgba(120,53,175,.25);--chip-bd:rgba(120,53,175,.45);--bar-bg:rgba(120,53,175,.25);--bar-bd:rgba(120,53,175,.45);--body-color:#f5f3ff;--sec-color:rgba(237,233,254,.8);--mut-color:rgba(216,180,254,.7);--fnt-color:rgba(196,181,254,.6);--tc:#0b0714}
-    [data-theme="dusk"]{--bg1:#0d1117;--bg2:#0d1117;--tc:#0d1117;--card-bg:rgba(13,17,23,.92);--card-bd:rgba(99,102,241,.4);--panel-bg:rgba(28,38,68,.35);--panel-bd:rgba(99,102,241,.4);--thin-bd:rgba(99,102,241,.3);--sbtn-bg:rgba(38,48,88,.38);--sbtn-bd:rgba(99,102,241,.5);--sbtn-hov:rgba(38,48,88,.55);--stgl-bg:rgba(28,38,68,.28);--stgl-hov:rgba(28,38,68,.45);--chip-bg:rgba(99,102,241,.2);--chip-bd:rgba(99,102,241,.4);--bar-bg:rgba(99,102,241,.2);--bar-bd:rgba(99,102,241,.4)}
+    :root{--bg1:#0b0714;--bg2:#0b0714;--card-bg:rgba(26,15,43,.95);--card-bd:rgba(120,53,175,.45);--panel-bg:rgba(88,28,135,.25);--panel-bd:rgba(120,53,175,.45);--thin-bd:rgba(120,53,175,.35);--sbtn-bg:rgba(88,28,135,.32);--sbtn-bd:rgba(120,53,175,.52);--sbtn-hov:rgba(88,28,135,.48);--stgl-bg:rgba(88,28,135,.24);--stgl-hov:rgba(88,28,135,.4);--chip-bg:rgba(120,53,175,.25);--chip-bd:rgba(120,53,175,.45);--bar-bg:rgba(120,53,175,.25);--bar-bd:rgba(120,53,175,.45);--body-color:#f5f3ff;--sec-color:rgba(237,233,254,.8);--mut-color:rgba(216,180,254,.7);--fnt-color:rgba(196,181,254,.6);--tc:#0b0714}
+    [data-theme="dusk"]{--bg1:#0d1117;--bg2:#0d1117;--tc:#0d1117;--card-bg:rgba(13,17,23,.96);--card-bd:rgba(99,102,241,.4);--panel-bg:rgba(28,38,68,.35);--panel-bd:rgba(99,102,241,.4);--thin-bd:rgba(99,102,241,.3);--sbtn-bg:rgba(38,48,88,.38);--sbtn-bd:rgba(99,102,241,.5);--sbtn-hov:rgba(38,48,88,.55);--stgl-bg:rgba(28,38,68,.28);--stgl-hov:rgba(28,38,68,.45);--chip-bg:rgba(99,102,241,.2);--chip-bd:rgba(99,102,241,.4);--bar-bg:rgba(99,102,241,.2);--bar-bd:rgba(99,102,241,.4)}
     [data-theme="midnight"]{--bg1:#000;--bg2:#000;--tc:#000;--card-bg:rgba(4,0,12,.93);--card-bd:rgba(139,92,246,.5);--panel-bg:rgba(45,0,90,.28);--panel-bd:rgba(139,92,246,.5);--thin-bd:rgba(139,92,246,.38);--sbtn-bg:rgba(55,0,110,.35);--sbtn-bd:rgba(139,92,246,.55);--sbtn-hov:rgba(55,0,110,.5);--stgl-bg:rgba(45,0,90,.25);--stgl-hov:rgba(45,0,90,.42);--chip-bg:rgba(139,92,246,.2);--chip-bd:rgba(139,92,246,.45);--bar-bg:rgba(139,92,246,.2);--bar-bd:rgba(139,92,246,.45)}
     [data-theme="nebula"]{--bg1:#0b0714;--bg2:#0b0714;--tc:#0b0714}
     [data-theme="parchment"]{--bg1:#f0e8d5;--bg2:#f0e8d5;--tc:#f0e8d5;--card-bg:rgba(255,252,244,.97);--card-bd:rgba(120,53,175,.22);--panel-bg:rgba(120,53,175,.07);--panel-bd:rgba(120,53,175,.22);--thin-bd:rgba(120,53,175,.18);--sbtn-bg:rgba(120,53,175,.1);--sbtn-bd:rgba(120,53,175,.28);--sbtn-hov:rgba(120,53,175,.18);--stgl-bg:rgba(120,53,175,.07);--stgl-hov:rgba(120,53,175,.14);--chip-bg:rgba(120,53,175,.09);--chip-bd:rgba(120,53,175,.22);--bar-bg:rgba(120,53,175,.09);--bar-bd:rgba(120,53,175,.22);--body-color:#2e1065;--sec-color:rgba(46,16,101,.78);--mut-color:rgba(46,16,101,.62);--fnt-color:rgba(46,16,101,.5)}
@@ -320,19 +320,21 @@
 
       return(
         <div style={{display:visible?"block":"none"}}>
-          <div className="mt-4 grid grid-cols-4 gap-2">
-            <Stat label="Score" value={scoreDisplay}/>
-            <Stat label="Accuracy" value={accuracyDisplay}/>
-            <StatTwo label="Streak / Longest" left={streak} right={bestStreak}/>
-            <Stat label="Avg Time (Correct)" value={fmtTime(calcAvg(times))}/>
+          <div className="mt-4 rounded-2xl panel flex overflow-hidden">
+            {[
+              {label:"Score",value:scoreDisplay,off:false,fn:null},
+              {label:"Accuracy",value:accuracyDisplay,off:false,fn:null},
+              {label:"Streak",value:`${streak}/${bestStreak}`,off:false,fn:null},
+              {label:"Last",value:fmtTime(calcLast(times)),off:!extStats,fn:()=>setExtStats(v=>!v)},
+              {label:"Avg",value:fmtTime(calcAvg(times)),off:!extStats,fn:()=>setExtStats(v=>!v)},
+              {label:"Med",value:fmtTime(calcMed(times)),off:!extStats,fn:()=>setExtStats(v=>!v)},
+            ].map((s,i,arr)=>(<div key={s.label} onClick={s.fn||undefined} className={`flex-1 flex flex-col items-center py-2 gap-0.5${i<arr.length-1?" border-r border-purple-500/20":""}${s.fn?" cursor-pointer":""}`}><span className="text-[10px] text-purple-200/80 leading-none">{s.label}</span><span className={`text-sm font-semibold tabular-nums leading-tight mt-0.5${s.off?" opacity-40":""}`}>{s.off?"—":s.value}</span></div>))}
           </div>
-          {extStats&&(<div className="mt-2 flex justify-evenly"><div className="w-1/4"><Stat label="Last Time (Correct)" value={fmtTime(calcLast(times))}/></div><div className="w-1/4"><Stat label="Median Time (Correct)" value={fmtTime(calcMed(times))}/></div></div>)}
           <div className="mt-3 rounded-2xl panel p-3">
             <div className="flex items-center gap-2 flex-nowrap">
               <div className="flex items-center shrink-0"><span className="text-sm text-purple-200/80 leading-none">Ao</span><input type="text" inputMode="numeric" value={aoxN} onChange={e=>setAoxN(e.target.value)} onBlur={()=>setAoxN(String(Math.max(2,Math.min(1000,parseInt(aoxN)||10))))} className="panel rounded-xl px-2 py-1 w-14 text-center tabular-nums text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 shrink-0" disabled={isRunning&&runPhase!=="idle"}/></div>
-              <button type="button" onClick={()=>{if(!isRunning||runPhase==="idle")setMistakesOk(v=>!v);}} className={`px-2 py-1 rounded-xl text-xs font-medium border shrink-0 ${mistakesOk?"btn-solid border-transparent":"surface-toggle text-purple-100/80"}`}>Allow Mistakes</button>
-              <button type="button" onClick={()=>{if(!isRunning||runPhase==="idle")setOneByOne(v=>!v);}} className={`px-2 py-1 rounded-xl text-xs font-medium border shrink-0 ${oneByOne?"btn-solid border-transparent":"surface-toggle text-purple-100/80"}`}>One-By-One</button>
-              <button type="button" className={`px-2 py-1 rounded-xl text-xs font-medium border shrink-0 ml-auto ${extStats?"btn-solid border-transparent":"surface-button text-purple-100/80"}`} onClick={()=>setExtStats(v=>!v)}>Stats +</button>
+              <button type="button" onClick={()=>{if(!isRunning||runPhase==="idle")setMistakesOk(v=>!v);}} className={`flex-1 px-2 py-1 rounded-xl text-xs font-medium border ${mistakesOk?"btn-solid border-transparent":"surface-toggle text-purple-100/80"}`}>Allow Mistakes</button>
+              <button type="button" onClick={()=>{if(!isRunning||runPhase==="idle")setOneByOne(v=>!v);}} className={`flex-1 px-2 py-1 rounded-xl text-xs font-medium border ${oneByOne?"btn-solid border-transparent":"surface-toggle text-purple-100/80"}`}>One-By-One</button>
             </div>
             <div className="mt-2 flex gap-4 text-xs text-purple-300/60">
               <span>Best Average: {bestData.avg!=null?`${bestData.avg.toFixed(2)}s`:"—"}</span>
@@ -684,7 +686,7 @@
       const DARK_THEMES=[{id:'dusk',name:'Dusk'},{id:'midnight',name:'Midnight'},{id:'nebula',name:'Nebula'}];
       const LIGHT_THEMES=[{id:'light',name:'Light'},{id:'parchment',name:'Parchment'}];
       const ALL_THEMES_LABELED=[{id:'dusk',name:'Dusk (dark)'},{id:'midnight',name:'Midnight (dark)'},{id:'nebula',name:'Nebula (dark)'},{id:'light',name:'Light (light)'},{id:'parchment',name:'Parchment (light)'}];
-      const SettingsPopover=()=>(<div className="absolute left-0 right-0 top-full mt-2 z-50 rounded-2xl card p-4 space-y-4 shadow-xl">
+      const settingsJsx=settingsOpen&&(<div className="absolute left-0 right-0 top-full mt-2 z-50 rounded-2xl card p-4 space-y-4 shadow-xl">
         <div className="space-y-2">
           <div className="text-[10px] uppercase tracking-widest text-purple-300/60">Date Format</div>
           <div className="flex gap-2">
@@ -715,7 +717,7 @@
           <div className="flex items-center justify-between"><span className="text-xs text-purple-200/80">Use System Settings</span><button type="button" onClick={()=>setUseSystem(v=>!v)} className={`px-3 py-1 rounded-xl text-xs font-medium border ${useSystem?"btn-solid border-transparent":"surface-toggle border-purple-800/60 text-purple-100/80"}`}>{useSystem?"On":"Off"}</button></div>
           {useSystem?(<><div className="flex items-center gap-3"><span className="text-xs text-purple-200/80 w-10 shrink-0">Dark:</span><select value={darkTheme} onChange={e=>setDarkTheme(e.target.value)} className="panel rounded-xl px-2 py-1 text-sm flex-1 focus:outline-none focus:ring-2 focus:ring-purple-400 appearance-none">{DARK_THEMES.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></div><div className="flex items-center gap-3"><span className="text-xs text-purple-200/80 w-10 shrink-0">Light:</span><select value={lightTheme} onChange={e=>setLightTheme(e.target.value)} className="panel rounded-xl px-2 py-1 text-sm flex-1 focus:outline-none focus:ring-2 focus:ring-purple-400 appearance-none">{LIGHT_THEMES.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></div></>):(<div className="flex items-center gap-3"><span className="text-xs text-purple-200/80 w-10 shrink-0">Theme:</span><select value={manualTheme} onChange={e=>setManualTheme(e.target.value)} className="panel rounded-xl px-2 py-1 text-sm flex-1 focus:outline-none focus:ring-2 focus:ring-purple-400 appearance-none">{ALL_THEMES_LABELED.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></div>)}
         </div>
-        <div className="pt-2 border-t border-purple-500/20 text-[11px] text-purple-300/60">Last Updated: 4/12/26 20:35</div>
+        <div className="pt-2 border-t border-purple-500/20 text-[11px] text-purple-300/60">Last Updated: 4/12/26 22:47</div>
       </div>);
       return(
         <div className="mx-auto px-4 py-5 w-full max-w-[480px]">
@@ -729,27 +731,28 @@
               </div>
               {/* mode selector */}
               <div className="relative">
-                <select ref={modeSelectRef} value={mode} onChange={e=>{setMode(e.target.value);e.target.blur();const root=document.getElementById('root');if(root){root.style.pointerEvents='none';setTimeout(()=>root.style.pointerEvents='',400);}}} className="panel rounded-xl px-2.5 py-2 pr-9 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 appearance-none">
+                <select ref={modeSelectRef} value={mode} onChange={e=>{setMode(e.target.value);setSettingsOpen(false);e.target.blur();const root=document.getElementById('root');if(root){root.style.pointerEvents='none';setTimeout(()=>root.style.pointerEvents='',400);}}} className="panel rounded-xl px-2.5 py-2 pr-9 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 appearance-none">
                   <option value="classic">Classic</option><option value="aox">AoX</option><option value="deduction">Deduction</option><option value="flash">Flash</option><option value="blitz">Blitz</option><option value="sudden">Sudden Death</option><option value="lookup">Lookup</option><option value="guide">How to Play</option>
                 </select>
                 <div className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 flex flex-col items-center leading-none text-[7px] text-white/90"><span>▲</span><span>▼</span></div>
               </div>
             </div>
-            {settingsOpen&&<SettingsPopover/>}
+            {settingsJsx}
           </div>
           {showStats&&(<>
-            <div className="mt-4 grid grid-cols-4 gap-2">
-              <Stat label={mode==="blitz"||mode==="sudden"?"Score (Round)":"Score"} value={mode==="blitz"?`${blitzRoundStats.good}/${blitzRoundStats.played}`:`${S.good}/${S.played}`} disabled={statsOff} onClick={toggleStatsOff} pressed={!statsOff}/>
-              {/* #3 — accuracy shows dash until first attempt */}
-              <Stat label="Accuracy" value={S.played?`${(S.good/S.played*100).toFixed(1)}%`:"—"} disabled={statsOff} onClick={toggleStatsOff} pressed={!statsOff}/>
-              <StatTwo label="Streak / Longest" left={S.streak} right={S.best} disabled={statsOff} onClick={toggleStatsOff} pressed={!statsOff}/>
-              <Stat label="Avg Time (Correct)" value={fmtTime(sAvg)} disabled={avgVisOff} onClick={toggleTimingVis} pressed={!avgVisOff}/>
+            <div className="mt-4 rounded-2xl panel flex overflow-hidden">
+              {[
+                {label:"Score",value:mode==="blitz"?`${blitzRoundStats.good}/${blitzRoundStats.played}`:`${S.good}/${S.played}`,off:statsOff,fn:toggleStatsOff},
+                {label:"Accuracy",value:S.played?`${(S.good/S.played*100).toFixed(1)}%`:"—",off:statsOff,fn:toggleStatsOff},
+                {label:"Streak",value:`${S.streak}/${S.best}`,off:statsOff,fn:toggleStatsOff},
+                {label:"Last",value:fmtTime(sLast),off:avgVisOff,fn:toggleTimingVis},
+                {label:"Avg",value:fmtTime(sAvg),off:avgVisOff,fn:toggleTimingVis},
+                {label:"Med",value:fmtTime(sMed),off:avgVisOff,fn:toggleTimingVis},
+              ].map((s,i,arr)=>(<button key={s.label} type="button" onClick={s.fn} className={`flex-1 flex flex-col items-center py-2 gap-0.5${i<arr.length-1?" border-r border-purple-500/20":""}`}><span className="text-[10px] text-purple-200/80 leading-none">{s.label}</span><span className={`text-sm font-semibold tabular-nums leading-tight mt-0.5${s.off?" opacity-40":""}`}>{s.off?"—":s.value}</span></button>))}
             </div>
-            {extStats&&(<div className="mt-2 flex justify-evenly"><div className="w-1/4"><Stat label="Last Time (Correct)" value={fmtTime(sLast)} disabled={lastVisOff} onClick={toggleTimingVis} pressed={!lastVisOff}/></div><div className="w-1/4"><Stat label="Median Time (Correct)" value={fmtTime(sMed)} disabled={medVisOff} onClick={toggleTimingVis} pressed={!medVisOff}/></div></div>)}
             <div className="mt-3 flex items-center gap-2">
               <div className="flex flex-1 gap-2">
                 <button type="button" className="flex-1 px-3 py-1.5 rounded-xl btn-solid border border-transparent text-xs font-medium" onClick={handleResetStats}>Reset</button>
-                <button type="button" className={`flex-1 px-3 py-1.5 rounded-xl text-xs font-medium border ${extStats?"btn-solid border-transparent":"surface-button text-purple-100/80"}`} onClick={()=>setExtStats(v=>!v)}>Stats +</button>
               </div>
               {timerSettingControl&&<div className="flex-1 min-w-0">{timerSettingControl}</div>}
             </div>
@@ -837,13 +840,11 @@
             <p><b>Show Codes</b> — reveals the calculation codes for the current date. Counts as wrong if you haven't already answered incorrectly. In AoX without Allow Mistakes, opening Show Codes ends the run.</p>
           </GuideSection>
           <GuideSection id="stats" title="Stats" openId={open} onToggle={toggle}>
-            <p><b>Score</b> — correct first-try answers out of total attempts. In AoX, shows correct answers out of total attempts; the run ends once correct answers reach the set number.</p>
+            <p><b>Score</b> — correct first-try answers out of total attempts. In Blitz and Sudden Death, only the current round is shown. In AoX, shows correct answers out of total attempts; the run ends once correct answers reach the set number.</p>
             <p><b>Accuracy</b> — percentage of questions answered correctly on the first try. Shows — until your first attempt.</p>
-            <p><b>Streak / Longest</b> — your current consecutive correct streak and your all-time longest in this mode.</p>
-            <p><b>Avg Time (Correct)</b> — average time across all first-try correct answers. Always tracked. Tap to hide.</p>
-            <p><b>Last Time (Correct)</b> — your most recent first-try correct answer time.</p>
-            <p><b>Median Time (Correct)</b> — the middle value of all your correct times when sorted. Less skewed by outliers than the average.</p>
-            <p className="text-purple-300/70 text-[12px]">Tap Score, Accuracy, or Streak to hide all three together. Tap Avg Time, Last Time, or Median Time to toggle each independently. Settings are saved per mode. Use Stats + to show or hide the bottom row.</p>
+            <p><b>Streak</b> — your current consecutive correct streak / your longest in this session.</p>
+            <p><b>Last / Avg / Med</b> — timing stats, calculated using correct answers only. Last is your most recent correct time; Avg is the average across all correct answers; Med is the median, which is less skewed by outliers. Hidden by default in Classic and Deduction.</p>
+            <p className="text-purple-300/70 text-[12px]">Tap Score, Accuracy, or Streak to hide all three together. Tap Last, Avg, or Med to hide all three time stats. Settings are saved per mode.</p>
           </GuideSection>
           <GuideSection id="range" title="Year Range" openId={open} onToggle={toggle}><p>Set via the ⚙ settings menu. Controls which years dates are drawn from. Defaults to 1–10000 AD. Changing the range resets the current round.</p></GuideSection>
           <GuideSection id="theme" title="Theme" openId={open} onToggle={toggle}><p>Five themes: Dusk (default dark navy), Midnight (true black with purple), Nebula (deep purple), Light (clean white), and Parchment (warm cream). Accessible from the ⚙ settings menu in any tab. Enable Use System Settings to match your device's light/dark mode automatically, with separate theme choices for each. Disable to pick one manually.</p></GuideSection>
@@ -855,16 +856,16 @@
             <p>Average your times over a set number of correct solves (2–1000). The score shows correct answers out of total attempts; the run ends when correct answers reach your target. Press Begin to start a run.</p>
             <p><b>Allow Mistakes</b> — wrong answers don't end the run but don't count toward your score.</p>
             <p><b>One-By-One</b> — hides the date between solves. Press Continue to reveal each new date.</p>
-            <p><b>Stats +</b> — show or hide the Last Time and Median Time rows.</p>
+            <p><b>Last / Avg / Med</b> — tap any of these to show or hide all three time stats.</p>
             <p><b>Back</b> — review the previous date without affecting the run. Press Continue to resume. After a run completes, Back lets you browse all dates from that run; press Results to return to your results.</p>
             <p><b>Override</b> — after wrong: gives credit with time recorded, preserves streak. After correct: undoes the credit, resets streak, and continues (or ends the run if Allow Mistakes is off). One override per question.</p>
             <p>Best Avg and Best Median are saved per n and Allow Mistakes setting. The score display freezes when a run ends and only resets after pressing Reset.</p>
           </GuideSection>
           <GuideSection id="deduction" title="Deduction" openId={open} onToggle={toggle}><p>Identify the missing piece of a date given the rest plus the weekday. Choose Day, Month, or Year mode. Each question has exactly one correct answer. Switch subtypes anytime — progress in each is preserved.</p></GuideSection>
-          <GuideSection id="blitz" title="Blitz" openId={open} onToggle={toggle}><p>Answer as many dates as possible within the time limit (10s–180s, default 60s, adjustable via the slider). Score shown is for the current round only. Stats reset at the start of each round.</p></GuideSection>
-          <GuideSection id="sudden" title="Sudden Death" openId={open} onToggle={toggle}><p>Each question has its own countdown (3s–20s, default 5s, adjustable via the slider). A wrong answer or running out of time ends the run. Score (Round) shows your current run only. Stats reset at the start of each round.</p></GuideSection>
+          <GuideSection id="blitz" title="Blitz" openId={open} onToggle={toggle}><p>Answer as many dates as possible within the time limit (10s–180s, default 60s, adjustable via the slider). Score shows correct answers for the current round only. Stats reset at the start of each round.</p></GuideSection>
+          <GuideSection id="sudden" title="Sudden Death" openId={open} onToggle={toggle}><p>Each question has its own countdown (3s–20s, default 5s, adjustable via the slider). A wrong answer or running out of time ends the run. Score shows your current run only. Stats reset at the start of each round.</p></GuideSection>
           <GuideSection id="flash" title="Flash" openId={open} onToggle={toggle}><p>The date is briefly revealed (50ms–3000ms, default 500ms, adjustable via the slider) then hidden. Answer from memory.</p></GuideSection>
-          <GuideSection id="lookup" title="Lookup" openId={open} onToggle={toggle}><p>Enter any AD date as month/day/year (e.g. 7/4/1776) to instantly see its weekday. Supports years 1–10000. Show Codes is available for all results and stays open as you browse your history — it only closes when you manually hide it or submit a new lookup.</p></GuideSection>
+          <GuideSection id="lookup" title="Lookup" openId={open} onToggle={toggle}><p>Enter any AD date as month/day/year (or day/month/year if Day First is selected) to instantly see its weekday. Supports years 1–10000. Show Codes is available for all results and stays open as you browse your history. October 5–14, 1582 never existed and will appear in history as "Does Not Exist" with Show Codes unavailable.</p></GuideSection>
         </div>
       );
     }
@@ -932,7 +933,12 @@
         let yy=+match[3];
         if(yy<1||yy>10000){slo("Year must be between 1 and 10000.");return;}
         if(mm<1||mm>12){slo("Month must be 1–12.");return;}
-        if(isGapDate(yy,mm,dd)){slo("October 5–14, 1582 never existed. When the Gregorian calendar was adopted, 10 days were skipped to correct accumulated calendar drift.");return;}
+        if(isGapDate(yy,mm,dd)){
+          const gapMsg="October 5–14, 1582 never existed. When the Gregorian calendar was adopted, 10 days were skipped to correct accumulated calendar drift.";
+          const displayDate=`${MONTH[mm-1]} ${dd}, ${yy}`;
+          const entry={id:`${Date.now().toString(36)}-${Math.random().toString(36).slice(2,8)}`,label:displayDate,weekday:"Does Not Exist",result:gapMsg,y:yy,m:mm,d:dd,isGap:true};
+          lastLookupRef.current=null;slo(gapMsg);scd(null);ssid(entry.id);sco(false);if(onAddHistory)onAddHistory(entry);return;
+        }
         const julian=useJulian&&isJulianDate(yy,mm,dd);
         const maxd=dimL(yy,mm,julian);
         if(dd<1||dd>maxd){slo(`Day must be 1–${maxd} for ${MONTH[mm-1]}.`);return;}
@@ -946,7 +952,7 @@
       function clearLookup(){sli("");if(document.activeElement)document.activeElement.blur();slo("");scd(null);ssid(null);sco(false);lastLookupRef.current=null;}
       const entries=Array.isArray(history)?history:[];
       React.useEffect(()=>{if(!sid)return;if(!entries.some(e=>e.id===sid)){ssid(null);scd(null);slo("");sco(false);}},[entries,sid]);
-      const selEntry=entry=>{if(!entry)return;ssid(entry.id);slo(entry?.result||"");if(entry&&typeof entry.y==="number")scd({y:entry.y,m:entry.m,d:entry.d});if(document.activeElement)document.activeElement.blur();};
+      const selEntry=entry=>{if(!entry)return;ssid(entry.id);slo(entry?.result||"");if(entry.isGap){scd(null);sco(false);lastLookupRef.current=null;}else if(typeof entry.y==="number")scd({y:entry.y,m:entry.m,d:entry.d});if(document.activeElement)document.activeElement.blur();};
       const clearHist=()=>{if(onClearHistory)onClearHistory();ssid(null);scd(null);slo("");sco(false);lastLookupRef.current=null;};
       const dayFirst=dateOrder==='day-first';
       return(
