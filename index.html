@@ -61,6 +61,12 @@
     [data-theme="parchment"] .text-white\/90,[data-theme="light"] .text-white\/90{color:var(--mut-color)!important}
     [data-theme="parchment"] .bg-purple-500\/20,[data-theme="light"] .bg-purple-500\/20{background-color:rgba(120,53,175,.2)!important}
     [data-theme="parchment"] .border-purple-500\/40,[data-theme="light"] .border-purple-500\/40{border-color:rgba(120,53,175,.3)!important}
+    input[type="range"]{-webkit-appearance:none;appearance:none;height:4px;border-radius:2px;border:none;outline:none;}
+    input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:20px;height:20px;border-radius:50%;background:#fff;cursor:pointer;border:none;box-shadow:0 1px 3px rgba(0,0,0,.3);}
+    input[type="range"]::-moz-range-thumb{width:20px;height:20px;border-radius:50%;background:#fff;cursor:pointer;border:none;box-shadow:0 1px 3px rgba(0,0,0,.3);}
+    input[type="range"]::-webkit-slider-runnable-track{height:4px;border-radius:2px;}
+    input[type="range"]::-moz-range-track{height:4px;border-radius:2px;background:transparent;}
+    input[type="range"]:disabled{opacity:.4;cursor:not-allowed;}
   </style>
 </head>
 <body class="text-purple-50">
@@ -159,7 +165,7 @@
 
 
 
-    const DEPLOY_TS=new Date('2026-04-14T05:32:00Z');
+    const DEPLOY_TS=new Date('2026-04-14T06:25:00Z');
 
     function StatPanel({stats}){
       return(
@@ -692,24 +698,14 @@
         if(ded.type==="month"){const ok=(+val)===ded.m;flashDed("month",index,ok);if(ok){if(!countedWrong){prevStatsSnapshotRef.current={played:S.played,good:S.good,streak:S.streak,best:S.best,timesLen:S.times.length,blitzPlayed:blitzRoundStats.played,blitzGood:blitzRoundStats.good,wasWrong:false};setCanOverrideCorrect(true);if(tStartRef.current){const dt=(performance.now()-tStartRef.current)/1000;updateStats(c=>{c.times=[...c.times,dt];});}}if(!countedWrong)updateStats(c=>{c.played+=1;c.good+=1;c.streak+=1;if(c.streak>c.best)c.best=c.streak;});sctn();}else{updateStats(c=>{c.played+=1;c.streak=0;});sw(MONTH[+val-1],index);}}
         if(ded.type==="day"){const ok=(+val)===ded.d;flashDed("day",index,ok);if(ok){if(!countedWrong){prevStatsSnapshotRef.current={played:S.played,good:S.good,streak:S.streak,best:S.best,timesLen:S.times.length,blitzPlayed:blitzRoundStats.played,blitzGood:blitzRoundStats.good,wasWrong:false};setCanOverrideCorrect(true);if(tStartRef.current){const dt=(performance.now()-tStartRef.current)/1000;updateStats(c=>{c.times=[...c.times,dt];});}}if(!countedWrong)updateStats(c=>{c.played+=1;c.good+=1;c.streak+=1;if(c.streak>c.best)c.best=c.streak;});sctn();}else{updateStats(c=>{c.played+=1;c.streak=0;});sw(String(+val),index);}}
       }
-      useEffect(()=>{
+      useLayoutEffect(()=>{
         const prevMode=prevModeForSwitchRef.current;prevModeForSwitchRef.current=mode;
         // === LEAVING prevMode ===
-        // Blitz/Sudden mid-round: force end and count penalty
-        const leavingMidRound=(prevMode==="blitz"||prevMode==="sudden")&&active;
-        if(leavingMidRound&&!countedWrong){
-          setStatsByMode(prev=>{const ms={...(prev[prevMode]||blankStatsByEra())};const es={...(ms.AD||blankStats())};es.played+=1;es.streak=0;return{...prev,[prevMode]:{...ms,AD:es}};});
-          if(prevMode==="blitz")setBlitzRoundStats(p=>({...p,played:p.played+1,streak:0}));
-        }
-        // Blitz/Sudden: save done snap for restoration
-        const leavingTimerDone=(prevMode==="blitz"||prevMode==="sudden")&&(timerDone||leavingMidRound);
+        // Blitz/Sudden done state: save snap for restoration (mid-round exits → full reset via arm())
+        const leavingTimerDone=(prevMode==="blitz"||prevMode==="sudden")&&timerDone;
         if(leavingTimerDone){
-          const cb=correctRef.current;
-          const sb=leavingMidRound?(()=>{const b={...persistBtns};for(const k in b){if(b[k]==='wrong-latest')b[k]='wrong-prev';}b[cb]='correct';return b;})():{...persistBtns};
           const prevS=(statsByMode[prevMode]?.AD)||blankStats();
-          const finalPrevS=leavingMidRound&&!countedWrong?{...prevS,played:prevS.played+1,streak:0}:{...prevS};
-          const finalBlitzRS=leavingMidRound&&!countedWrong&&prevMode==="blitz"?{...blitzRoundStats,played:blitzRoundStats.played+1,streak:0}:{...blitzRoundStats};
-          timerDoneSnapRef.current={mode:prevMode,blitzRoundStats:finalBlitzRS,persistBtns:sb,date:{...date},S:finalPrevS};
+          timerDoneSnapRef.current={mode:prevMode,blitzRoundStats:{...blitzRoundStats},persistBtns:{...persistBtns},date:{...date},S:{...prevS}};
         } else if(prevMode==="blitz"||prevMode==="sudden"){
           timerDoneSnapRef.current=null;
         }
@@ -770,11 +766,11 @@
       const baseBtn="w-full rounded-2xl border px-4 py-3 text-base transition shadow-sm select-none";
       const idleBtn="surface-button";
       const optionsDisabled=(isTimer(mode)&&!active)||locked||calcOpen||calcPenaltyActive;
-      const centerLastOpt=(index,total)=>{if(total<=0||index!==total-1)return"";return total%3===1?"col-start-2":"";};
+      const centerLastOpt=(index,total)=>{if(total<=0||index!==total-1)return"";return total%3===1?"col-span-3":"";};
       const timerSettingControl=(()=>{
-        if(mode==="blitz")return(<div className="flex items-center gap-2"><input type="range" min="10" max="180" step="5" value={blitzSec} onChange={e=>{const v=+e.target.value;setBlitzSec(v);if(!active){setBlitzRemain(v);blitzRemainRef.current=v;if(blitzTimeRef.current)blitzTimeRef.current.textContent=v+"s";if(blitzBarRef.current)blitzBarRef.current.style.width="100%";}}} disabled={active||timerDone} className="accent-purple-500 flex-1 disabled:opacity-40"/><span className="tabular-nums text-xs w-8 shrink-0 text-right">{blitzSec}s</span></div>);
-        if(mode==="sudden")return(<div className="flex items-center gap-2"><input type="range" min="3" max="20" step="1" value={qSec} onChange={e=>{const v=+e.target.value;setQSec(v);if(!active){setQRemain(v);if(suddenTimeRef.current)suddenTimeRef.current.textContent=v+"s";if(suddenBarRef.current)suddenBarRef.current.style.width="100%";}}} disabled={active||timerDone} className="accent-purple-500 flex-1 disabled:opacity-40"/><span className="tabular-nums text-xs w-8 shrink-0 text-right">{qSec}s</span></div>);
-        if(mode==="flash")return(<div className="flex items-center gap-2"><input type="range" min="50" max="3000" step="50" value={flashMs} onChange={e=>{const v=+e.target.value;setFlashMs(v);if(!active){setFlashRemainMs(v);resetFlashBar();}}} disabled={active} className="accent-purple-500 flex-1 disabled:opacity-40"/><span className="tabular-nums text-xs w-12 shrink-0 text-right">{flashMs}ms</span></div>);
+        if(mode==="blitz")return(<div className="flex items-center gap-2"><input type="range" min="10" max="180" step="5" value={blitzSec} onChange={e=>{const v=+e.target.value;setBlitzSec(v);if(!active){setBlitzRemain(v);blitzRemainRef.current=v;if(blitzTimeRef.current)blitzTimeRef.current.textContent=v+"s";if(blitzBarRef.current)blitzBarRef.current.style.width="100%";}}} disabled={active||timerDone} style={{background:`linear-gradient(to right,#7c3aed ${Math.round((blitzSec-10)/170*100)}%,var(--bar-bg) ${Math.round((blitzSec-10)/170*100)}%)`}} className="flex-1"/><span className="tabular-nums text-xs w-8 shrink-0 text-right">{blitzSec}s</span></div>);
+        if(mode==="sudden")return(<div className="flex items-center gap-2"><input type="range" min="3" max="20" step="1" value={qSec} onChange={e=>{const v=+e.target.value;setQSec(v);if(!active){setQRemain(v);if(suddenTimeRef.current)suddenTimeRef.current.textContent=v+"s";if(suddenBarRef.current)suddenBarRef.current.style.width="100%";}}} disabled={active||timerDone} style={{background:`linear-gradient(to right,#7c3aed ${Math.round((qSec-3)/17*100)}%,var(--bar-bg) ${Math.round((qSec-3)/17*100)}%)`}} className="flex-1"/><span className="tabular-nums text-xs w-8 shrink-0 text-right">{qSec}s</span></div>);
+        if(mode==="flash")return(<div className="flex items-center gap-2"><input type="range" min="50" max="3000" step="50" value={flashMs} onChange={e=>{const v=+e.target.value;setFlashMs(v);if(!active){setFlashRemainMs(v);resetFlashBar();}}} disabled={active} style={{background:`linear-gradient(to right,#7c3aed ${Math.round((flashMs-50)/2950*100)}%,var(--bar-bg) ${Math.round((flashMs-50)/2950*100)}%)`}} className="flex-1"/><span className="tabular-nums text-xs w-12 shrink-0 text-right">{flashMs}ms</span></div>);
         return null;
       })();
 
@@ -809,7 +805,7 @@
       const [settingsOpen,setSettingsOpen]=useState(false);
       const settingsRef=useRef(null);
       const settingsPopoverRef=useRef(null);
-      useEffect(()=>{if(!settingsOpen)return;const h=e=>{const inBtn=settingsRef.current&&settingsRef.current.contains(e.target);const inPop=settingsPopoverRef.current&&settingsPopoverRef.current.contains(e.target);if(!inBtn&&!inPop)setSettingsOpen(false);};document.addEventListener('mousedown',h);document.addEventListener('touchstart',h);return()=>{document.removeEventListener('mousedown',h);document.removeEventListener('touchstart',h);};},[settingsOpen]);
+      useEffect(()=>{if(!settingsOpen)return;const h=e=>{const inBtn=settingsRef.current&&settingsRef.current.contains(e.target);const inPop=settingsPopoverRef.current&&settingsPopoverRef.current.contains(e.target);const inSel=modeSelectRef.current&&modeSelectRef.current.contains(e.target);if(!inBtn&&!inPop&&!inSel)setSettingsOpen(false);};document.addEventListener('mousedown',h);document.addEventListener('touchstart',h);return()=>{document.removeEventListener('mousedown',h);document.removeEventListener('touchstart',h);};},[settingsOpen]);
       const DARK_THEMES=[{id:'dusk',name:'Dusk'},{id:'midnight',name:'Midnight'},{id:'nebula',name:'Nebula'}];
       const LIGHT_THEMES=[{id:'light',name:'Light'},{id:'parchment',name:'Parchment'}];
       const ALL_THEMES_LABELED=[{id:'dusk',name:'Dusk (dark)'},{id:'midnight',name:'Midnight (dark)'},{id:'nebula',name:'Nebula (dark)'},{id:'light',name:'Light (light)'},{id:'parchment',name:'Parchment (light)'}];
@@ -972,7 +968,7 @@
           </GuideSection>
           <GuideSection id="range" title="Year Range" openId={open} onToggle={toggle}><p>Set via the ⚙ settings menu. Controls which years dates are drawn from. Defaults to 1–10000 AD. Changing the range resets the current round.</p></GuideSection>
           <GuideSection id="theme" title="Theme" openId={open} onToggle={toggle}><p>Five themes: Dusk (default dark navy), Midnight (true black with purple), Nebula (deep purple), Light (clean white), and Parchment (warm cream). Accessible from the ⚙ settings menu in any tab. Enable Use System Settings to match your device's light/dark mode automatically, with separate theme choices for each. Disable to pick one manually.</p></GuideSection>
-          <GuideSection id="dateformat" title="Date Format" openId={open} onToggle={toggle}><p>Set via the ⚙ settings menu. Choose Month First or Day First, and Written (e.g. January 1, 2000) or Numeric (e.g. 1/1/2000). Applies to all game modes, lookup results, and the Last Updated timestamp in settings. The lookup input format follows your order setting (month/day/year or day/month/year). The time in Last Updated is in 24-hour format.</p></GuideSection>
+          <GuideSection id="dateformat" title="Date Format" openId={open} onToggle={toggle}><p>Set via the ⚙ settings menu. The Month First / Day First and Written / Numeric settings apply site-wide — to all game modes, lookup results, and the Last Updated timestamp. The lookup input also follows your order setting (month/day/year or day/month/year). The time in Last Updated is in 24-hour format.</p></GuideSection>
           <GuideSection id="julian" title="Julian Calendar" openId={open} onToggle={toggle}><p>Toggle via the ⚙ settings menu under Calendar System. Off by default. When on, dates on or before October 4, 1582 are treated as Julian calendar dates, which have different leap year rules — every year divisible by 4 is a leap year, with no century exception. This affects weekday calculation and the codes shown in Show Codes. October 5–14, 1582 are always excluded since those dates never existed; the Gregorian calendar skipped them to correct accumulated calendar drift.</p></GuideSection>
           <Divider label="Modes"/>
           <GuideSection id="classic" title="Classic" openId={open} onToggle={toggle}><p>The main practice mode with no time pressure. Answer at your own pace. Override works after both wrong and correct answers.</p></GuideSection>
@@ -1046,6 +1042,7 @@
       const [calcOpenByEntry,setCalcOpenByEntry]=React.useState({});
       const sco=typeof onCalcOpenChange==="function"?next=>{onCalcOpenChange(!!next);if(sid)setCalcOpenByEntry(prev=>({...prev,[sid]:!!next}));}:()=>{};
       const lastLookupRef=React.useRef(null);
+      const lookupInputRef=React.useRef(null);
       function isLeapL(y){y=y>0?y:1-Math.abs(y);return y%400===0||(y%4===0&&y%100!==0);}
       function dimL(y,m,julian=false){const leap=julian?(y%4===0):isLeapL(y);return m===2?(leap?29:28):[4,6,9,11].includes(m)?30:31;}
       function wdayL(y,m,d){function jdn(y,m,d){const a=Math.floor((14-m)/12),y2=y+4800-a,m2=m-3+12*a;return d+Math.floor((153*m2+2)/5)+365*y2+Math.floor(y2/4)-Math.floor(y2/100)+Math.floor(y2/400)-32045;}return((jdn(y>0?y:1-Math.abs(y),m,d)+1)%7+7)%7;}
@@ -1053,34 +1050,34 @@
         const s=li.trim();
         const dayFirst=dateOrder==='day-first';
         const match=/^(\d{1,2})\/(\d{1,2})\/(\d{1,5})$/.exec(s);
-        if(!match){ssid(null);slo(`Enter date as ${dayFirst?'day/month':'month/day'}/year, e.g. ${dayFirst?'4/7':'7/4'}/1776.`);return;}
+        if(!match){ssid(null);slo(`Enter date as ${dayFirst?'day/month':'month/day'}/year, e.g. ${dayFirst?'4/7':'7/4'}/1776.`);lookupInputRef.current?.focus();return;}
         let mm,dd;
         if(dayFirst){dd=+match[1];mm=+match[2];}else{mm=+match[1];dd=+match[2];}
         let yy=+match[3];
-        if(yy<1||yy>10000){ssid(null);slo("Year must be between 1 and 10000.");return;}
-        if(mm<1||mm>12){ssid(null);slo("Month must be 1–12.");return;}
+        if(yy<1||yy>10000){ssid(null);slo("Year must be between 1 and 10000.");lookupInputRef.current?.focus();return;}
+        if(mm<1||mm>12){ssid(null);slo("Month must be 1–12.");lookupInputRef.current?.focus();return;}
         const existing=entries.find(e=>e.y===yy&&e.m===mm&&e.d===dd);
         if(existing){
           if(onMoveHistory)onMoveHistory(existing.id);
           slo(existing.result);ssid(existing.id);
           if(existing.isGap){scd(null);sco(false);}else scd({y:yy,m:mm,d:dd});
-          lastLookupRef.current=s;return;
+          lastLookupRef.current=s;lookupInputRef.current?.blur();return;
         }
         if(isGapDate(yy,mm,dd)){
           const gapMsg="October 5–14, 1582 never existed. When the Gregorian calendar was adopted, 10 days were skipped to correct accumulated calendar drift.";
           const displayDate=`${MONTH[mm-1]} ${dd}, ${yy}`;
           const entry={id:`${Date.now().toString(36)}-${Math.random().toString(36).slice(2,8)}`,label:displayDate,weekday:"Does Not Exist",result:gapMsg,y:yy,m:mm,d:dd,isGap:true};
-          lastLookupRef.current=s;slo(gapMsg);scd(null);ssid(entry.id);sco(false);if(onAddHistory)onAddHistory(entry);return;
+          lastLookupRef.current=s;slo(gapMsg);scd(null);ssid(entry.id);sco(false);if(onAddHistory)onAddHistory(entry);lookupInputRef.current?.blur();return;
         }
         const julian=useJulian&&isJulianDate(yy,mm,dd);
         const maxd=dimL(yy,mm,julian);
-        if(dd<1||dd>maxd){ssid(null);slo(`Day must be 1–${maxd} for ${MONTH[mm-1]}.`);return;}
+        if(dd<1||dd>maxd){ssid(null);slo(`Day must be 1–${maxd} for ${MONTH[mm-1]}.`);lookupInputRef.current?.focus();return;}
         const wd=julian?wdayJulian(yy,mm,dd):wdayL(yy,mm,dd);
         const d=DAY[wd];
         const displayDate=fmtDate?fmtDate(yy,mm,dd):`${MONTH[mm-1]} ${dd}, ${yy}`;
         const rt=`${displayDate} is a ${d}.`;
         const entry={id:`${Date.now().toString(36)}-${Math.random().toString(36).slice(2,8)}`,label:displayDate,weekday:d,result:rt,y:yy,m:mm,d:dd};
-        lastLookupRef.current=s;slo(rt);scd({y:yy,m:mm,d:dd});ssid(entry.id);sco(false);if(onAddHistory)onAddHistory(entry);
+        lastLookupRef.current=s;slo(rt);scd({y:yy,m:mm,d:dd});ssid(entry.id);sco(false);if(onAddHistory)onAddHistory(entry);lookupInputRef.current?.blur();
       }
       function clearLookup(){sli("");slo("");scd(null);ssid(null);sco(false);lastLookupRef.current=null;}
       const entries=Array.isArray(history)?history:[];
@@ -1094,8 +1091,8 @@
         <div className="mt-1 space-y-4">
           <div className="rounded-2xl panel p-4 space-y-4">
             <div className="flex flex-wrap items-stretch gap-2">
-              <input value={li} onChange={e=>sli(e.target.value)} placeholder={dayFirst?"e.g., 4/7/1776":"e.g., 7/4/1776"} className="panel rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-400 flex-1 min-w-0"/>
-              <button type="button" onClick={runLookup} className="px-4 py-2 rounded-xl btn-solid text-sm font-medium">Lookup</button>
+              <input ref={lookupInputRef} value={li} onChange={e=>sli(e.target.value)} placeholder={dayFirst?"e.g., 4/7/1776":"e.g., 7/4/1776"} className="panel rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-400 flex-1 min-w-0"/>
+              <button type="button" onClick={runLookup} onMouseDown={e=>e.preventDefault()} className="px-4 py-2 rounded-xl btn-solid text-sm font-medium">Lookup</button>
               <button type="button" onClick={clearLookup} onMouseDown={e=>e.preventDefault()} className="px-4 py-2 rounded-xl bg-zinc-700 text-white text-sm font-medium">Clear</button>
             </div>
             {displayNote&&<div className="text-sm text-purple-100/90">{displayNote}</div>}
