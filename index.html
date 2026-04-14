@@ -61,11 +61,11 @@
     [data-theme="parchment"] .text-white\/90,[data-theme="light"] .text-white\/90{color:var(--mut-color)!important}
     [data-theme="parchment"] .bg-purple-500\/20,[data-theme="light"] .bg-purple-500\/20{background-color:rgba(120,53,175,.2)!important}
     [data-theme="parchment"] .border-purple-500\/40,[data-theme="light"] .border-purple-500\/40{border-color:rgba(120,53,175,.3)!important}
-    input[type="range"]{-webkit-appearance:none;appearance:none;height:4px;border-radius:2px;border:none;outline:none;background:linear-gradient(to right,#7c3aed var(--rng-fill,50%),var(--bar-bg) var(--rng-fill,50%));}
-    input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:36px;height:22px;border-radius:11px;background:#fff;cursor:pointer;border:none;box-shadow:0 2px 4px rgba(0,0,0,.2);margin-top:-9px;}
-    input[type="range"]::-moz-range-thumb{width:36px;height:22px;border-radius:11px;background:#fff;cursor:pointer;border:none;box-shadow:0 2px 4px rgba(0,0,0,.2);}
-    input[type="range"]::-webkit-slider-runnable-track{height:4px;border-radius:2px;}
-    input[type="range"]::-moz-range-track{height:4px;border-radius:2px;background:transparent;}
+    input[type="range"]{-webkit-appearance:none;appearance:none;height:5px;border-radius:3px;border:none;outline:none;background:linear-gradient(to right,#a855f7 0%,#7c3aed var(--rng-fill,50%),var(--panel-bd) var(--rng-fill,50%));}
+    input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;height:28px;border-radius:11px;background:#fff;cursor:pointer;border:none;box-shadow:0 0.5px 4px rgba(0,0,0,.3);margin-top:-11.5px;}
+    input[type="range"]::-moz-range-thumb{width:22px;height:28px;border-radius:11px;background:#fff;cursor:pointer;border:none;box-shadow:0 0.5px 4px rgba(0,0,0,.3);}
+    input[type="range"]::-webkit-slider-runnable-track{height:5px;border-radius:3px;}
+    input[type="range"]::-moz-range-track{height:5px;border-radius:3px;background:transparent;}
     input[type="range"]:disabled{opacity:.4;cursor:not-allowed;}
   </style>
 </head>
@@ -165,7 +165,7 @@
 
 
 
-    const DEPLOY_TS=new Date('2026-04-14T07:50:00Z');
+    const DEPLOY_TS=new Date('2026-04-14T20:50:00Z');
 
     function StatPanel({stats}){
       return(
