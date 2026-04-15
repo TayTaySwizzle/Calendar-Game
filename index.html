@@ -167,7 +167,7 @@
 
 
 
-    const DEPLOY_TS=new Date('2026-04-15T07:43:00Z');
+    const DEPLOY_TS=new Date('2026-04-15T20:20:00Z');
 
     function StatPanel({stats}){
       return(
@@ -200,6 +200,7 @@
       const markAoxCorrect=idx=>setAoxPersistBtns(prev=>{const next={...prev};for(const k in next){if(next[k]==='wrong-latest')next[k]='wrong-prev';}next[idx]='correct';return next;});
       const resetAoxPB=()=>setAoxPersistBtns({});
       const [codesOpen,setCodesOpen]=useState(false);
+      const [aoxCodesInstant,setAoxCodesInstant]=useState(false);
       const [canOverrideCorrect,setCanOverrideCorrect]=useState(false);
       const tStartRef=useRef(null);
       const wrongTimeRef=useRef(null);
@@ -235,12 +236,14 @@
 
       function reset(){setRunPhase("idle");setDisplayN(n);setShown(false);setInBackMode(false);setAoxStack([]);setAoxForwardStack([]);setTimes([]);setStreak(0);setBestStreak(0);setAttempts(0);setGuesses([]);setMsg("");setFlash(null);resetAoxPB();setCodesOpen(false);setCanOverrideCorrect(false);setQuestionCounted(false);setPendingWrongCredit(null);setOverrideUsedAox(false);setAoxBackDepth(0);setDate(randomDate(minY,maxY));tStartRef.current=null;wrongTimeRef.current=null;prevTimesSnapRef.current=null;prevStreakSnapRef.current=null;prevBestSnapRef.current=null;}
       useEffect(()=>{if(!visible&&(runPhase==="running"||runPhase==="failed"))reset();},[visible]);
+      useEffect(()=>{if(aoxCodesInstant){const t=setTimeout(()=>setAoxCodesInstant(false),50);return()=>clearTimeout(t);}},[aoxCodesInstant]);
       function startOrContinue(){
         if(runPhase==="idle"){setRunPhase("running");setDisplayN(n);setShown(true);tStartRef.current=performance.now();}
         else if(inBackMode){setInBackMode(false);setAoxForwardStack([]);const nd=randomDate(minY,maxY);setDate(nd);setMsg("");setGuesses([]);resetAoxPB();setCodesOpen(false);wrongTimeRef.current=null;setCanOverrideCorrect(false);setQuestionCounted(false);setPendingWrongCredit(null);setOverrideUsedAox(false);setAoxBackDepth(0);if(oneByOne){setShown(false);tStartRef.current=null;}else{setShown(true);tStartRef.current=performance.now();}}
         else if(isRunning&&!shown){setShown(true);setGuesses([]);setMsg("");tStartRef.current=performance.now();wrongTimeRef.current=null;setCanOverrideCorrect(false);setQuestionCounted(false);setPendingWrongCredit(null);}
       }
       function goBackAox(){if(backDisabled)return;const prevEntry=aoxStack[aoxStack.length-1];
+        if(codesOpen){setCodesOpen(false);setAoxCodesInstant(true);}
         // Save current view to aox forward stack
         const fwdHC=!inBackMode?computeHCAox(aoxPersistBtns):aoxBrowseHasCredit;
         const fwdEntry={...date,btns:{...aoxPersistBtns},overrideUsed:overrideUsedAox,capsule:{snapshot:prevTimesSnapRef.current?[...prevTimesSnapRef.current]:null,streakSnap:prevStreakSnapRef.current?{...prevStreakSnapRef.current}:null,wrongTime:wrongTimeRef.current,canOverrideCorrect,questionCounted,pendingWrongCredit},isLive:!inBackMode,liveCodesOpen:codesOpen,hasCredit:fwdHC};
@@ -257,6 +260,7 @@
       }
       function goForwardAox(){
         const fwd=aoxForwardStack[aoxForwardStack.length-1];if(!fwd)return;
+        if(codesOpen){setCodesOpen(false);setAoxCodesInstant(true);}
         setAoxForwardStack(s=>s.slice(0,-1));
         // Push current browsed entry back to aoxStack
         const capsule={snapshot:prevTimesSnapRef.current?[...prevTimesSnapRef.current]:null,streakSnap:prevStreakSnapRef.current?{...prevStreakSnapRef.current}:null,wrongTime:wrongTimeRef.current};
@@ -446,7 +450,8 @@
             </div>
           </div>
           <div className="mt-4 rounded-2xl panel p-4">
-            <div className="text-center">
+            <div className="text-center relative">
+              {inBackMode&&<span className="absolute right-0 top-0 text-[11px] tabular-nums text-purple-300/60">Q{aoxStack.length+1}</span>}
               <div className="text-xs uppercase tracking-widest text-purple-100/80">What Day Is This?</div>
               <div className="mt-1 text-3xl font-bold">{dateVisible?fmtDate(date.y,date.m,date.d):"—"}</div>
             </div>
@@ -458,14 +463,14 @@
             <div className="grid grid-cols-4 gap-2">
               {primaryBtn}
               <div className="col-span-1 flex gap-1">
-                <button type="button" className={`flex-1 px-1 py-2 rounded-xl border surface-button text-sm font-medium flex items-center justify-center ${backDisabled?"opacity-60 pointer-events-none":""}`} onClick={goBackAox}><span style={{position:'relative',top:'-0.5px'}}>&lt;</span></button>
-                <button type="button" className={`flex-1 px-1 py-2 rounded-xl border surface-button text-sm font-medium flex items-center justify-center ${aoxForwardStack.length===0?"opacity-60 pointer-events-none":""}`} onClick={goForwardAox}><span style={{position:'relative',top:'-0.5px'}}>&gt;</span></button>
+                <button type="button" className={`flex-1 px-1 py-2 rounded-xl border surface-button text-sm font-medium flex items-center justify-center ${backDisabled?"opacity-60 pointer-events-none":""}`} onClick={goBackAox}><span style={{position:'relative',top:'-1.5px'}}>&lt;</span></button>
+                <button type="button" className={`flex-1 px-1 py-2 rounded-xl border surface-button text-sm font-medium flex items-center justify-center ${aoxForwardStack.length===0?"opacity-60 pointer-events-none":""}`} onClick={goForwardAox}><span style={{position:'relative',top:'-1.5px'}}>&gt;</span></button>
               </div>
               <button type="button" className={`col-span-1 px-3 py-2 rounded-xl border surface-button text-sm font-medium text-center ${revealLocked?"opacity-60 pointer-events-none":""}`} onClick={revealAnswer}>Reveal</button>
               <button type="button" className={`col-span-1 px-3 py-2 rounded-xl border surface-button text-sm font-medium text-center ${!overrideAvail?"opacity-60 pointer-events-none":""}`} onClick={handleOverride}>Override</button>
             </div>
             <button type="button" className={`w-full px-4 py-2 rounded-xl btn-solid text-sm font-medium ${codesDisabled&&!inBackMode?"opacity-60 pointer-events-none":""}`} onClick={openCodes}>{codesOpen?"Hide Codes":"Show Codes"}</button>
-            <Expander open={codesOpen}><div className="pt-2 pb-1 rounded-2xl thin p-4"><MethodExplanation date={date} useJulian={useJulian}/></div></Expander>
+            <Expander open={codesOpen} instant={aoxCodesInstant}><div className="pt-2 pb-1 rounded-2xl thin p-4"><MethodExplanation date={date} useJulian={useJulian}/></div></Expander>
           </div>
         </div>
       );
@@ -560,6 +565,7 @@
       const resetPB=()=>setPersistBtns({});
       const [blitzBest,setBlitzBest]=useState({});
       const [suddenBest,setSuddenBest]=useState({});
+      const suddenBestSnapRef=useRef(null);
       const [blitzSec,setBlitzSec]=useState(60),[blitzRemain,setBlitzRemain]=useState(60),[blitzRunning,setBlitzRunning]=useState(false);
       const blitzStartRef=useRef(null),blitzPausedAtRef=useRef(null),blitzPausedAccRef=useRef(0);
       const blitzRemainRef=useRef(60);
@@ -615,7 +621,7 @@
         const loop=()=>{
           const now=performance.now();
           if(blitzRunning&&blitzStartRef.current){const t=(now-blitzStartRef.current-blitzPausedAccRef.current)/1000;const r=Math.max(0,blitzSec-t);blitzRemainRef.current=r;if(blitzBarRef.current)blitzBarRef.current.style.width=Math.max(0,Math.min(100,(r/blitzSec)*100))+"%";if(blitzTimeRef.current)blitzTimeRef.current.textContent=Math.ceil(r)+"s";if(r<=.001){setBlitzRunning(false);blitzStartRef.current=null;blitzPausedAtRef.current=null;blitzPausedAccRef.current=0;setActive(false);setShowTimerDate(true);setTimerDone(true);markCorrect(correctRef.current);setLocked(true);}}
-          if(mode==="sudden"&&qDeadlineRef.current){const r=Math.max(0,(qDeadlineRef.current+qPausedAccRef.current-now)/1000);if(suddenBarRef.current)suddenBarRef.current.style.width=(qSec>0?Math.max(0,Math.min(100,(r/qSec)*100)):100)+"%";if(suddenTimeRef.current)suddenTimeRef.current.textContent=Math.ceil(r)+"s";if(r<=.001){qDeadlineRef.current=null;qPausedAtRef.current=null;qPausedAccRef.current=0;updateStats(c=>{c.played+=1;c.streak=0;});markCorrect(correctRef.current);setActive(false);setShowTimerDate(true);setTimerDone(true);}}
+          if(mode==="sudden"&&qDeadlineRef.current){const r=Math.max(0,(qDeadlineRef.current+qPausedAccRef.current-now)/1000);if(suddenBarRef.current)suddenBarRef.current.style.width=(qSec>0?Math.max(0,Math.min(100,(r/qSec)*100)):100)+"%";if(suddenTimeRef.current)suddenTimeRef.current.textContent=Math.ceil(r)+"s";if(r<=.001){qDeadlineRef.current=null;qPausedAtRef.current=null;qPausedAccRef.current=0;updateStats(c=>{c.played+=1;c.streak=0;});markCorrect(correctRef.current);setActive(false);setShowTimerDate(true);setTimerDone(true);setCanOverrideCorrect(false);setPendingWrongOverride(null);}}
           if(mode==="flash"&&active&&flashPhase==="show"&&flashDeadlineRef.current)setFlashRemainMs(Math.max(0,flashDeadlineRef.current-now));
           raf=requestAnimationFrame(loop);
         };
@@ -669,6 +675,7 @@
       function goBack(){
         if(mode==="deduction"){
           const prev=dedStack[dedStack.length-1];if(!prev)return;
+          if(calcOpen){setCalcOpen(false);setCalcInstantClose(true);}
           // Save current view to forward stack
           const fwdCapsule={snapshot:prevStatsSnapshotRef.current?{...prevStatsSnapshotRef.current}:null,wrongTime:wrongTimeRef.current};
           const fwdHC=backDepth===0?computeHasCredit(persistBtns):browseHasCredit;
@@ -687,6 +694,7 @@
           setOverrideUsedThisQ(prev.overrideUsed||false);setBackDepth(d=>d+1);setBrowseHasCredit(prev.hasCredit??computeHasCredit(prev.btns));return;
         }
         const prev=stack[stack.length-1];if(!prev)return;
+        if(calcOpen){setCalcOpen(false);setCalcInstantClose(true);}
         // Save current view to forward stack
         const fwdCapsule={snapshot:prevStatsSnapshotRef.current?{...prevStatsSnapshotRef.current}:null,wrongTime:wrongTimeRef.current};
         const fwdHC=backDepth===0?computeHasCredit(persistBtns):browseHasCredit;
@@ -706,6 +714,7 @@
       function goForward(){
         if(mode==="deduction"){
           const fwd=dedForwardStack[dedForwardStack.length-1];if(!fwd)return;
+          if(calcOpen){setCalcOpen(false);setCalcInstantClose(true);}
           setDedForwardStack(s=>s.slice(0,-1));
           // Push current browsed entry back to dedStack
           const capsule={snapshot:prevStatsSnapshotRef.current?{...prevStatsSnapshotRef.current}:null,wrongTime:wrongTimeRef.current};
@@ -731,6 +740,7 @@
           setBackDepth(d=>Math.max(0,d-1));return;
         }
         const fwd=forwardStack[forwardStack.length-1];if(!fwd)return;
+        if(calcOpen){setCalcOpen(false);setCalcInstantClose(true);}
         setForwardStack(s=>s.slice(0,-1));
         // Push current browsed entry back to stack
         const capsule={snapshot:prevStatsSnapshotRef.current?{...prevStatsSnapshotRef.current}:null,wrongTime:wrongTimeRef.current};
@@ -826,8 +836,8 @@
           if(mode==="blitz")setBlitzRoundStats(p=>({...p,good:p.good+1}));
           setCountedWrong(false);setCanOverrideCorrect(false);setGuesses([]);setMsg("");setLocked(false);setRevealed(false);setCalcPenalty(false);setCalcOpen(false);calcPenaltyStatesRef.current.set(mode,false);
           setFlash({type:"good",idx:mode==="deduction"?getDedCorrectIdx():correct});setTimeout(()=>setFlash(null),550);
-          if(isTimer(mode)){setActive(true);setShowTimerDate(false);if(mode==="blitz"){blitzStartRef.current=performance.now()-((blitzSec-blitzRemainRef.current)*1000);blitzPausedAccRef.current=0;setBlitzRunning(true);}if(mode==="sudden"){const now=performance.now();qDeadlineRef.current=now+qSec*1000;qPausedAccRef.current=0;qPausedAtRef.current=null;setQRemain(qSec);}if(mode==="flash"){setFlashPhase("show");clearTimeout(flashTimerRef.current);const now=performance.now();flashDeadlineRef.current=now+flashMs;setFlashRemainMs(flashMs);flashTimerRef.current=setTimeout(endFlashPhase,Math.max(50,flashMs));startFlashBar(flashMs);}}
-          const overrideBtns=mode==="deduction"?{[getDedCorrectIdx()]:'correct'}:{[correct]:'correct'};pushAndNext(overrideBtns);if(mode==="deduction")setDedStack(s=>{if(!s.length)return s;return[...s.slice(0,-1),{...s[s.length-1],overrideUsed:true}];});else setStack(s=>{if(!s.length)return s;return[...s.slice(0,-1),{...s[s.length-1],overrideUsed:true}];});return;
+          if(isTimer(mode)){setActive(true);setShowTimerDate(false);if(mode==="blitz"){blitzStartRef.current=performance.now()-((blitzSec-blitzRemainRef.current)*1000);blitzPausedAccRef.current=0;setBlitzRunning(true);}if(mode==="sudden"){setTimerDone(false);if(suddenBestSnapRef.current&&suddenBestSnapRef.current.key===qSec){setSuddenBest(prev=>({...prev,[qSec]:suddenBestSnapRef.current.prev}));suddenBestSnapRef.current=null;}const now=performance.now();qDeadlineRef.current=now+qSec*1000;qPausedAccRef.current=0;qPausedAtRef.current=null;setQRemain(qSec);}if(mode==="flash"){setFlashPhase("show");clearTimeout(flashTimerRef.current);const now=performance.now();flashDeadlineRef.current=now+flashMs;setFlashRemainMs(flashMs);flashTimerRef.current=setTimeout(endFlashPhase,Math.max(50,flashMs));startFlashBar(flashMs);}}
+          const overrideBtns=mode==="deduction"?{[getDedCorrectIdx()]:'correct'}:{[correct]:'correct'};pushAndNext(overrideBtns);if(mode==="deduction")setDedStack(s=>{if(!s.length)return s;return[...s.slice(0,-1),{...s[s.length-1],overrideUsed:true}];});else setStack(s=>{if(!s.length)return s;return[...s.slice(0,-1),{...s[s.length-1],overrideUsed:true}];});setPendingWrongOverride(null);return;
         }
         if(pendingWrongOverride!=null){
           const {wrongTime,snapshot}=pendingWrongOverride;
@@ -899,10 +909,10 @@
       function submitDedAnswer(val,index){
         if(!ded||locked)return;
         const sctn=()=>{const ci=getDedCorrectIdx();const dedBtns=mkBtnsWithCorrect(persistBtns,ci);const capsule={snapshot:prevStatsSnapshotRef.current?{...prevStatsSnapshotRef.current}:null,wrongTime:wrongTimeRef.current};setDedStack(s=>ded?[...s,{...ded,btns:dedBtns,overrideUsed:false,capsule,hasCredit:computeHasCredit(dedBtns)}]:s);setDedForwardStack([]);spawnDed();setMsg("");setGuesses([]);setCountedWrong(false);setCanOverrideCorrect(false);setLocked(false);setRevealed(false);setOverrideUsedThisQ(false);setBackDepth(0);wrongTimeRef.current=null;prevStatsSnapshotRef.current=null;resetPB();};
-        const sw=(label,idx)=>{if(!countedWrong){wrongTimeRef.current=tStartRef.current?(performance.now()-tStartRef.current)/1000:null;prevStatsSnapshotRef.current=null;}markWrong(idx);setGuesses(g=>g.includes(label)?g:[...g,label]);setCountedWrong(true);setCanOverrideCorrect(false);};
-        if(ded.type==="year"){const ok=(+val)===ded.y;flashDed("year",index,ok);if(ok){if(!countedWrong){prevStatsSnapshotRef.current={played:S.played,good:S.good,streak:S.streak,best:S.best,timesLen:S.times.length,blitzPlayed:blitzRoundStats.played,blitzGood:blitzRoundStats.good,wasWrong:false};setCanOverrideCorrect(true);if(tStartRef.current){const dt=(performance.now()-tStartRef.current)/1000;updateStats(c=>{c.times=[...c.times,dt];});}}if(!countedWrong)updateStats(c=>{c.played+=1;c.good+=1;c.streak+=1;if(c.streak>c.best)c.best=c.streak;});sctn();}else{updateStats(c=>{c.played+=1;c.streak=0;});sw(fmtYear(+val),index);}}
-        if(ded.type==="month"){const ok=(+val)===ded.m;flashDed("month",index,ok);if(ok){if(!countedWrong){prevStatsSnapshotRef.current={played:S.played,good:S.good,streak:S.streak,best:S.best,timesLen:S.times.length,blitzPlayed:blitzRoundStats.played,blitzGood:blitzRoundStats.good,wasWrong:false};setCanOverrideCorrect(true);if(tStartRef.current){const dt=(performance.now()-tStartRef.current)/1000;updateStats(c=>{c.times=[...c.times,dt];});}}if(!countedWrong)updateStats(c=>{c.played+=1;c.good+=1;c.streak+=1;if(c.streak>c.best)c.best=c.streak;});sctn();}else{updateStats(c=>{c.played+=1;c.streak=0;});sw(MONTH[+val-1],index);}}
-        if(ded.type==="day"){const ok=(+val)===ded.d;flashDed("day",index,ok);if(ok){if(!countedWrong){prevStatsSnapshotRef.current={played:S.played,good:S.good,streak:S.streak,best:S.best,timesLen:S.times.length,blitzPlayed:blitzRoundStats.played,blitzGood:blitzRoundStats.good,wasWrong:false};setCanOverrideCorrect(true);if(tStartRef.current){const dt=(performance.now()-tStartRef.current)/1000;updateStats(c=>{c.times=[...c.times,dt];});}}if(!countedWrong)updateStats(c=>{c.played+=1;c.good+=1;c.streak+=1;if(c.streak>c.best)c.best=c.streak;});sctn();}else{updateStats(c=>{c.played+=1;c.streak=0;});sw(String(+val),index);}}
+        const sw=(label,idx)=>{if(!countedWrong){wrongTimeRef.current=tStartRef.current?(performance.now()-tStartRef.current)/1000:null;prevStatsSnapshotRef.current={played:S.played,good:S.good,streak:S.streak,best:S.best,timesLen:S.times.length,blitzPlayed:blitzRoundStats.played,blitzGood:blitzRoundStats.good,wasWrong:true};}markWrong(idx);setGuesses(g=>g.includes(label)?g:[...g,label]);setCountedWrong(true);setCanOverrideCorrect(false);};
+        if(ded.type==="year"){const ok=(+val)===ded.y;flashDed("year",index,ok);if(ok){if(!countedWrong){prevStatsSnapshotRef.current={played:S.played,good:S.good,streak:S.streak,best:S.best,timesLen:S.times.length,blitzPlayed:blitzRoundStats.played,blitzGood:blitzRoundStats.good,wasWrong:false};setCanOverrideCorrect(true);if(tStartRef.current){const dt=(performance.now()-tStartRef.current)/1000;updateStats(c=>{c.times=[...c.times,dt];});}}else if(countedWrong&&prevStatsSnapshotRef.current){setCanOverrideCorrect(true);}if(!countedWrong)updateStats(c=>{c.played+=1;c.good+=1;c.streak+=1;if(c.streak>c.best)c.best=c.streak;});sctn();}else{if(!countedWrong)updateStats(c=>{c.played+=1;c.streak=0;});sw(fmtYear(+val),index);}}
+        if(ded.type==="month"){const ok=(+val)===ded.m;flashDed("month",index,ok);if(ok){if(!countedWrong){prevStatsSnapshotRef.current={played:S.played,good:S.good,streak:S.streak,best:S.best,timesLen:S.times.length,blitzPlayed:blitzRoundStats.played,blitzGood:blitzRoundStats.good,wasWrong:false};setCanOverrideCorrect(true);if(tStartRef.current){const dt=(performance.now()-tStartRef.current)/1000;updateStats(c=>{c.times=[...c.times,dt];});}}else if(countedWrong&&prevStatsSnapshotRef.current){setCanOverrideCorrect(true);}if(!countedWrong)updateStats(c=>{c.played+=1;c.good+=1;c.streak+=1;if(c.streak>c.best)c.best=c.streak;});sctn();}else{if(!countedWrong)updateStats(c=>{c.played+=1;c.streak=0;});sw(MONTH[+val-1],index);}}
+        if(ded.type==="day"){const ok=(+val)===ded.d;flashDed("day",index,ok);if(ok){if(!countedWrong){prevStatsSnapshotRef.current={played:S.played,good:S.good,streak:S.streak,best:S.best,timesLen:S.times.length,blitzPlayed:blitzRoundStats.played,blitzGood:blitzRoundStats.good,wasWrong:false};setCanOverrideCorrect(true);if(tStartRef.current){const dt=(performance.now()-tStartRef.current)/1000;updateStats(c=>{c.times=[...c.times,dt];});}}else if(countedWrong&&prevStatsSnapshotRef.current){setCanOverrideCorrect(true);}if(!countedWrong)updateStats(c=>{c.played+=1;c.good+=1;c.streak+=1;if(c.streak>c.best)c.best=c.streak;});sctn();}else{if(!countedWrong)updateStats(c=>{c.played+=1;c.streak=0;});sw(String(+val),index);}}
       }
       useLayoutEffect(()=>{
         const prevMode=prevModeForSwitchRef.current;prevModeForSwitchRef.current=mode;
@@ -985,7 +995,7 @@
       const centerLastOpt=(index,total)=>{if(total<=0||index!==total-1)return"";return total%3===1?"col-span-3":"";};
       const timerSettingControl=(()=>{
         if(mode==="blitz")return(<div className="flex items-center gap-2"><input type="range" min="10" max="180" step="5" value={blitzSec} onChange={e=>{const v=+e.target.value;setBlitzSec(v);if(!active){setBlitzRemain(v);blitzRemainRef.current=v;if(blitzTimeRef.current)blitzTimeRef.current.textContent=v+"s";if(blitzBarRef.current)blitzBarRef.current.style.width="100%";}}} disabled={active||timerDone} style={{"--rng-fill":Math.round((blitzSec-10)/170*100)+"%"}} className="flex-1 disabled:opacity-40"/><span className="tabular-nums text-xs w-8 shrink-0 text-right">{blitzSec}s</span></div>);
-        if(mode==="sudden")return(<div className="flex items-center gap-2"><input type="range" min="3" max="20" step="1" value={qSec} onChange={e=>{const v=+e.target.value;setQSec(v);if(!active){setQRemain(v);if(suddenTimeRef.current)suddenTimeRef.current.textContent=v+"s";if(suddenBarRef.current)suddenBarRef.current.style.width="100%";}}} disabled={active||timerDone} style={{"--rng-fill":Math.round((qSec-3)/17*100)+"%"}} className="flex-1 disabled:opacity-40"/><span className="tabular-nums text-xs w-8 shrink-0 text-right">{qSec}s</span></div>);
+        if(mode==="sudden")return(<div className="flex items-center gap-2"><input type="range" min="1" max="20" step="1" value={qSec} onChange={e=>{const v=+e.target.value;setQSec(v);if(!active){setQRemain(v);if(suddenTimeRef.current)suddenTimeRef.current.textContent=v+"s";if(suddenBarRef.current)suddenBarRef.current.style.width="100%";}}} disabled={active||timerDone} style={{"--rng-fill":Math.round((qSec-1)/19*100)+"%"}} className="flex-1 disabled:opacity-40"/><span className="tabular-nums text-xs w-8 shrink-0 text-right">{qSec}s</span></div>);
         if(mode==="flash")return(<div className="flex items-center gap-2"><input type="range" min="50" max="3000" step="50" value={flashMs} onChange={e=>{const v=+e.target.value;setFlashMs(v);if(!active){setFlashRemainMs(v);resetFlashBar();}}} disabled={active} style={{"--rng-fill":Math.round((flashMs-50)/2950*100)+"%"}} className="flex-1 disabled:opacity-40"/><span className="tabular-nums text-xs w-12 shrink-0 text-right">{flashMs}ms</span></div>);
         return null;
       })();
@@ -994,7 +1004,7 @@
       const flashHiding=mode==="flash"&&active&&flashPhase==="hide";
       let timerBlocksReveal=false;
       if(isTimer(mode)){if(mode==="flash"){if(!showTimerDate){if(!active||flashPhase==="dash")timerBlocksReveal=true;else if(flashPhase==="show")timerBlocksReveal=true;else if(flashHiding)timerBlocksReveal=false;}}else timerBlocksReveal=!shouldShowTimerDate;}
-      const revealDisabled=(locked&&revealed)||calcOpen||calcPenaltyActive||timerBlocksReveal;
+      const revealDisabled=(locked&&revealed)||calcOpen||calcPenaltyActive||timerBlocksReveal||timerDone;
       const timerBusy=isTimer(mode)&&active;
       const overrideAvail=(countedWrong||canOverrideCorrect||pendingWrongOverride!=null)&&!overrideUsedThisQ;
       const calcTarget=useMemo(()=>{if(mode==="lookup"||mode==="guide"||mode==="aox")return null;if(isTimer(mode)&&!shouldShowTimerDate)return null;if(mode==="deduction")return ded?{y:ded.y,m:ded.m,d:ded.d}:null;return date;},[mode,shouldShowTimerDate,date?.y,date?.m,date?.d,ded?.y,ded?.m,ded?.d]);
@@ -1002,17 +1012,17 @@
       const lookupCalcTargetKey=lookupCalcDate?`${lookupCalcDate.y}-${lookupCalcDate.m}-${lookupCalcDate.d}`:"none";
       useEffect(()=>{if(calcInstantClose){const t=setTimeout(()=>setCalcInstantClose(false),50);return()=>clearTimeout(t);}},[calcInstantClose]);
       useEffect(()=>{const pm=prevModeRef.current;if(pm!==mode){prevModeRef.current=mode;return;}setCalcOpen(false);setCalcInstantClose(false);prevModeRef.current=mode;},[calcTargetKey,mode]);
-      const handleResetStats=()=>{resetStatsCurrent();if(mode==='blitz')setBlitzBest({});if(mode==='sudden')setSuddenBest({});doNew({skipInactiveMessage:true});};
+      const handleResetStats=()=>{resetStatsCurrent();if(mode==='blitz')setBlitzBest({});if(mode==='sudden')setSuddenBest({});setStack([]);setForwardStack([]);setDedStack([]);setDedForwardStack([]);setBackDepth(0);doNew({skipInactiveMessage:true});};
       const canHideStats=["classic","deduction","flash"].includes(mode);
       const effectiveStatsOff=canHideStats&&statsOff;
       const effectiveAvgVisOff=canHideStats&&avgVisOff;
       useEffect(()=>{
         if(!timerDone)return;
         if(mode==='blitz'){setBlitzBest(prev=>{const cur=prev[blitzSec]??{score:0,streak:0};const score=blitzRoundStats.good;const bstreak=blitzRoundStats.best;if(score===0&&bstreak===0)return prev;return{...prev,[blitzSec]:{score:Math.max(cur.score,score),streak:Math.max(cur.streak,bstreak)}};});}
-        if(mode==='sudden'){setSuddenBest(prev=>{const cur=prev[qSec]??{score:0};const score=S.good;if(score===0)return prev;return{...prev,[qSec]:{score:Math.max(cur.score,score)}};});}
+        if(mode==='sudden'){setSuddenBest(prev=>{const cur=prev[qSec]??{score:0};const score=S.good;if(score===0)return prev;suddenBestSnapRef.current={key:qSec,prev:{...cur}};return{...prev,[qSec]:{score:Math.max(cur.score,score)}};});}
       },[timerDone]);
       const applyCalcPenalty=()=>{setCalcPenalty(true);const roundOver=(mode==="blitz"||mode==="sudden")&&!active;const fp=!countedWrong&&!revealed;if(fp&&!roundOver){wrongTimeRef.current=tStartRef.current?(performance.now()-tStartRef.current)/1000:null;prevStatsSnapshotRef.current=null;preCalcPenaltySnapshotRef.current={played:S.played,good:S.good,streak:S.streak,best:S.best,timesLen:S.times.length,blitzPlayed:blitzRoundStats.played,blitzGood:blitzRoundStats.good};updateStats(c=>{c.played+=1;c.streak=0;});if(mode==="blitz")setBlitzRoundStats(p=>({...p,played:p.played+1,streak:0}));}if(mode==="deduction"&&ded){markCorrect(getDedCorrectIdx());}else if(mode!=="deduction")markCorrect(correct);if(isTimer(mode)&&active){setActive(false);setShowTimerDate(true);if(mode==="blitz"){setBlitzRunning(false);blitzStartRef.current=null;blitzPausedAtRef.current=null;blitzPausedAccRef.current=0;setTimerDone(true);}if(mode==="sudden"){qDeadlineRef.current=null;qPausedAtRef.current=null;qPausedAccRef.current=0;setTimerDone(true);}if(mode==="flash"){clearTimeout(flashTimerRef.current);flashTimerRef.current=null;setFlashPhase("dash");flashDeadlineRef.current=null;}}if(!revealed)setRevealed(true);if(!countedWrong){setCountedWrong(true);setCanOverrideCorrect(false);}};
-      const handleCalcOpenChange=next=>{if(next)applyCalcPenalty();setCalcOpen(next);};
+      const handleCalcOpenChange=next=>{if(next&&!(locked&&!revealed&&backDepth>0))applyCalcPenalty();setCalcOpen(next);};
       const showStats=mode!=="lookup"&&mode!=="guide"&&mode!=="aox";
       const sAvg=calcAvg(S.times),sLast=calcLast(S.times),sMed=calcMed(S.times);
       const [dateOrder,setDateOrder]=useState('month-first');
@@ -1082,7 +1092,7 @@
             <StatPanel stats={[
               {label:"Score",value:mode==="blitz"?`${blitzRoundStats.good}/${blitzRoundStats.played}`:`${S.good}/${S.played}`,off:effectiveStatsOff,fn:canHideStats?toggleStatsOff:null},
               {label:"Accuracy",value:S.played?`${(S.good/S.played*100).toFixed(1)}%`:"—",off:effectiveStatsOff,fn:canHideStats?toggleStatsOff:null},
-              {label:"Streak",value:`${S.streak}/${S.best}`,off:effectiveStatsOff||mode==="sudden",fn:canHideStats?toggleStatsOff:null},
+              ...(mode!=="sudden"?[{label:"Streak",value:`${S.streak}/${S.best}`,off:effectiveStatsOff,fn:canHideStats?toggleStatsOff:null}]:[]),
               {label:"Last",value:fmtTime(sLast),off:effectiveAvgVisOff,fn:canHideStats?toggleTimingVis:null},
               {label:"Average",value:fmtTime(sAvg),off:effectiveAvgVisOff,fn:canHideStats?toggleTimingVis:null},
               {label:"Median",value:fmtTime(sMed),off:effectiveAvgVisOff,fn:canHideStats?toggleTimingVis:null},
@@ -1104,7 +1114,8 @@
               {mode==="sudden"&&(<div className="mb-3"><div className="text-center text-xs tabular-nums text-purple-200/80 mb-1"><span ref={suddenTimeRef}>{qSec}s</span></div><div className="bar"><span ref={suddenBarRef} style={{width:"100%"}}></span></div></div>)}
               {mode==="flash"&&(<div className="mb-3"><div className="text-center text-xs tabular-nums text-purple-200/80 mb-1">{Math.round(flashRemainMs)}ms</div><div className="bar"><span ref={flashBarRef} style={{width:"100%"}}></span></div></div>)}
               <div className="mt-4 rounded-2xl panel p-4">
-                <div className="text-center">
+                <div className="text-center relative">
+                  {backDepth>0&&<span className="absolute right-0 top-0 text-[11px] tabular-nums text-purple-300/60">Q{stack.length+1}</span>}
                   <div className="text-xs uppercase tracking-widest text-purple-100/80">What Day Is This?</div>
                   <div className="mt-1 text-3xl font-bold">{shouldShowTimerDate?((mode==="flash"&&active&&flashPhase==="hide")?"…":fmtDate(date.y,date.m,date.d)):"—"}</div>
                 </div>
@@ -1116,8 +1127,8 @@
                 <div className="grid grid-cols-4 gap-2">
                   {isTimer(mode)?(active?(<button type="button" className="col-span-1 px-3 py-2 rounded-xl bg-rose-600/90 text-white text-sm font-medium" onClick={arm}>Reset</button>):timerDone?(<button type="button" className="col-span-1 px-3 py-2 rounded-xl bg-rose-600/90 text-white text-sm font-medium" onClick={arm}>Reset</button>):(<button type="button" className="col-span-1 px-3 py-2 rounded-xl btn-solid text-sm font-medium" onClick={begin}>Begin</button>)):(<button type="button" className="col-span-1 px-3 py-2 rounded-xl border surface-button text-sm font-medium" onClick={()=>doNew()}>New</button>)}
                   <div className="col-span-1 flex gap-1">
-                    <button type="button" className={`flex-1 px-1 py-2 rounded-xl border surface-button text-sm font-medium flex items-center justify-center ${(timerBusy||stack.length===0)?"opacity-60 pointer-events-none":""}`} onClick={goBack}><span style={{position:'relative',top:'-0.5px'}}>&lt;</span></button>
-                    <button type="button" className={`flex-1 px-1 py-2 rounded-xl border surface-button text-sm font-medium flex items-center justify-center ${(timerBusy||forwardStack.length===0)?"opacity-60 pointer-events-none":""}`} onClick={goForward}><span style={{position:'relative',top:'-0.5px'}}>&gt;</span></button>
+                    <button type="button" className={`flex-1 px-1 py-2 rounded-xl border surface-button text-sm font-medium flex items-center justify-center ${(timerBusy||stack.length===0)?"opacity-60 pointer-events-none":""}`} onClick={goBack}><span style={{position:'relative',top:'-1.5px'}}>&lt;</span></button>
+                    <button type="button" className={`flex-1 px-1 py-2 rounded-xl border surface-button text-sm font-medium flex items-center justify-center ${(timerBusy||forwardStack.length===0)?"opacity-60 pointer-events-none":""}`} onClick={goForward}><span style={{position:'relative',top:'-1.5px'}}>&gt;</span></button>
                   </div>
                   <button type="button" className={`col-span-1 px-3 py-2 rounded-xl border surface-button text-sm font-medium text-center ${revealDisabled?"opacity-60 pointer-events-none":""}`} onClick={reveal}>Reveal</button>
                   <button type="button" className={`col-span-1 px-3 py-2 rounded-xl border surface-button text-sm font-medium text-center ${!overrideAvail?"opacity-60 pointer-events-none":""}`} onClick={override}>Override</button>
@@ -1132,7 +1143,8 @@
                 {["day","month","year"].map(t=>(<button key={t} type="button" onClick={()=>changeDedType(t)} className={`px-3 py-1.5 rounded-xl text-sm font-medium border ${dedType===t?"btn-solid border-transparent text-white":"surface-toggle border-purple-800/60 text-purple-100/80"}`}>{t[0].toUpperCase()+t.slice(1)}</button>))}
               </div>
               <div className="mt-4 rounded-2xl panel p-4">
-                <div className="text-center">
+                <div className="text-center relative">
+                  {backDepth>0&&<span className="absolute right-0 top-0 text-[11px] tabular-nums text-purple-300/60">Q{dedStack.length+1}</span>}
                   <div className="text-xs uppercase tracking-widest text-purple-100/80">{dedType==="year"?"What Year Is This?":dedType==="month"?"What Month Is This?":"What Day Is This?"}</div>
                   <div className="mt-1 text-3xl font-bold">{ded?(ded.type==="year"?`${MONTH[ded.m-1]} ${ded.d}`:ded.type==="month"?`${ded.d}, ${fmtYear(ded.y)}`:`${MONTH[ded.m-1]}, ${fmtYear(ded.y)}`):"—"}</div>
                   {ded&&<div className="mt-1 text-lg text-purple-100">Weekday: <span className="font-semibold">{DAY[ded.w]}</span></div>}
@@ -1147,8 +1159,8 @@
                 <div className="grid grid-cols-4 gap-2">
                   <button type="button" className="col-span-1 px-3 py-2 rounded-xl border surface-button text-sm font-medium" onClick={runDeductionRound}>New</button>
                   <div className="col-span-1 flex gap-1">
-                    <button type="button" className={`flex-1 px-1 py-2 rounded-xl border surface-button text-sm font-medium flex items-center justify-center ${dedStack.length===0?"opacity-60 pointer-events-none":""}`} onClick={goBack}><span style={{position:'relative',top:'-0.5px'}}>&lt;</span></button>
-                    <button type="button" className={`flex-1 px-1 py-2 rounded-xl border surface-button text-sm font-medium flex items-center justify-center ${dedForwardStack.length===0?"opacity-60 pointer-events-none":""}`} onClick={goForward}><span style={{position:'relative',top:'-0.5px'}}>&gt;</span></button>
+                    <button type="button" className={`flex-1 px-1 py-2 rounded-xl border surface-button text-sm font-medium flex items-center justify-center ${dedStack.length===0?"opacity-60 pointer-events-none":""}`} onClick={goBack}><span style={{position:'relative',top:'-1.5px'}}>&lt;</span></button>
+                    <button type="button" className={`flex-1 px-1 py-2 rounded-xl border surface-button text-sm font-medium flex items-center justify-center ${dedForwardStack.length===0?"opacity-60 pointer-events-none":""}`} onClick={goForward}><span style={{position:'relative',top:'-1.5px'}}>&gt;</span></button>
                   </div>
                   <button type="button" className={`col-span-1 px-3 py-2 rounded-xl border surface-button text-sm font-medium text-center ${revealDisabled?"opacity-60 pointer-events-none":""}`} onClick={reveal}>Reveal</button>
                   <button type="button" className={`col-span-1 px-3 py-2 rounded-xl border surface-button text-sm font-medium text-center ${!overrideAvail?"opacity-60 pointer-events-none":""}`} onClick={override}>Override</button>
@@ -1178,14 +1190,14 @@
             <p><b>New</b> — load a fresh date. In timer modes, only available after pressing Begin.</p>
             <p><b>Back (&lt;)</b> — return to the previous date. The answer is shown and the card is locked. No stat penalty. You can go back through your entire history in Classic, Flash, and Deduction; in Blitz, Sudden Death, and AoX, you can browse the current round or run.</p>
             <p><b>Forward (&gt;)</b> — move forward through dates you've browsed past with Back. The forward history clears whenever you answer a new question, press New/Begin/Reset, or take any action that advances the date. Overriding while browsing back does not clear the forward history.</p>
-            <p><b>Reveal</b> — show the correct answer without guessing. Counts as a wrong attempt.</p>
+            <p><b>Reveal</b> — show the correct answer without guessing. Counts as a wrong attempt. No penalty on unanswered dates while browsing back.</p>
             <p><b>Override</b> — fix a mistake. You can override any date in your history by browsing to it with Back/Forward. After a wrong answer: gives you credit and adjusts your score. After a correct answer: undoes the credit and adjusts your score. You can only override once per question. Overriding a wrong answer while browsing back clears any wrong highlights; only the correct answer is shown. In Blitz and Sudden Death, you can override past dates after the round ends to adjust your score and saved bests. In AoX without Allow Mistakes, overriding a correct answer ends the run.</p>
-            <p><b>Show Codes</b> — reveals the calculation codes for the current date. Counts as wrong if you haven't already answered incorrectly. In AoX without Allow Mistakes, opening Show Codes ends the run.</p>
+            <p><b>Show Codes</b> — reveals the calculation codes for the current date. Counts as wrong if you haven't already answered incorrectly. No penalty on unanswered dates while browsing back. In AoX without Allow Mistakes, opening Show Codes ends the run.</p>
           </GuideSection>
           <GuideSection id="stats" title="Stats" openId={open} onToggle={toggle}>
             <p><b>Score</b> — correct first-try answers out of total attempts. In Blitz and Sudden Death, only the current round is shown. In AoX, shows correct answers out of total attempts; the run ends once correct answers reach the set number.</p>
             <p><b>Accuracy</b> — percentage of questions answered correctly on the first try. Shows — until your first attempt.</p>
-            <p><b>Streak</b> — your current consecutive correct streak / your longest in this session.</p>
+            <p><b>Streak</b> — your current consecutive correct streak / your best in this session.</p>
             <p><b>Last / Avg / Med</b> — timing stats, calculated using correct answers only. Last is your most recent correct time; Avg is the average across all correct answers; Med is the median, which is less skewed by outliers.</p>
             <p className="text-purple-300/70 text-[12px]">In modes designed for casual practice (Classic, Deduction, Flash), you can tap any stat to hide it. Tapping Score, Accuracy, or Streak hides all three; tapping any timing stat hides all three. Stats always track in the background regardless of visibility. Enabling timing stats resets all stats so the score and timing always reflect the same set of questions. In all other modes, stats are always visible.</p>
           </GuideSection>
@@ -1194,7 +1206,7 @@
           <GuideSection id="dateformat" title="Date Format" openId={open} onToggle={toggle}><p>Set via the ⚙ settings menu. The Month First / Day First and Written / Numeric settings apply site-wide — to all game modes, lookup results, and the Last Updated timestamp. The lookup input also follows your order setting (month/day/year or day/month/year). The time in Last Updated is in 24-hour format.</p></GuideSection>
           <GuideSection id="julian" title="Julian Calendar" openId={open} onToggle={toggle}><p>Toggle via the ⚙ settings menu under Calendar System. Off by default. When on, dates on or before October 4, 1582 are treated as Julian calendar dates, which have different leap year rules — every year divisible by 4 is a leap year, with no century exception. This affects weekday calculation and the codes shown in Show Codes. October 5–14, 1582 are always excluded since those dates never existed; the Gregorian calendar skipped them to correct accumulated calendar drift.</p></GuideSection>
           <Divider label="Modes"/>
-          <GuideSection id="classic" title="Classic" openId={open} onToggle={toggle}><p>The main practice mode with no time pressure. Answer at your own pace. Override works after both wrong and correct answers.</p></GuideSection>
+          <GuideSection id="classic" title="Classic" openId={open} onToggle={toggle}><p>The main practice mode with no time pressure. Answer at your own pace. Override works after both wrong and correct answers. Reset Stats clears your stats and question history.</p></GuideSection>
           <GuideSection id="aox" title="AoX" openId={open} onToggle={toggle}>
             <p>Average your times over a set number of correct solves (2–1000). The score shows correct answers out of total attempts; the run ends when correct answers reach your target. Press Begin to start a run.</p>
             <p><b>Allow Mistakes</b> — wrong answers don't end the run but don't count toward your score.</p>
@@ -1204,10 +1216,10 @@
             <p><b>Override</b> — after wrong: gives credit with time recorded, preserves streak. After correct: undoes the credit, resets streak, and either ends the run (Allow Mistakes off) or advances to a new date (Allow Mistakes on). You can also override past dates while browsing back with Back/Forward. If overriding on the last question with Allow Mistakes on, a new date is generated to complete the average. One override per question.</p>
             <p>Stats in AoX are always visible and always track. Best average and best median are tracked independently per n and Allow Mistakes combination — they can come from different runs. If you override a correct answer that set a new best, the best is also restored. The score display freezes when a run ends and only resets after pressing Reset.</p>
           </GuideSection>
-          <GuideSection id="deduction" title="Deduction" openId={open} onToggle={toggle}><p>Identify the missing piece of a date given the rest plus the weekday. Choose Day, Month, or Year mode. Each question has exactly one correct answer. Switch subtypes anytime — progress in each is preserved. Stats are tracked separately for each subtype (Day, Month, Year). Reset Stats only resets the current subtype.</p></GuideSection>
+          <GuideSection id="deduction" title="Deduction" openId={open} onToggle={toggle}><p>Identify the missing piece of a date given the rest plus the weekday. Choose Day, Month, or Year mode. Each question has exactly one correct answer. Switch subtypes anytime — progress in each is preserved. Stats are tracked separately for each subtype (Day, Month, Year). Reset Stats only resets the current subtype and clears its question history.</p></GuideSection>
           <GuideSection id="blitz" title="Blitz" openId={open} onToggle={toggle}><p>Answer as many dates as possible within the time limit (10s–180s, default 60s). Score shows correct answers for the current round only. When time runs out, the correct answer for the current date is highlighted and your bests are recorded. After the round ends, you can browse your round's history with Back/Forward and override past dates to adjust your score and saved bests. Best score and best streak are tracked independently per timer duration — they can come from different rounds. Press Reset to clear your stats and unlock the slider for the next round.</p></GuideSection>
-          <GuideSection id="sudden" title="Sudden Death" openId={open} onToggle={toggle}><p>Each question has its own countdown (3s–20s, default 5s). A wrong answer or running out of time ends the run and reveals the correct answer. Score shows your current run only. Streak is hidden in this mode since any wrong answer ends the run, making streak always equal to score. After the run ends, you can browse your history with Back/Forward and override past dates to adjust your score and saved best. Press Reset to clear your stats and unlock the slider for the next run.</p></GuideSection>
-          <GuideSection id="flash" title="Flash" openId={open} onToggle={toggle}><p>The date is briefly revealed (50ms–3000ms, default 500ms, adjustable via the slider) then hidden. Answer from memory.</p></GuideSection>
+          <GuideSection id="sudden" title="Sudden Death" openId={open} onToggle={toggle}><p>Each question has its own countdown (1s–20s, default 5s). A wrong answer or running out of time ends the run and reveals the correct answer. Score shows your current run only. Streak is not shown in this mode since any wrong answer ends the run, making streak always equal to score. After the run ends, you can browse your history with Back/Forward and override past dates to adjust your score and saved best. Overriding a wrong answer continues the run; the best score is only finalized when the run truly ends. Press Reset to clear your stats and unlock the slider for the next run.</p></GuideSection>
+          <GuideSection id="flash" title="Flash" openId={open} onToggle={toggle}><p>The date is briefly revealed (50ms–3000ms, default 500ms, adjustable via the slider) then hidden. Answer from memory. Reset Stats clears your stats and question history.</p></GuideSection>
           <GuideSection id="lookup" title="Lookup" openId={open} onToggle={toggle}><p>Enter any AD date as month/day/year (or day/month/year if Day First is selected) to instantly see its weekday. Supports years 1–10000. Show Codes is available for all results and stays open as you browse your history. The history panel shows up to 10 entries before scrolling. October 5–14, 1582 never existed and will appear in history as "Does Not Exist" with Show Codes unavailable.</p></GuideSection>
         </div>
       );
