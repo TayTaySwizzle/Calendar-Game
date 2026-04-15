@@ -167,7 +167,7 @@
 
 
 
-    const DEPLOY_TS=new Date('2026-04-14T22:05:00Z');
+    const DEPLOY_TS=new Date('2026-04-15T02:58:00Z');
 
     function StatPanel({stats}){
       return(
@@ -608,6 +608,7 @@
             if(mode==="blitz")setBlitzRoundStats(p=>({...p,played:u.blitzPlayed+1,good:u.blitzGood}));
           }
           prevStatsSnapshotRef.current=null;wrongTimeRef.current=null;setCanOverrideCorrect(false);setCountedWrong(true);
+          if(u.wasWrong){if(mode==="deduction"){setDedStack(s=>{if(!s.length)return s;const last=s[s.length-1];const ci=last.type==="year"?last.options.findIndex(y=>y===last.y):last.type==="month"?last.options.findIndex(m=>m===last.m):last.options.findIndex(d=>d===last.d);return[...s.slice(0,-1),{...last,btns:{[ci]:'correct'}}];});}else{setStack(s=>{if(!s.length)return s;const last=s[s.length-1];const wd=activeWday(last.y,last.m,last.d);return[...s.slice(0,-1),{...last,btns:{[wd]:'correct'}}];});}}
           if(!avgVisOff){pushAndNext();if(mode==="deduction")setDedStack(s=>{if(!s.length)return s;return[...s.slice(0,-1),{...s[s.length-1],overrideUsed:true}];});else setStack(s=>{if(!s.length)return s;return[...s.slice(0,-1),{...s[s.length-1],overrideUsed:true}];});}
           else{setGuesses([]);setMsg("");setLocked(false);setRevealed(false);setCalcPenalty(false);setCalcOpen(false);}
           return;
@@ -980,10 +981,10 @@
             <p><b>Last / Avg / Med</b> — tap any of these to show or hide all three time stats.</p>
             <p><b>Back</b> — review the previous date without affecting the run. Press Continue to resume. After a run completes, Back lets you browse all dates from that run; press Reset to start fresh.</p>
             <p><b>Override</b> — after wrong: gives credit with time recorded, preserves streak. After correct: undoes the credit, resets streak, and either ends the run (Allow Mistakes off) or advances to a new date (Allow Mistakes on). If overriding on the last question with Allow Mistakes on, a new date is generated to complete the average. One override per question; only available when viewing the immediately previous question.</p>
-            <p>Stats in AoX are always visible and always track. Best average and best median are tracked separately per n and Allow Mistakes combination. If you override a correct answer that set a new best, the best is also restored. The score display freezes when a run ends and only resets after pressing Reset.</p>
+            <p>Stats in AoX are always visible and always track. Best average and best median are tracked independently per n and Allow Mistakes combination — they can come from different runs. If you override a correct answer that set a new best, the best is also restored. The score display freezes when a run ends and only resets after pressing Reset.</p>
           </GuideSection>
           <GuideSection id="deduction" title="Deduction" openId={open} onToggle={toggle}><p>Identify the missing piece of a date given the rest plus the weekday. Choose Day, Month, or Year mode. Each question has exactly one correct answer. Switch subtypes anytime — progress in each is preserved.</p></GuideSection>
-          <GuideSection id="blitz" title="Blitz" openId={open} onToggle={toggle}><p>Answer as many dates as possible within the time limit (10s–180s, default 60s). Score shows correct answers for the current round only. When time runs out, the correct answer for the current date is highlighted and your bests are recorded. Best score and best streak are tracked separately per timer duration. Press Reset to clear your stats and unlock the slider for the next round.</p></GuideSection>
+          <GuideSection id="blitz" title="Blitz" openId={open} onToggle={toggle}><p>Answer as many dates as possible within the time limit (10s–180s, default 60s). Score shows correct answers for the current round only. When time runs out, the correct answer for the current date is highlighted and your bests are recorded. Best score and best streak are tracked independently per timer duration — they can come from different rounds. Press Reset to clear your stats and unlock the slider for the next round.</p></GuideSection>
           <GuideSection id="sudden" title="Sudden Death" openId={open} onToggle={toggle}><p>Each question has its own countdown (3s–20s, default 5s). A wrong answer or running out of time ends the run and reveals the correct answer. Score shows your current run only. Press Reset to clear your stats and unlock the slider for the next run.</p></GuideSection>
           <GuideSection id="flash" title="Flash" openId={open} onToggle={toggle}><p>The date is briefly revealed (50ms–3000ms, default 500ms, adjustable via the slider) then hidden. Answer from memory.</p></GuideSection>
           <GuideSection id="lookup" title="Lookup" openId={open} onToggle={toggle}><p>Enter any AD date as month/day/year (or day/month/year if Day First is selected) to instantly see its weekday. Supports years 1–10000. Show Codes is available for all results and stays open as you browse your history. The history panel shows up to 10 entries before scrolling. October 5–14, 1582 never existed and will appear in history as "Does Not Exist" with Show Codes unavailable.</p></GuideSection>
