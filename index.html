@@ -167,7 +167,7 @@
 
 
 
-    const DEPLOY_TS=new Date('2026-04-15T03:31:00Z');
+    const DEPLOY_TS=new Date('2026-04-15T04:58:00Z');
 
     function StatPanel({stats}){
       return(
@@ -449,8 +449,8 @@
             <div className="grid grid-cols-4 gap-2">
               {primaryBtn}
               <div className="col-span-1 flex gap-1">
-                <button type="button" className={`flex-1 px-1 py-2 rounded-xl border surface-button text-sm font-medium text-center ${backDisabled?"opacity-60 pointer-events-none":""}`} onClick={goBackAox}>&lt;</button>
-                <button type="button" className={`flex-1 px-1 py-2 rounded-xl border surface-button text-sm font-medium text-center ${aoxForwardStack.length===0?"opacity-60 pointer-events-none":""}`} onClick={goForwardAox}>&gt;</button>
+                <button type="button" className={`flex-1 px-1 py-2 rounded-xl border surface-button text-sm font-medium flex items-center justify-center ${backDisabled?"opacity-60 pointer-events-none":""}`} onClick={goBackAox}>&lt;</button>
+                <button type="button" className={`flex-1 px-1 py-2 rounded-xl border surface-button text-sm font-medium flex items-center justify-center ${aoxForwardStack.length===0?"opacity-60 pointer-events-none":""}`} onClick={goForwardAox}>&gt;</button>
               </div>
               <button type="button" className={`col-span-1 px-3 py-2 rounded-xl border surface-button text-sm font-medium text-center ${revealLocked?"opacity-60 pointer-events-none":""}`} onClick={revealAnswer}>Reveal</button>
               <button type="button" className={`col-span-1 px-3 py-2 rounded-xl border surface-button text-sm font-medium text-center ${!overrideAvail?"opacity-60 pointer-events-none":""}`} onClick={handleOverride}>Override</button>
@@ -578,7 +578,7 @@
       // #6 — removed prevLookupCalcKeyRef and its effect; lookup Show Codes now only closes
       // when runLookup() fires a new result or the user manually closes it.
       const pendingDedSwitchRef=useRef(null);
-      const prevModeRef=useRef(mode);const prevModeForSwitchRef=useRef(mode);const timerDoneSnapRef=useRef(null);const preservedByModeRef=useRef({});
+      const prevModeRef=useRef(mode);const prevModeForSwitchRef=useRef(mode);const timerDoneSnapRef=useRef(null);const preservedByModeRef=useRef({});const stacksByModeRef=useRef({});
       useEffect(()=>{const el=document.documentElement;if(mode==='guide'){el.style.overflow='auto';document.body.style.overflow='auto';}else{el.style.overflow='hidden';document.body.style.overflow='hidden';}return()=>{el.style.overflow='';document.body.style.overflow='';};},[mode]);
       useEffect(()=>{setShowTimerDate(false);},[mode]);
       const updateStats=mutator=>{setStatsByMode(prev=>{const ms={...(prev[mode]||blankStatsByEra())};const es={...(ms.AD||blankStats())};mutator(es);return{...prev,[mode]:{...ms,AD:es}};});};
@@ -735,16 +735,17 @@
           const u=prevStatsSnapshotRef.current;
           if(u.wasWrong){
             // Give credit for a previously wrong answer
-            updateStats(c=>{c.good+=1;});
-            if(mode==="blitz")setBlitzRoundStats(p=>({...p,good:p.good+1}));
+            updateStats(c=>{c.good+=1;c.streak=0;if(wrongTimeRef.current!=null&&trackingOn())c.times=[...c.times,wrongTimeRef.current];});
+            if(mode==="blitz")setBlitzRoundStats(p=>({...p,good:p.good+1,streak:0}));
             if(mode==="deduction")setPersistBtns({[getDedCorrectIdx()]:'correct'});
             else setPersistBtns({[correct]:'correct'});
           }else{
             // Undo credit for a previously correct answer
-            updateStats(c=>{c.good=Math.max(0,c.good-1);});
-            if(mode==="blitz")setBlitzRoundStats(p=>({...p,good:Math.max(0,p.good-1)}));
+            const tIdx=typeof u.timesLen==="number"?u.timesLen:null;
+            updateStats(c=>{c.good=Math.max(0,c.good-1);c.streak=0;if(tIdx!=null&&tIdx<c.times.length)c.times=[...c.times.slice(0,tIdx),...c.times.slice(tIdx+1)];});
+            if(mode==="blitz")setBlitzRoundStats(p=>({...p,good:Math.max(0,p.good-1),streak:0}));
             if(timerDone){
-              if(mode==='blitz')setBlitzBest(prev=>{const cur=prev[blitzSec];if(!cur)return prev;const ng=Math.max(0,blitzRoundStats.good-1);return cur.score===blitzRoundStats.good?{...prev,[blitzSec]:{...cur,score:ng}}:prev;});
+              if(mode==='blitz')setBlitzBest(prev=>{const cur=prev[blitzSec];if(!cur)return prev;const ng=Math.max(0,blitzRoundStats.good-1);const ns=0;return{...prev,[blitzSec]:{score:cur.score===blitzRoundStats.good?ng:cur.score,streak:cur.streak===blitzRoundStats.best?Math.min(cur.streak,blitzRoundStats.best):cur.streak}};});
               if(mode==='sudden')setSuddenBest(prev=>{const cur=prev[qSec];if(!cur)return prev;const ng=Math.max(0,S.good-1);return cur.score===S.good?{...prev,[qSec]:{score:ng}}:prev;});
             }
           }
@@ -856,7 +857,10 @@
       useLayoutEffect(()=>{
         const prevMode=prevModeForSwitchRef.current;prevModeForSwitchRef.current=mode;
         // === LEAVING prevMode ===
-        // Blitz/Sudden done state: save snap for restoration (mid-round exits → full reset via arm())
+        // Save stacks for all modes except mid-round blitz/sudden (which should reset)
+        const midRound=(prevMode==="blitz"||prevMode==="sudden")&&active&&!timerDone;
+        if(!midRound){stacksByModeRef.current[prevMode]={stack:[...stack],forwardStack:[...forwardStack],dedStack:[...dedStack],dedForwardStack:[...dedForwardStack],backDepth};}
+        // Blitz/Sudden done state: save snap for restoration
         const leavingTimerDone=(prevMode==="blitz"||prevMode==="sudden")&&timerDone;
         if(leavingTimerDone){
           const prevS=(statsByMode[prevMode]?.AD)||blankStats();
@@ -878,6 +882,7 @@
         const arrivedTimingOff=["classic","flash"].includes(mode)&&(avgVisOffByMode[mode]??false);
         const preservedQ=arrivedTimingOff?preservedByModeRef.current[mode]:null;
         const arrivedDedPreserve=mode==="deduction"&&(avgVisOffByMode["deduction"]??false)&&!!preservedByModeRef.current["deduction"];
+        const savedStacks=stacksByModeRef.current[mode];
         if(restoringTimerDone){
           // Slim reset (no stat wipe), then restore done state
           resetPB();setActive(false);setShowTimerDate(false);setMsg("");setGuesses([]);setFlash(null);
@@ -888,14 +893,20 @@
           clearTimeout(flashTimerRef.current);flashTimerRef.current=null;setFlashPhase("dash");
           flashDeadlineRef.current=null;setFlashRemainMs(flashMs);resetFlashBar();
           tStartRef.current=null;wrongTimeRef.current=null;prevStatsSnapshotRef.current=null;
-          setStack([]);setDedStack([]);setForwardStack([]);setDedForwardStack([]);setCalcOpen(false);
+          // Restore stacks from saved
+          if(savedStacks){setStack(savedStacks.stack);setForwardStack(savedStacks.forwardStack);setDedStack(savedStacks.dedStack);setDedForwardStack(savedStacks.dedForwardStack);setBackDepth(savedStacks.backDepth);}
+          else{setStack([]);setDedStack([]);setForwardStack([]);setDedForwardStack([]);}
+          setCalcOpen(false);
           setTimerDone(true);setBlitzRoundStats({...snap.blitzRoundStats});
           setStatsByMode(prev=>({...prev,[mode]:{...(prev[mode]||blankStatsByEra()),AD:{...snap.S}}}));
           setPersistBtns({...snap.persistBtns});setDate({...snap.date});
           setLocked(true);setShowTimerDate(true);
         } else {
           arm();
-          setGuesses([]);setStack([]);setDedStack([]);setForwardStack([]);setDedForwardStack([]);setMsg("");
+          // Restore stacks from saved, or clear
+          if(savedStacks){setStack(savedStacks.stack);setForwardStack(savedStacks.forwardStack);setDedStack(savedStacks.dedStack);setDedForwardStack(savedStacks.dedForwardStack);setBackDepth(savedStacks.backDepth);}
+          else{setStack([]);setForwardStack([]);setDedStack([]);setDedForwardStack([]);}
+          setGuesses([]);setMsg("");
           setLocked(false);setRevealed(false);setCanOverrideCorrect(false);
           wrongTimeRef.current=null;prevStatsSnapshotRef.current=null;
           if(mode==="deduction"){
@@ -1055,8 +1066,8 @@
                 <div className="grid grid-cols-4 gap-2">
                   {isTimer(mode)?(active?(<button type="button" className="col-span-1 px-3 py-2 rounded-xl bg-rose-600/90 text-white text-sm font-medium" onClick={arm}>Reset</button>):timerDone?(<button type="button" className="col-span-1 px-3 py-2 rounded-xl bg-rose-600/90 text-white text-sm font-medium" onClick={arm}>Reset</button>):(<button type="button" className="col-span-1 px-3 py-2 rounded-xl btn-solid text-sm font-medium" onClick={begin}>Begin</button>)):(<button type="button" className="col-span-1 px-3 py-2 rounded-xl border surface-button text-sm font-medium" onClick={()=>doNew()}>New</button>)}
                   <div className="col-span-1 flex gap-1">
-                    <button type="button" className={`flex-1 px-1 py-2 rounded-xl border surface-button text-sm font-medium text-center ${(timerBusy||stack.length===0)?"opacity-60 pointer-events-none":""}`} onClick={goBack}>&lt;</button>
-                    <button type="button" className={`flex-1 px-1 py-2 rounded-xl border surface-button text-sm font-medium text-center ${(timerBusy||forwardStack.length===0)?"opacity-60 pointer-events-none":""}`} onClick={goForward}>&gt;</button>
+                    <button type="button" className={`flex-1 px-1 py-2 rounded-xl border surface-button text-sm font-medium flex items-center justify-center ${(timerBusy||stack.length===0)?"opacity-60 pointer-events-none":""}`} onClick={goBack}>&lt;</button>
+                    <button type="button" className={`flex-1 px-1 py-2 rounded-xl border surface-button text-sm font-medium flex items-center justify-center ${(timerBusy||forwardStack.length===0)?"opacity-60 pointer-events-none":""}`} onClick={goForward}>&gt;</button>
                   </div>
                   <button type="button" className={`col-span-1 px-3 py-2 rounded-xl border surface-button text-sm font-medium text-center ${revealDisabled?"opacity-60 pointer-events-none":""}`} onClick={reveal}>Reveal</button>
                   <button type="button" className={`col-span-1 px-3 py-2 rounded-xl border surface-button text-sm font-medium text-center ${!overrideAvail?"opacity-60 pointer-events-none":""}`} onClick={override}>Override</button>
@@ -1086,8 +1097,8 @@
                 <div className="grid grid-cols-4 gap-2">
                   <button type="button" className="col-span-1 px-3 py-2 rounded-xl border surface-button text-sm font-medium" onClick={runDeductionRound}>New</button>
                   <div className="col-span-1 flex gap-1">
-                    <button type="button" className={`flex-1 px-1 py-2 rounded-xl border surface-button text-sm font-medium text-center ${dedStack.length===0?"opacity-60 pointer-events-none":""}`} onClick={goBack}>&lt;</button>
-                    <button type="button" className={`flex-1 px-1 py-2 rounded-xl border surface-button text-sm font-medium text-center ${dedForwardStack.length===0?"opacity-60 pointer-events-none":""}`} onClick={goForward}>&gt;</button>
+                    <button type="button" className={`flex-1 px-1 py-2 rounded-xl border surface-button text-sm font-medium flex items-center justify-center ${dedStack.length===0?"opacity-60 pointer-events-none":""}`} onClick={goBack}>&lt;</button>
+                    <button type="button" className={`flex-1 px-1 py-2 rounded-xl border surface-button text-sm font-medium flex items-center justify-center ${dedForwardStack.length===0?"opacity-60 pointer-events-none":""}`} onClick={goForward}>&gt;</button>
                   </div>
                   <button type="button" className={`col-span-1 px-3 py-2 rounded-xl border surface-button text-sm font-medium text-center ${revealDisabled?"opacity-60 pointer-events-none":""}`} onClick={reveal}>Reveal</button>
                   <button type="button" className={`col-span-1 px-3 py-2 rounded-xl border surface-button text-sm font-medium text-center ${!overrideAvail?"opacity-60 pointer-events-none":""}`} onClick={override}>Override</button>
