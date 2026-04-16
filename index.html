@@ -169,7 +169,7 @@
 
 
 
-    const DEPLOY_TS=new Date('2026-04-16T03:17:00Z');
+    const DEPLOY_TS=new Date('2026-04-16T04:15:00Z');
 
     function StatPanel({stats}){
       return(
@@ -922,21 +922,16 @@
       useLayoutEffect(()=>{
         const prevMode=prevModeForSwitchRef.current;prevModeForSwitchRef.current=mode;
         // === LEAVING prevMode ===
-        // Save stacks for all modes except mid-round blitz (which should reset)
-        const midRound=(prevMode==="blitz")&&active&&!timerDone;
-        if(!midRound){stacksByModeRef.current[prevMode]={stack:[...stack],forwardStack:[...forwardStack],dedStack:[...dedStack],dedForwardStack:[...dedForwardStack],backDepth};}
-        // Blitz/Sudden done state: save snap for restoration
-        const leavingTimerDone=(prevMode==="blitz")&&timerDone;
-        if(leavingTimerDone){
-          const prevS=(statsByMode[prevMode]?.AD)||blankStats();
-          timerDoneSnapRef.current={mode:prevMode,blitzRoundStats:{...blitzRoundStats},persistBtns:{...persistBtns},date:{...date},S:{...prevS}};
-        } else if(prevMode==="blitz"){
-          timerDoneSnapRef.current=null;
-        }
-        // Classic/Deduction/Flash timing OFF: save question state
+        // Save stacks for all modes except blitz mid-round or blitz timerDone (both should reset on return)
+        const blitzLeavingRound=(prevMode==="blitz")&&(active||timerDone);
+        if(!blitzLeavingRound){stacksByModeRef.current[prevMode]={stack:[...stack],forwardStack:[...forwardStack],dedStack:[...dedStack],dedForwardStack:[...dedForwardStack],backDepth};}
+        else{delete stacksByModeRef.current[prevMode];}
+        // Blitz: never preserve done state across mode switches — return should act as Reset
+        if(prevMode==="blitz"){timerDoneSnapRef.current=null;}
+        // Classic/Deduction/Flash timing OFF: save question state (incl. date so persistBtns stays valid)
         const leavingTimingOff=["classic","deduction","flash"].includes(prevMode)&&(avgVisOffByMode[prevMode]??false);
         if(leavingTimingOff){
-          preservedByModeRef.current[prevMode]={persistBtns:{...persistBtns},locked,revealed,countedWrong,guesses:[...guesses],msg};
+          preservedByModeRef.current[prevMode]={persistBtns:{...persistBtns},locked,revealed,countedWrong,guesses:[...guesses],msg,date:{...date}};
           if(prevMode==="deduction"&&ded)setSavedDedByType(prev=>({...prev,[dedType]:captureDedSnap()}));
         } else if(["classic","deduction","flash"].includes(prevMode)){
           delete preservedByModeRef.current[prevMode];
@@ -984,6 +979,7 @@
             setCountedWrong(preservedQ.countedWrong);
             if(preservedQ.countedWrong)setOverrideUsedThisQ(true);
             setGuesses([...preservedQ.guesses]);setMsg(preservedQ.msg);
+            if(preservedQ.date)setDate({...preservedQ.date});
           }
         }
       },[mode]);
@@ -1120,7 +1116,7 @@
             {mode==='blitz'&&(<div className="mt-3 rounded-2xl panel p-3 space-y-2">
               <div className="flex gap-2">
                 <button type="button" onClick={toggleAllowMistakesBtn} className={`flex-1 px-2 py-1 rounded-xl text-xs font-medium border ${allowMistakes?"btn-solid border-transparent":"surface-toggle text-purple-100/80"}${(active||timerDone)?" opacity-60 pointer-events-none":""}`}>Allow Mistakes</button>
-                <button type="button" onClick={togglePerQBtn} className={`flex-1 px-2 py-1 rounded-xl text-xs font-medium border ${perQ?"btn-solid border-transparent":"surface-toggle text-purple-100/80"}${(active||timerDone)?" opacity-60 pointer-events-none":""}`}>{perQ?"Per Q":"Per Round"}</button>
+                <button type="button" onClick={togglePerQBtn} className={`flex-1 px-2 py-1 rounded-xl text-xs font-medium border btn-solid border-transparent${(active||timerDone)?" opacity-60 pointer-events-none":""}`}>{perQ?"Per Q":"Per Round"}</button>
               </div>
               {timerSettingControl}
             </div>)}
@@ -1157,7 +1153,7 @@
                   <button type="button" className={`col-span-1 px-3 py-2 rounded-xl border surface-button text-sm font-medium text-center ${revealDisabled?"opacity-60 pointer-events-none":""}`} onClick={reveal}>Reveal</button>
                   <button type="button" className={`col-span-1 px-3 py-2 rounded-xl border surface-button text-sm font-medium text-center ${!overrideAvail?"opacity-60 pointer-events-none":""}`} onClick={override}>Override</button>
                 </div>
-                <MethodBreakdownSection key={mode} date={calcTarget} open={calcOpen} onOpenChange={handleCalcOpenChange} className="" contentClassName="mt-3 rounded-2xl thin p-4" instant={calcInstantClose} useJulian={useJulian}/>
+                <MethodBreakdownSection key={mode} date={calcTarget} open={calcOpen} onOpenChange={handleCalcOpenChange} className="" contentClassName="mt-3 rounded-2xl thin px-4 py-3" instant={calcInstantClose} useJulian={useJulian}/>
               </div>
             </div>
           )}
@@ -1189,7 +1185,7 @@
                   <button type="button" className={`col-span-1 px-3 py-2 rounded-xl border surface-button text-sm font-medium text-center ${revealDisabled?"opacity-60 pointer-events-none":""}`} onClick={reveal}>Reveal</button>
                   <button type="button" className={`col-span-1 px-3 py-2 rounded-xl border surface-button text-sm font-medium text-center ${!overrideAvail?"opacity-60 pointer-events-none":""}`} onClick={override}>Override</button>
                 </div>
-                <MethodBreakdownSection date={calcTarget} open={calcOpen} onOpenChange={handleCalcOpenChange} className="" contentClassName="mt-3 rounded-2xl thin p-4" instant={calcInstantClose} useJulian={useJulian}/>
+                <MethodBreakdownSection date={calcTarget} open={calcOpen} onOpenChange={handleCalcOpenChange} className="" contentClassName="mt-3 rounded-2xl thin px-4 py-3" instant={calcInstantClose} useJulian={useJulian}/>
               </div>
             </div>
           )}
