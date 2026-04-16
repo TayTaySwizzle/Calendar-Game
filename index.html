@@ -135,8 +135,18 @@
       const innerRef=useRef(null);
       const prevOpenRef=useRef(open);
       const mountedRef=useRef(false);
+      const resizeObsRef=useRef(null);
       useLayoutEffect(()=>{
         const el=outerRef.current;if(!el)return;
+        const attachObs=()=>{
+          if(typeof ResizeObserver==="undefined"||!innerRef.current||!outerRef.current)return;
+          const obs=new ResizeObserver(()=>{
+            if(!outerRef.current||!innerRef.current)return;
+            outerRef.current.style.maxHeight=(innerRef.current.scrollHeight+16)+"px";
+          });
+          obs.observe(innerRef.current);
+          resizeObsRef.current=obs;
+        };
         if(!mountedRef.current){
           mountedRef.current=true;
           prevOpenRef.current=open;
@@ -145,14 +155,16 @@
             el.style.maxHeight=(innerRef.current?.scrollHeight??0)+16+"px";
             el.getBoundingClientRect();
             el.style.transition='';
+            attachObs();
           }else{
             el.style.maxHeight="0px";
           }
-          return;
+          return()=>{if(resizeObsRef.current){resizeObsRef.current.disconnect();resizeObsRef.current=null;}};
         }
         const wasOpen=prevOpenRef.current;prevOpenRef.current=open;
         if(open){
           el.style.maxHeight=(innerRef.current?.scrollHeight??0)+16+"px";
+          attachObs();
         }else if(instant||!wasOpen){
           el.style.maxHeight="0px";
           if(onClosed)onClosed();
@@ -163,13 +175,14 @@
           const handler=()=>{el.removeEventListener("transitionend",handler);if(onClosed)onClosed();};
           el.addEventListener("transitionend",handler,{once:true});
         }
+        return()=>{if(resizeObsRef.current){resizeObsRef.current.disconnect();resizeObsRef.current=null;}};
       },[open,instant,onClosed]);
       return(<div ref={outerRef} className="expander"><div ref={innerRef}>{children}</div></div>);
     }
 
 
 
-    const DEPLOY_TS=new Date('2026-04-16T06:56:00Z');
+    const DEPLOY_TS=new Date('2026-04-16T07:45:00Z');
 
     function StatPanel({stats}){
       return(
@@ -470,7 +483,7 @@
               <button type="button" className={`col-span-1 px-3 py-2 rounded-xl border surface-button text-sm font-medium text-center ${!overrideAvail?"opacity-60 pointer-events-none":""}`} onClick={handleOverride}>Override</button>
             </div>
             <button type="button" className={`w-full px-4 py-2 rounded-xl btn-solid text-sm font-medium ${codesDisabled&&!inBackMode?"opacity-60 pointer-events-none":""}`} onClick={openCodes}>{codesOpen?"Hide Codes":"Show Codes"}</button>
-            <Expander open={codesOpen} instant={aoxCodesInstant}><div className="pt-2 pb-1 rounded-2xl thin p-4"><MethodExplanation date={date} useJulian={useJulian}/></div></Expander>
+            <Expander open={codesOpen} instant={aoxCodesInstant}><div className="mt-3 rounded-2xl thin px-4 pt-[3px] pb-1.5"><MethodExplanation date={date} useJulian={useJulian}/></div></Expander>
           </div>
         </div>
       );
@@ -1048,6 +1061,27 @@
         }
         blitzConfigPrevRef.current={perQ,allowMistakes};
       },[perQ,allowMistakes,mode,active,timerDone]);
+      useEffect(()=>{
+        if(mode!=="blitz"||!timerDone)return;
+        if(!perQ){
+          const bk=`${allowMistakes?'m':'n'}${blitzSec}`;
+          setBlitzBest(prev=>{
+            const cur=prev[bk]??{score:0,streak:0};
+            const newScore=Math.max(cur.score,blitzRoundStats.good);
+            const newStreak=Math.max(cur.streak,blitzRoundStats.best);
+            if(newScore===cur.score&&newStreak===cur.streak)return prev;
+            return{...prev,[bk]:{score:newScore,streak:newStreak}};
+          });
+        }else{
+          setSuddenBest(prev=>{
+            const cur=prev[qSec]??{score:0};
+            suddenBestSnapRef.current={key:qSec,prev:{...cur}};
+            const newScore=Math.max(cur.score,S.good);
+            if(newScore===cur.score)return prev;
+            return{...prev,[qSec]:{score:newScore}};
+          });
+        }
+      },[mode,timerDone,perQ,allowMistakes,blitzSec,qSec]);
       const applyCalcPenalty=()=>{setCalcPenalty(true);const roundOver=(mode==="blitz")&&!active;const fp=!countedWrong&&!revealed;if(fp&&!roundOver){wrongTimeRef.current=tStartRef.current?(performance.now()-tStartRef.current)/1000:null;prevStatsSnapshotRef.current=null;preCalcPenaltySnapshotRef.current={played:S.played,good:S.good,streak:S.streak,best:S.best,timesLen:S.times.length,blitzPlayed:blitzRoundStats.played,blitzGood:blitzRoundStats.good};updateStats(c=>{c.played+=1;c.streak=0;});if(mode==="blitz"&&!perQ)setBlitzRoundStats(p=>({...p,played:p.played+1,streak:0}));}if(mode==="deduction"&&ded){markCorrect(getDedCorrectIdx());}else if(mode!=="deduction")markCorrect(correct);if(isTimer(mode)&&active){setActive(false);setShowTimerDate(true);if(mode==="blitz"&&!perQ){setBlitzRunning(false);blitzStartRef.current=null;blitzPausedAtRef.current=null;blitzPausedAccRef.current=0;setTimerDone(true);}if(mode==="blitz"&&perQ){qDeadlineRef.current=null;qPausedAtRef.current=null;qPausedAccRef.current=0;setTimerDone(true);}if(mode==="flash"){clearTimeout(flashTimerRef.current);flashTimerRef.current=null;setFlashPhase("dash");flashDeadlineRef.current=null;}}if(!revealed)setRevealed(true);if(!countedWrong){setCountedWrong(true);setCanOverrideCorrect(false);}};
       const handleCalcOpenChange=next=>{if(next&&!(locked&&!revealed&&backDepth>0))applyCalcPenalty();setCalcOpen(next);};
       const showStats=mode!=="lookup"&&mode!=="guide"&&mode!=="aox";
@@ -1376,7 +1410,7 @@
           <div className="rounded-2xl panel p-4 space-y-4">
             <div className="flex items-center justify-between text-[11px] uppercase tracking-wide text-purple-200/70"><span>History</span>{entries.length>0&&(<button type="button" onClick={clearHist} className="text-purple-200/70 font-medium">Clear History</button>)}</div>
             {entries.length>0?(<ul className="space-y-2 overflow-y-auto max-h-[440px]">{entries.map(e=>(<li key={e.id}><button type="button" onClick={()=>selEntry(e)} className={`w-full text-left px-3 py-2 rounded-xl panel flex items-center justify-between gap-3 text-xs transition ${sid===e.id?"border-l-2 border-l-purple-400 bg-purple-500/35":"hist-unsel hover:bg-purple-500/15"}`}><span className="block text-[13px] font-medium text-purple-100/90">{e.label}</span><span className="text-[12px] font-semibold text-purple-200/80">{getEntryWeekday(e)}</span></button></li>))}</ul>):(<p className="text-sm text-purple-200/70">No lookups yet.</p>)}
-            <MethodBreakdownSection date={cdv} className="pt-4 border-t border-purple-500/40" contentClassName="mt-3 rounded-xl panel p-3" open={cov} onOpenChange={sco} useJulian={useJulian}/>
+            <MethodBreakdownSection date={cdv} className="pt-4 border-t border-purple-500/40" contentClassName="mt-3 rounded-2xl panel px-4 pt-[3px] pb-1.5" open={cov} onOpenChange={sco} useJulian={useJulian}/>
           </div>
         </div>
       );
