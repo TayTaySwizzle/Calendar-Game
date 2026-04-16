@@ -169,7 +169,7 @@
 
 
 
-    const DEPLOY_TS=new Date('2026-04-16T06:49:00Z');
+    const DEPLOY_TS=new Date('2026-04-16T06:56:00Z');
 
     function StatPanel({stats}){
       return(
@@ -1167,7 +1167,7 @@
                   <button type="button" className={`col-span-1 px-3 py-2 rounded-xl border surface-button text-sm font-medium text-center ${revealDisabled?"opacity-60 pointer-events-none":""}`} onClick={reveal}>Reveal</button>
                   <button type="button" className={`col-span-1 px-3 py-2 rounded-xl border surface-button text-sm font-medium text-center ${!overrideAvail?"opacity-60 pointer-events-none":""}`} onClick={override}>Override</button>
                 </div>
-                <MethodBreakdownSection key={mode} date={calcTarget} open={calcOpen} onOpenChange={handleCalcOpenChange} className="" contentClassName="mt-3 rounded-2xl thin px-4 pt-1 pb-1.5" instant={calcInstantClose} useJulian={useJulian}/>
+                <MethodBreakdownSection key={mode} date={calcTarget} open={calcOpen} onOpenChange={handleCalcOpenChange} className="" contentClassName="mt-3 rounded-2xl thin px-4 pt-[3px] pb-1.5" instant={calcInstantClose} useJulian={useJulian}/>
               </div>
             </div>
           )}
@@ -1199,7 +1199,7 @@
                   <button type="button" className={`col-span-1 px-3 py-2 rounded-xl border surface-button text-sm font-medium text-center ${revealDisabled?"opacity-60 pointer-events-none":""}`} onClick={reveal}>Reveal</button>
                   <button type="button" className={`col-span-1 px-3 py-2 rounded-xl border surface-button text-sm font-medium text-center ${!overrideAvail?"opacity-60 pointer-events-none":""}`} onClick={override}>Override</button>
                 </div>
-                <MethodBreakdownSection date={calcTarget} open={calcOpen} onOpenChange={handleCalcOpenChange} className="" contentClassName="mt-3 rounded-2xl thin px-4 pt-1 pb-1.5" instant={calcInstantClose} useJulian={useJulian}/>
+                <MethodBreakdownSection date={calcTarget} open={calcOpen} onOpenChange={handleCalcOpenChange} className="" contentClassName="mt-3 rounded-2xl thin px-4 pt-[3px] pb-1.5" instant={calcInstantClose} useJulian={useJulian}/>
               </div>
             </div>
           )}
