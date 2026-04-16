@@ -169,7 +169,7 @@
 
 
 
-    const DEPLOY_TS=new Date('2026-04-16T04:15:00Z');
+    const DEPLOY_TS=new Date('2026-04-16T06:16:00Z');
 
     function StatPanel({stats}){
       return(
@@ -519,7 +519,9 @@
       const [minInputVal,setMinInputVal]=useState("1");
       const [maxInputVal,setMaxInputVal]=useState("10000");
       const minInputRef=useRef(null),maxInputRef=useRef(null);
-      const [date,setDate]=useState(()=>randomDate(1,10000));
+      const [dateByMode,setDateByMode]=useState(()=>({classic:randomDate(1,10000),blitz:randomDate(1,10000),flash:randomDate(1,10000)}));
+      const date=dateByMode[mode]??dateByMode.classic;
+      const setDate=valOrFn=>setDateByMode(prev=>({...prev,[mode]:typeof valOrFn==='function'?valOrFn(prev[mode]??prev.classic):valOrFn}));
       const [stack,setStack]=useState([]),[dedStack,setDedStack]=useState([]);
       const [forwardStack,setForwardStack]=useState([]);
       const [dedForwardStack,setDedForwardStack]=useState([]);
@@ -614,7 +616,7 @@
       function resetFlashBar(){if(flashBarRef.current){flashBarRef.current.style.transition="none";flashBarRef.current.style.width="100%";}}
       function startFlashBar(ms){requestAnimationFrame(()=>{if(!flashBarRef.current)return;const s=flashBarRef.current;s.style.transition="none";s.style.width="100%";s.getBoundingClientRect();s.style.transition=`width ${ms}ms linear`;s.style.width="0%";});}
       const refreshForRange=useCallback(()=>{
-        setActive(false);setShowTimerDate(false);setMsg("");setGuesses([]);setFlash(null);setLocked(false);setRevealed(false);setCountedWrong(false);setCanOverrideCorrect(false);setCalcPenalty(false);setCalcOpen(false);setOverrideUsedThisQ(false);setBackDepth(0);resetPB();setStack([]);setDedStack([]);setForwardStack([]);setDedForwardStack([]);calcPenaltyStatesRef.current.set(mode,false);setBlitzRemain(blitzSec);setBlitzRunning(false);blitzStartRef.current=null;blitzPausedAtRef.current=null;blitzPausedAccRef.current=0;blitzRemainRef.current=blitzSec;qDeadlineRef.current=null;qPausedAtRef.current=null;qPausedAccRef.current=0;setQRemain(qSec);clearTimeout(flashTimerRef.current);flashTimerRef.current=null;setFlashPhase("dash");flashDeadlineRef.current=null;setFlashRemainMs(flashMs);resetFlashBar();tStartRef.current=null;wrongTimeRef.current=null;prevStatsSnapshotRef.current=null;setDate(randomDate(minY,maxY,useJulian));spawnDedWithRange(minY,maxY);setSavedDedByType(blankDedTypeStore());
+        setActive(false);setShowTimerDate(false);setMsg("");setGuesses([]);setFlash(null);setLocked(false);setRevealed(false);setCountedWrong(false);setCanOverrideCorrect(false);setCalcPenalty(false);setCalcOpen(false);setOverrideUsedThisQ(false);setBackDepth(0);resetPB();setStack([]);setDedStack([]);setForwardStack([]);setDedForwardStack([]);calcPenaltyStatesRef.current.set(mode,false);setBlitzRemain(blitzSec);setBlitzRunning(false);blitzStartRef.current=null;blitzPausedAtRef.current=null;blitzPausedAccRef.current=0;blitzRemainRef.current=blitzSec;qDeadlineRef.current=null;qPausedAtRef.current=null;qPausedAccRef.current=0;setQRemain(qSec);clearTimeout(flashTimerRef.current);flashTimerRef.current=null;setFlashPhase("dash");flashDeadlineRef.current=null;setFlashRemainMs(flashMs);resetFlashBar();tStartRef.current=null;wrongTimeRef.current=null;prevStatsSnapshotRef.current=null;setDateByMode({classic:randomDate(minY,maxY,useJulian),blitz:randomDate(minY,maxY,useJulian),flash:randomDate(minY,maxY,useJulian)});preservedByModeRef.current={};spawnDedWithRange(minY,maxY);setSavedDedByType(blankDedTypeStore());
       },[mode,blitzSec,qSec,flashMs,minY,maxY,useJulian]);
       useEffect(()=>{if(!rangeRefreshPendingRef.current)return;rangeRefreshPendingRef.current=false;refreshForRange();},[minY,maxY,refreshForRange]);
       useEffect(()=>{const onVis=()=>{const now=performance.now();if(document.hidden){if(blitzRunning&&blitzPausedAtRef.current==null)blitzPausedAtRef.current=now;if(qDeadlineRef.current&&qPausedAtRef.current==null)qPausedAtRef.current=now;}else{if(blitzPausedAtRef.current!=null){blitzPausedAccRef.current+=now-blitzPausedAtRef.current;blitzPausedAtRef.current=null;}if(qPausedAtRef.current!=null){qPausedAccRef.current+=now-qPausedAtRef.current;qPausedAtRef.current=null;}}};document.addEventListener("visibilitychange",onVis);return()=>document.removeEventListener("visibilitychange",onVis);},[blitzRunning]);
@@ -922,7 +924,8 @@
       useLayoutEffect(()=>{
         const prevMode=prevModeForSwitchRef.current;prevModeForSwitchRef.current=mode;
         // Interaction check for prevMode: used to decide whether to preserve question state
-        const hasInteracted=countedWrong||revealed||calcOpen||Object.keys(persistBtns).length>0;
+        const prevCalcOpen=calcOpenByMode[prevMode]??false;
+        const hasInteracted=countedWrong||revealed||prevCalcOpen||Object.keys(persistBtns).length>0;
         // === LEAVING prevMode ===
         // Save stacks for all modes except blitz mid-round or blitz timerDone (both should reset on return)
         const blitzLeavingRound=(prevMode==="blitz")&&(active||timerDone);
@@ -989,8 +992,8 @@
               setDate(randomDate(minY,maxY,useJulian));
               tStartRef.current=performance.now();
             }
-            // If codes were showing, close instantly so the new codes don't appear mid-animation.
-            if(calcOpen){setCalcOpen(false);setCalcInstantClose(true);}
+            // If codes were showing, close with animation. wasOpenRef freeze keeps old codes visible during the 310ms close.
+            if(calcOpen)setCalcOpen(false);
           }
         }
       },[mode]);
@@ -1164,7 +1167,7 @@
                   <button type="button" className={`col-span-1 px-3 py-2 rounded-xl border surface-button text-sm font-medium text-center ${revealDisabled?"opacity-60 pointer-events-none":""}`} onClick={reveal}>Reveal</button>
                   <button type="button" className={`col-span-1 px-3 py-2 rounded-xl border surface-button text-sm font-medium text-center ${!overrideAvail?"opacity-60 pointer-events-none":""}`} onClick={override}>Override</button>
                 </div>
-                <MethodBreakdownSection key={mode} date={calcTarget} open={calcOpen} onOpenChange={handleCalcOpenChange} className="" contentClassName="mt-3 rounded-2xl thin px-4 py-2.5" instant={calcInstantClose} useJulian={useJulian}/>
+                <MethodBreakdownSection key={mode} date={calcTarget} open={calcOpen} onOpenChange={handleCalcOpenChange} className="" contentClassName="mt-3 rounded-2xl thin px-4 py-2" instant={calcInstantClose} useJulian={useJulian}/>
               </div>
             </div>
           )}
@@ -1196,7 +1199,7 @@
                   <button type="button" className={`col-span-1 px-3 py-2 rounded-xl border surface-button text-sm font-medium text-center ${revealDisabled?"opacity-60 pointer-events-none":""}`} onClick={reveal}>Reveal</button>
                   <button type="button" className={`col-span-1 px-3 py-2 rounded-xl border surface-button text-sm font-medium text-center ${!overrideAvail?"opacity-60 pointer-events-none":""}`} onClick={override}>Override</button>
                 </div>
-                <MethodBreakdownSection date={calcTarget} open={calcOpen} onOpenChange={handleCalcOpenChange} className="" contentClassName="mt-3 rounded-2xl thin px-4 py-2.5" instant={calcInstantClose} useJulian={useJulian}/>
+                <MethodBreakdownSection date={calcTarget} open={calcOpen} onOpenChange={handleCalcOpenChange} className="" contentClassName="mt-3 rounded-2xl thin px-4 py-2" instant={calcInstantClose} useJulian={useJulian}/>
               </div>
             </div>
           )}
@@ -1276,7 +1279,7 @@
       const [frozenDate,setFrozenDate]=React.useState(date);
       const latestDateRef=React.useRef(date);
       latestDateRef.current=date;
-      const wasOpenRef=React.useRef(false);
+      const wasOpenRef=React.useRef(isControlled?!!controlledOpen:false);
       const key=date?`${date.y}-${date.m}-${date.d}`:"";
       React.useEffect(()=>{if(!isControlled)setInternalOpen(false);},[key,isControlled]);
       const hasDate=!!date;
