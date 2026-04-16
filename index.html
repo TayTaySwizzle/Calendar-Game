@@ -169,7 +169,7 @@
 
 
 
-    const DEPLOY_TS=new Date('2026-04-15T23:52:00Z');
+    const DEPLOY_TS=new Date('2026-04-16T00:20:00Z');
 
     function StatPanel({stats}){
       return(
@@ -530,7 +530,6 @@
       const [backDepth,setBackDepth]=useState(0);
       const [browseHasCredit,setBrowseHasCredit]=useState(false);
       const [timerDone,setTimerDone]=useState(false);
-      const [overrideError,setOverrideError]=useState(null);
       const timesAtTimingOffRef=useRef(null);
       const activeWday=(y,m,d)=>(useJulian&&isJulianDate(y,m,d))?wdayJulian(y,m,d):wday(y,m,d);
       const dimFn=(y,m)=>{const leap=(useJulian&&isJulianDate(y,m,1))?isLeapJulian(y):isLeap(y);return m===2?(leap?29:28):([4,6,9,11].includes(m)?30:31);};
@@ -556,6 +555,7 @@
       const blankStatsByEra=()=>({AD:blankStats()});
       const [statsByMode,setStatsByMode]=useState({classic:blankStatsByEra(),blitz:blankStatsByEra(),sudden:blankStatsByEra(),flash:blankStatsByEra(),"deduction-day":blankStatsByEra(),"deduction-month":blankStatsByEra(),"deduction-year":blankStatsByEra()});
       const [blitzRoundStats,setBlitzRoundStats]=useState(()=>blankStats());
+      const [dedType,setDedType]=useState("day");
       const statKey=mode==="deduction"?`deduction-${dedType}`:mode;
       const S=(statsByMode[statKey]?.AD)||blankStats();
       const tStartRef=useRef(null);
@@ -585,7 +585,6 @@
       const flashDeadlineRef=useRef(null);
       const flashBarRef=useRef(null);
       const endFlashPhase=useCallback(()=>{setFlashPhase("hide");flashDeadlineRef.current=null;setFlashRemainMs(0);flashTimerRef.current=null;},[]);
-      const [dedType,setDedType]=useState("day");
       const [ded,setDed]=useState(null);
       const getDedCorrectIdx=()=>{if(!ded)return-1;if(ded.type==="year")return ded.options.findIndex(y=>y===ded.y);if(ded.type==="month")return ded.options.findIndex(m=>m===ded.m);return ded.options.findIndex(d=>d===ded.d);};
       const [dedFlash,setDedFlash]=useState(null);
@@ -789,7 +788,7 @@
         }
         return{curStreak,bestStreak};
       }
-      function override(){try{
+      function override(){
         setOverrideUsedThisQ(true);
         // === BROWSING-BACK OVERRIDE: delta-based stat adjustment + streak recalc ===
         if(backDepth>0&&canOverrideCorrect&&prevStatsSnapshotRef.current){
@@ -859,7 +858,7 @@
           if(!avgVisOff){pushAndNext();if(mode==="deduction")setDedStack(s=>{if(!s.length)return s;return[...s.slice(0,-1),{...s[s.length-1],overrideUsed:true}];});else setStack(s=>{if(!s.length)return s;return[...s.slice(0,-1),{...s[s.length-1],overrideUsed:true}];});}
           return;
         }
-      }catch(err){setOverrideError(err?.message||String(err));}}
+      }
       function submitDoW(idx){
         if(isTimer(mode)&&!active)return;if(locked)return;
         if(idx===correct){
@@ -1092,8 +1091,6 @@
             </div>
             {settingsJsx}
           </div>
-          {overrideError&&<div className="mt-2 p-2 rounded-xl bg-rose-600/90 text-white text-xs">Override error: {overrideError}</div>}
-          {mode==="deduction"&&<div className="mt-1 text-[10px] text-rose-400">DEBUG: key={statKey} played={S.played} good={S.good} streak={S.streak}</div>}
           {showStats&&(<>
             <StatPanel stats={[
               {label:"Score",value:mode==="blitz"?`${blitzRoundStats.good}/${blitzRoundStats.played}`:`${S.good}/${S.played}`,off:effectiveStatsOff,fn:canHideStats?toggleStatsOff:null},
