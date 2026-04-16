@@ -921,6 +921,8 @@
       }
       useLayoutEffect(()=>{
         const prevMode=prevModeForSwitchRef.current;prevModeForSwitchRef.current=mode;
+        // Interaction check for prevMode: used to decide whether to preserve question state
+        const hasInteracted=countedWrong||revealed||calcOpen||Object.keys(persistBtns).length>0;
         // === LEAVING prevMode ===
         // Save stacks for all modes except blitz mid-round or blitz timerDone (both should reset on return)
         const blitzLeavingRound=(prevMode==="blitz")&&(active||timerDone);
@@ -928,8 +930,8 @@
         else{delete stacksByModeRef.current[prevMode];}
         // Blitz: never preserve done state across mode switches — return should act as Reset
         if(prevMode==="blitz"){timerDoneSnapRef.current=null;}
-        // Classic/Deduction/Flash timing OFF: save question state (incl. date so persistBtns stays valid)
-        const leavingTimingOff=["classic","deduction","flash"].includes(prevMode)&&(avgVisOffByMode[prevMode]??false);
+        // Preserve question state only when timing OFF AND no interaction with current date
+        const leavingTimingOff=["classic","deduction","flash"].includes(prevMode)&&(avgVisOffByMode[prevMode]??false)&&!hasInteracted;
         if(leavingTimingOff){
           preservedByModeRef.current[prevMode]={persistBtns:{...persistBtns},locked,revealed,countedWrong,guesses:[...guesses],msg,date:{...date}};
           if(prevMode==="deduction"&&ded)setSavedDedByType(prev=>({...prev,[dedType]:captureDedSnap()}));
@@ -980,6 +982,15 @@
             if(preservedQ.countedWrong)setOverrideUsedThisQ(true);
             setGuesses([...preservedQ.guesses]);setMsg(preservedQ.msg);
             if(preservedQ.date)setDate({...preservedQ.date});
+          } else if(["classic","flash","deduction"].includes(mode)){
+            // No preservation (timing on, or interacted): generate a fresh date/ded.
+            // Deduction handles its own spawn via the setDed(null) + savedDedByType clear above.
+            if(["classic","flash"].includes(mode)){
+              setDate(randomDate(minY,maxY,useJulian));
+              tStartRef.current=performance.now();
+            }
+            // If codes were showing, close instantly so the new codes don't appear mid-animation.
+            if(calcOpen){setCalcOpen(false);setCalcInstantClose(true);}
           }
         }
       },[mode]);
@@ -1153,7 +1164,7 @@
                   <button type="button" className={`col-span-1 px-3 py-2 rounded-xl border surface-button text-sm font-medium text-center ${revealDisabled?"opacity-60 pointer-events-none":""}`} onClick={reveal}>Reveal</button>
                   <button type="button" className={`col-span-1 px-3 py-2 rounded-xl border surface-button text-sm font-medium text-center ${!overrideAvail?"opacity-60 pointer-events-none":""}`} onClick={override}>Override</button>
                 </div>
-                <MethodBreakdownSection key={mode} date={calcTarget} open={calcOpen} onOpenChange={handleCalcOpenChange} className="" contentClassName="mt-3 rounded-2xl thin px-4 py-3" instant={calcInstantClose} useJulian={useJulian}/>
+                <MethodBreakdownSection key={mode} date={calcTarget} open={calcOpen} onOpenChange={handleCalcOpenChange} className="" contentClassName="mt-3 rounded-2xl thin px-4 py-2.5" instant={calcInstantClose} useJulian={useJulian}/>
               </div>
             </div>
           )}
@@ -1185,7 +1196,7 @@
                   <button type="button" className={`col-span-1 px-3 py-2 rounded-xl border surface-button text-sm font-medium text-center ${revealDisabled?"opacity-60 pointer-events-none":""}`} onClick={reveal}>Reveal</button>
                   <button type="button" className={`col-span-1 px-3 py-2 rounded-xl border surface-button text-sm font-medium text-center ${!overrideAvail?"opacity-60 pointer-events-none":""}`} onClick={override}>Override</button>
                 </div>
-                <MethodBreakdownSection date={calcTarget} open={calcOpen} onOpenChange={handleCalcOpenChange} className="" contentClassName="mt-3 rounded-2xl thin px-4 py-3" instant={calcInstantClose} useJulian={useJulian}/>
+                <MethodBreakdownSection date={calcTarget} open={calcOpen} onOpenChange={handleCalcOpenChange} className="" contentClassName="mt-3 rounded-2xl thin px-4 py-2.5" instant={calcInstantClose} useJulian={useJulian}/>
               </div>
             </div>
           )}
