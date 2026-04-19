@@ -88,6 +88,26 @@
     const METHOD_CD_ADVANCED_LEAP_MAP=new Map([[0,0],[4,-2],[8,3],[12,1],[16,-1],[20,-3],[24,2],[28,0],[32,-2],[36,3],[40,1],[44,-1],[48,-3],[52,2],[56,0],[60,-2],[64,3],[68,1],[72,-1],[76,-3],[80,2],[84,0],[88,-2],[92,3],[96,1]]);
     const METHOD_CD_ADVANCED_ZERO_YEARS=new Set([0,6,17,23,28,34,45,51,56,62,73,79,84,90]);
     const YEAR_OPTION_DEFAULT=9,DAY_OPTION_COUNT=7,MONTH_OPTION_COUNT=7;
+    // Month deduction boxes — 7 fixed boxes grouping months by shared doomsday code
+    // Each box: {label:displayed text, months:[month numbers in that box]}
+    const MONTH_BOXES_COMMON=[
+      {label:"Jan/Oct",months:[1,10]},      // code 6
+      {label:"Feb/Mar/Nov",months:[2,3,11]},// code 2
+      {label:"Apr/Jul",months:[4,7]},       // code 5
+      {label:"May",months:[5]},             // code 0
+      {label:"Jun",months:[6]},             // code 3
+      {label:"Aug",months:[8]},             // code 1
+      {label:"Sep/Dec",months:[9,12]},      // code 4
+    ];
+    const MONTH_BOXES_LEAP=[
+      {label:"Oct",months:[10]},            // code 6
+      {label:"Mar/Nov",months:[3,11]},      // code 2
+      {label:"Jan/Apr/Jul",months:[1,4,7]}, // code 5
+      {label:"May",months:[5]},             // code 0
+      {label:"Jun",months:[6]},             // code 3
+      {label:"Feb/Aug",months:[2,8]},       // code 1
+      {label:"Sep/Dec",months:[9,12]},      // code 4
+    ];
     const THEMES=[{id:'dusk',name:'Dusk'},{id:'midnight',name:'Midnight'},{id:'nebula',name:'Nebula'},{id:'light',name:'Light'},{id:'parchment',name:'Parchment'}];
     const toAstro=y=>y>0?y:1-Math.abs(y);
     const isLeap=y=>{y=toAstro(y);return y%400===0||(y%4===0&&y%100!==0);};
@@ -95,11 +115,19 @@
     function jdnGregorian(y,m,d){const a=Math.floor((14-m)/12),y2=y+4800-a,m2=m-3+12*a;return d+Math.floor((153*m2+2)/5)+365*y2+Math.floor(y2/4)-Math.floor(y2/100)+Math.floor(y2/400)-32045;}
     const wday=(y,m,d)=>((jdnGregorian(toAstro(y),m,d)+1)%7+7)%7;
     const fmtYear=y=>y>0?String(y):`${Math.abs(y)} BC`;
-    const fmt=(y,m,d,order='month-first',style='written')=>{
+    const fmt=(y,m,d,order='month-first',style='written',yearFirst=false)=>{
       const yr=fmtYear(y);
       if(style==='numeric'){
+        if(yearFirst){
+          if(order==='month-first')return`${yr}/${m}/${d}`;
+          return`${yr}/${d}/${m}`;
+        }
         if(order==='month-first')return`${m}/${d}/${yr}`;
         return`${d}/${m}/${yr}`;
+      }
+      if(yearFirst){
+        if(order==='month-first')return`${yr}, ${MONTH[m-1]} ${d}`;
+        return`${yr}, ${d} ${MONTH[m-1]}`;
       }
       if(order==='month-first')return`${MONTH[m-1]} ${d}, ${yr}`;
       return`${d} ${MONTH[m-1]} ${yr}`;
@@ -182,7 +210,7 @@
 
 
 
-    const DEPLOY_TS=new Date('2026-04-16T07:45:00Z');
+    const DEPLOY_TS=new Date('2026-04-19T21:30:00Z');
 
     function StatPanel({stats}){
       return(
@@ -223,6 +251,7 @@
       const prevStreakSnapRef=useRef(null);
       const prevBestSnapRef=useRef(null);
       const bestRef=useRef({});
+      const [bestNew,setBestNew]=useState({});// {[key]:{avg:bool,med:bool}}
       const [pendingWrongCredit,setPendingWrongCredit]=useState(null);
       const [overrideUsedAox,setOverrideUsedAox]=useState(false);
       const [aoxBackDepth,setAoxBackDepth]=useState(0);
@@ -245,11 +274,11 @@
         (runPhase==="failed")||
         (runPhase==="done"&&canOverrideCorrect)
       );
-      const codesDisabled=runPhase==="idle"||(oneByOne&&!shown&&!inBackMode&&!isLocked)||(runPhase==="done");
+      const codesDisabled=runPhase==="idle"||(oneByOne&&!shown&&!inBackMode&&!isLocked);
       const optionsDisabled=isLocked||codesOpen||(oneByOne&&!shown&&!inBackMode)||runPhase==="idle"||inBackMode;
       const baseBtn="w-full rounded-2xl border px-4 py-3 text-base transition shadow-sm select-none";
 
-      function reset(){setRunPhase("idle");setDisplayN(n);setShown(false);setInBackMode(false);setAoxStack([]);setAoxForwardStack([]);setTimes([]);setStreak(0);setBestStreak(0);setAttempts(0);setGuesses([]);setMsg("");setFlash(null);resetAoxPB();setCodesOpen(false);setCanOverrideCorrect(false);setQuestionCounted(false);setPendingWrongCredit(null);setOverrideUsedAox(false);setAoxBackDepth(0);setDate(randomDate(minY,maxY));tStartRef.current=null;wrongTimeRef.current=null;prevTimesSnapRef.current=null;prevStreakSnapRef.current=null;prevBestSnapRef.current=null;}
+      function reset(){setRunPhase("idle");setDisplayN(n);setShown(false);setInBackMode(false);setAoxStack([]);setAoxForwardStack([]);setTimes([]);setStreak(0);setBestStreak(0);setAttempts(0);setGuesses([]);setMsg("");setFlash(null);resetAoxPB();setCodesOpen(false);setCanOverrideCorrect(false);setQuestionCounted(false);setPendingWrongCredit(null);setOverrideUsedAox(false);setAoxBackDepth(0);setBestNew({});setDate(randomDate(minY,maxY));tStartRef.current=null;wrongTimeRef.current=null;prevTimesSnapRef.current=null;prevStreakSnapRef.current=null;prevBestSnapRef.current=null;}
       useEffect(()=>{if(!visible&&(runPhase==="running"||runPhase==="failed"))reset();},[visible]);
       useEffect(()=>{if(aoxCodesInstant){const t=setTimeout(()=>setAoxCodesInstant(false),50);return()=>clearTimeout(t);}},[aoxCodesInstant]);
       function startOrContinue(){
@@ -317,7 +346,10 @@
           const med=calcMed(newTimes);
           const prev=bestRef.current[bestKey]||{avg:null,med:null};
           prevBestSnapRef.current={key:bestKey,best:{...prev}};
-          bestRef.current[bestKey]={avg:prev.avg==null||avg<prev.avg?avg:prev.avg,med:prev.med==null||med<prev.med?med:prev.med};
+          const avgImp=prev.avg==null||avg<prev.avg;
+          const medImp=prev.med==null||med<prev.med;
+          bestRef.current[bestKey]={avg:avgImp?avg:prev.avg,med:medImp?med:prev.med};
+          if(avgImp||medImp)setBestNew(p=>{const e=p[bestKey]||{avg:false,med:false};return{...p,[bestKey]:{avg:e.avg||avgImp,med:e.med||medImp}};});
           setRunPhase("done");
         }
       }
@@ -358,7 +390,7 @@
       function submitDoW(idx){if(!isRunning||isLocked||codesOpen||inBackMode)return;if(oneByOne&&!shown)return;if(idx===correct)handleCorrect(idx);else handleWrong(idx);}
       function revealAnswer(){if(revealLocked)return;wrongTimeRef.current=(performance.now()-(tStartRef.current??performance.now()))/1000;markAoxCorrect(correct);setStreak(0);setCanOverrideCorrect(false);prevTimesSnapRef.current=null;prevStreakSnapRef.current=null;setPendingWrongCredit(null);if(!questionCounted)setAttempts(a=>a+1);setQuestionCounted(true);if(!mistakesOk)setRunPhase("failed");}
       function openCodes(){
-        if(inBackMode){setCodesOpen(v=>!v);return;}if(codesDisabled)return;
+        if(inBackMode||runPhase==="done"){setCodesOpen(v=>!v);return;}if(codesDisabled)return;
         if(!codesOpen){wrongTimeRef.current=(performance.now()-(tStartRef.current??performance.now()))/1000;setCanOverrideCorrect(false);prevTimesSnapRef.current=null;prevStreakSnapRef.current=null;setPendingWrongCredit(null);setStreak(0);if(!mistakesOk)setRunPhase("failed");if(!questionCounted)setAttempts(a=>a+1);setQuestionCounted(true);markAoxCorrect(correct);}
         setCodesOpen(v=>!v);
       }
@@ -377,7 +409,7 @@
           let bs=0,r=0;for(const h of history){if(h){r++;if(r>bs)bs=r;}else r=0;}
           setStreak(cs);setBestStreak(bs);
           prevTimesSnapRef.current=null;prevStreakSnapRef.current=null;setCanOverrideCorrect(false);
-          if(prevBestSnapRef.current&&prevBestSnapRef.current.key===bestKey){bestRef.current[bestKey]=prevBestSnapRef.current.best;prevBestSnapRef.current=null;}
+          if(prevBestSnapRef.current&&prevBestSnapRef.current.key===bestKey){bestRef.current[bestKey]=prevBestSnapRef.current.best;setBestNew(p=>{const n={...p};delete n[bestKey];return n;});prevBestSnapRef.current=null;}
           return;
         }
         if(inBackMode)return;
@@ -389,7 +421,7 @@
           setTimes(prevTimes);
           setStreak(0);
           if(prevStreakSnapRef.current)setBestStreak(prevStreakSnapRef.current.bestStreak);
-          if(prevBestSnapRef.current&&prevBestSnapRef.current.key===bestKey){bestRef.current[bestKey]=prevBestSnapRef.current.best;prevBestSnapRef.current=null;}
+          if(prevBestSnapRef.current&&prevBestSnapRef.current.key===bestKey){bestRef.current[bestKey]=prevBestSnapRef.current.best;setBestNew(p=>{const n={...p};delete n[bestKey];return n;});prevBestSnapRef.current=null;}
           prevTimesSnapRef.current=null;prevStreakSnapRef.current=null;setCanOverrideCorrect(false);setQuestionCounted(true);setPendingWrongCredit(null);
           setAoxStack(s=>s.slice(0,-1));
           setGuesses([]);setCodesOpen(false);wrongTimeRef.current=null;
@@ -410,7 +442,10 @@
           if(newTimes.length>=displayN){
             const avg=newTimes.reduce((a,b)=>a+b,0)/newTimes.length;const med=calcMed(newTimes);
             const prev=bestRef.current[bestKey]||{avg:null,med:null};
-            bestRef.current[bestKey]={avg:prev.avg==null||avg<prev.avg?avg:prev.avg,med:prev.med==null||med<prev.med?med:prev.med};
+            const avgImp=prev.avg==null||avg<prev.avg;
+            const medImp=prev.med==null||med<prev.med;
+            bestRef.current[bestKey]={avg:avgImp?avg:prev.avg,med:medImp?med:prev.med};
+            if(avgImp||medImp)setBestNew(p=>{const e=p[bestKey]||{avg:false,med:false};return{...p,[bestKey]:{avg:e.avg||avgImp,med:e.med||medImp}};});
             setAoxStack(s=>s.slice(0,-1));
             if(prevDate)setDate({...prevDate});
             setAoxPersistBtns(greenOnly);
@@ -454,8 +489,8 @@
             {label:"Median",value:fmtTime(calcMed(times)),off:false,fn:null},
           ]}/>
           <div className="mt-3 flex gap-4 text-xs text-purple-300/60">
-            <span>Best Average: {bestData.avg!=null?`${bestData.avg.toFixed(2)}s`:"—"}</span>
-            <span>Best Median: {bestData.med!=null?`${bestData.med.toFixed(2)}s`:"—"}</span>
+            <span>Best Average: {bestData.avg!=null?`${bestData.avg.toFixed(2)}s`:"—"}{bestNew[bestKey]?.avg&&<sup className="text-purple-400 font-bold ml-0.5">★</sup>}</span>
+            <span>Best Median: {bestData.med!=null?`${bestData.med.toFixed(2)}s`:"—"}{bestNew[bestKey]?.med&&<sup className="text-purple-400 font-bold ml-0.5">★</sup>}</span>
           </div>
           <div className="mt-3 flex items-center gap-2 flex-nowrap">
             <div className="flex items-center shrink-0"><span className={`text-sm leading-none text-purple-200/80${runPhase!=="idle"?" opacity-60":""}`}>Ao</span><input type="text" inputMode="numeric" readOnly={runPhase!=="idle"} value={aoxN} onChange={e=>{if(runPhase==="idle")setAoxN(e.target.value);}} onBlur={()=>setAoxN(String(Math.max(2,Math.min(1000,parseInt(aoxN)||10))))} className={`panel rounded-xl px-2 py-1 w-14 text-center tabular-nums text-sm focus:outline-none shrink-0${runPhase!=="idle"?" opacity-60 pointer-events-none":""}`}/></div>
@@ -580,6 +615,8 @@
       const markCorrect=idx=>setPersistBtns(prev=>{const next={...prev};for(const k in next){if(next[k]==='wrong-latest')next[k]='wrong-prev';}next[idx]='correct';return next;});
       const resetPB=()=>setPersistBtns({});
       const [blitzBest,setBlitzBest]=useState({});
+      const [blitzBestNew,setBlitzBestNew]=useState({});// {[key]:{score:bool,streak:bool}}
+      const [suddenBestNew,setSuddenBestNew]=useState({});// {[key]:bool}
       const [suddenBest,setSuddenBest]=useState({});
       const suddenBestSnapRef=useRef(null);
       const [allowMistakes,setAllowMistakes]=useState(true);
@@ -602,7 +639,7 @@
       const flashBarRef=useRef(null);
       const endFlashPhase=useCallback(()=>{setFlashPhase("hide");flashDeadlineRef.current=null;setFlashRemainMs(0);flashTimerRef.current=null;},[]);
       const [ded,setDed]=useState(null);
-      const getDedCorrectIdx=()=>{if(!ded)return-1;if(ded.type==="year")return ded.options.findIndex(y=>y===ded.y);if(ded.type==="month")return ded.options.findIndex(m=>m===ded.m);return ded.options.findIndex(d=>d===ded.d);};
+      const getDedCorrectIdx=()=>{if(!ded)return-1;if(ded.type==="year")return ded.options.findIndex(y=>y===ded.y);if(ded.type==="month"){if(ded.boxes)return ded.boxes.findIndex(b=>b.months.includes(ded.m));return ded.options.findIndex(m=>m===ded.m);}return ded.options.findIndex(d=>d===ded.d);};
       const [dedFlash,setDedFlash]=useState(null);
       const [lookupHistory,setLookupHistory]=useState([]);
       const [lookupInput,setLookupInput]=useState("");
@@ -646,7 +683,7 @@
         raf=requestAnimationFrame(loop);return()=>cancelAnimationFrame(raf);
       },[mode,blitzSec,qSec,blitzRunning,active,flashPhase]);
       const trackingOn=()=>["classic","blitz","flash","deduction"].includes(mode);
-      const arm=()=>{resetPB();setActive(false);setShowTimerDate(false);setMsg("");setGuesses([]);setFlash(null);setLocked(false);setRevealed(false);setCountedWrong(false);setCanOverrideCorrect(false);setPendingWrongOverride(null);setOverrideUsedThisQ(false);setBackDepth(0);setTimerDone(false);setStack([]);setForwardStack([]);setDedStack([]);setDedForwardStack([]);if(mode==="blitz")resetStatsCurrent();setBlitzRemain(blitzSec);blitzRemainRef.current=blitzSec;blitzStartRef.current=null;blitzPausedAtRef.current=null;blitzPausedAccRef.current=0;setBlitzRunning(false);if(mode==="blitz")setBlitzRoundStats(blankStats());qDeadlineRef.current=null;qPausedAtRef.current=null;qPausedAccRef.current=0;setQRemain(qSec);clearTimeout(flashTimerRef.current);flashTimerRef.current=null;setFlashPhase("dash");flashDeadlineRef.current=null;setFlashRemainMs(flashMs);resetFlashBar();tStartRef.current=null;wrongTimeRef.current=null;prevStatsSnapshotRef.current=null;if(blitzBarRef.current)blitzBarRef.current.style.width="100%";if(blitzTimeRef.current)blitzTimeRef.current.textContent=fmtBlitzT(blitzSec);if(suddenBarRef.current)suddenBarRef.current.style.width="100%";if(suddenTimeRef.current)suddenTimeRef.current.textContent=qSec+"s";};
+      const arm=()=>{resetPB();setActive(false);setShowTimerDate(false);setMsg("");setGuesses([]);setFlash(null);setLocked(false);setRevealed(false);setCountedWrong(false);setCanOverrideCorrect(false);setPendingWrongOverride(null);setOverrideUsedThisQ(false);setBackDepth(0);setTimerDone(false);setStack([]);setForwardStack([]);setDedStack([]);setDedForwardStack([]);if(mode==="blitz")resetStatsCurrent();if(mode==="blitz"){setBlitzBestNew({});setSuddenBestNew({});}setBlitzRemain(blitzSec);blitzRemainRef.current=blitzSec;blitzStartRef.current=null;blitzPausedAtRef.current=null;blitzPausedAccRef.current=0;setBlitzRunning(false);if(mode==="blitz")setBlitzRoundStats(blankStats());qDeadlineRef.current=null;qPausedAtRef.current=null;qPausedAccRef.current=0;setQRemain(qSec);clearTimeout(flashTimerRef.current);flashTimerRef.current=null;setFlashPhase("dash");flashDeadlineRef.current=null;setFlashRemainMs(flashMs);resetFlashBar();tStartRef.current=null;wrongTimeRef.current=null;prevStatsSnapshotRef.current=null;if(blitzBarRef.current)blitzBarRef.current.style.width="100%";if(blitzTimeRef.current)blitzTimeRef.current.textContent=fmtBlitzT(blitzSec);if(suddenBarRef.current)suddenBarRef.current.style.width="100%";if(suddenTimeRef.current)suddenTimeRef.current.textContent=qSec+"s";};
       const begin=()=>{
         setActive(true);setShowTimerDate(false);setMsg("");setLocked(false);setRevealed(false);setCountedWrong(false);setCanOverrideCorrect(false);if(mode==="blitz")resetStatsCurrent();if(mode==="blitz"&&!perQ){blitzStartRef.current=performance.now();blitzPausedAccRef.current=0;blitzPausedAtRef.current=null;setBlitzRunning(true);setBlitzRemain(blitzSec);blitzRemainRef.current=blitzSec;setBlitzRoundStats(blankStats());}if(mode==="blitz"&&perQ){const now=performance.now();qDeadlineRef.current=now+qSec*1000;qPausedAccRef.current=0;qPausedAtRef.current=null;setQRemain(qSec);}if(mode==="flash"){setFlashPhase("show");clearTimeout(flashTimerRef.current);const now=performance.now();flashDeadlineRef.current=now+flashMs;setFlashRemainMs(flashMs);flashTimerRef.current=setTimeout(endFlashPhase,Math.max(50,flashMs));startFlashBar(flashMs);}tStartRef.current=performance.now();pushAndNext();
       };
@@ -705,7 +742,8 @@
           setDedStack(s=>s.slice(0,-1));setDed(prev);
           const ci=prev.type==="year"?prev.options.findIndex(y=>y===prev.y):prev.type==="month"?prev.options.findIndex(m=>m===prev.m):prev.options.findIndex(d=>d===prev.d);
           const wasAnswered=prev.btns&&Object.keys(prev.btns).length>0;
-          setPersistBtns(wasAnswered?prev.btns:{});setLocked(true);setRevealed(wasAnswered);setGuesses([]);setMsg("");
+          const wasRevealed=!!(prev.btns&&Object.values(prev.btns).includes('correct'));
+          setPersistBtns(wasAnswered?prev.btns:{});setLocked(true);setRevealed(wasRevealed);setGuesses([]);setMsg("");
           setCountedWrong(false);setPendingWrongOverride(null);setCalcPenalty(false);
           const cap=prev.capsule||{};
           prevStatsSnapshotRef.current=cap.snapshot||null;wrongTimeRef.current=cap.wrongTime??null;
@@ -723,7 +761,8 @@
         setForwardStack(s=>[...s,fwdEntry]);
         setStack(s=>s.slice(0,-1));setDate(prev);
         const wasAnswered=prev.btns&&Object.keys(prev.btns).length>0;
-        setPersistBtns(wasAnswered?prev.btns:{});setGuesses([]);setLocked(true);setRevealed(wasAnswered);setMsg("");
+        const wasRevealed=!!(prev.btns&&Object.values(prev.btns).includes('correct'));
+        setPersistBtns(wasAnswered?prev.btns:{});setGuesses([]);setLocked(true);setRevealed(wasRevealed);setMsg("");
         setCountedWrong(false);setPendingWrongOverride(null);setCalcPenalty(false);
         const cap=prev.capsule||{};
         prevStatsSnapshotRef.current=cap.snapshot||null;wrongTimeRef.current=cap.wrongTime??null;preCalcPenaltySnapshotRef.current=null;
@@ -748,8 +787,9 @@
             setBrowseHasCredit(fwd.hasCredit??false);
           }else{
             setDed(fwd);const fwdAnswered=fwd.btns&&Object.keys(fwd.btns).length>0;
+            const fwdRevealed=!!(fwd.btns&&Object.values(fwd.btns).includes('correct'));
             setPersistBtns(fwdAnswered?fwd.btns:{});
-            setLocked(true);setRevealed(fwdAnswered);setGuesses([]);setMsg("");
+            setLocked(true);setRevealed(fwdRevealed);setGuesses([]);setMsg("");
             setCountedWrong(false);setCalcPenalty(false);
             const cap=fwd.capsule||{};prevStatsSnapshotRef.current=cap.snapshot||null;wrongTimeRef.current=cap.wrongTime??null;
             setCanOverrideCorrect(cap.snapshot!=null&&!(fwd.overrideUsed||false));
@@ -776,8 +816,9 @@
           setBrowseHasCredit(fwd.hasCredit??false);
         }else{
           setDate({y:fwd.y,m:fwd.m,d:fwd.d});const fwdAnswered=fwd.btns&&Object.keys(fwd.btns).length>0;
+          const fwdRevealed=!!(fwd.btns&&Object.values(fwd.btns).includes('correct'));
           setPersistBtns(fwdAnswered?fwd.btns:{});
-          setLocked(true);setRevealed(fwdAnswered);setGuesses([]);setMsg("");
+          setLocked(true);setRevealed(fwdRevealed);setGuesses([]);setMsg("");
           setCountedWrong(false);setPendingWrongOverride(null);setCalcPenalty(false);preCalcPenaltySnapshotRef.current=null;
           const cap=fwd.capsule||{};prevStatsSnapshotRef.current=cap.snapshot||null;wrongTimeRef.current=cap.wrongTime??null;
           setCanOverrideCorrect(cap.snapshot!=null&&!(fwd.overrideUsed||false));
@@ -855,7 +896,7 @@
           if(mode==="blitz")setBlitzRoundStats(p=>({...p,good:p.good+1}));
           setCountedWrong(false);setCanOverrideCorrect(false);setGuesses([]);setMsg("");setLocked(false);setRevealed(false);setCalcPenalty(false);setCalcOpen(false);calcPenaltyStatesRef.current.set(mode,false);
           setFlash({type:"good",idx:mode==="deduction"?getDedCorrectIdx():correct});setTimeout(()=>setFlash(null),550);
-          if(isTimer(mode)){setActive(true);setShowTimerDate(false);if(mode==="blitz"&&!perQ){blitzStartRef.current=performance.now()-((blitzSec-blitzRemainRef.current)*1000);blitzPausedAccRef.current=0;setBlitzRunning(true);}if(mode==="blitz"&&perQ){setTimerDone(false);if(suddenBestSnapRef.current&&suddenBestSnapRef.current.key===qSec){const revertBest=suddenBestSnapRef.current.prev;setSuddenBest(prev=>({...prev,[qSec]:revertBest}));suddenBestSnapRef.current=null;}const now=performance.now();qDeadlineRef.current=now+qSec*1000;qPausedAccRef.current=0;qPausedAtRef.current=null;setQRemain(qSec);}if(mode==="flash"){setFlashPhase("show");clearTimeout(flashTimerRef.current);const now=performance.now();flashDeadlineRef.current=now+flashMs;setFlashRemainMs(flashMs);flashTimerRef.current=setTimeout(endFlashPhase,Math.max(50,flashMs));startFlashBar(flashMs);}}
+          if(isTimer(mode)){setActive(true);setShowTimerDate(false);if(mode==="blitz"&&!perQ){blitzStartRef.current=performance.now()-((blitzSec-blitzRemainRef.current)*1000);blitzPausedAccRef.current=0;setBlitzRunning(true);}if(mode==="blitz"&&perQ){setTimerDone(false);if(suddenBestSnapRef.current&&suddenBestSnapRef.current.key===qSec){const revertBest=suddenBestSnapRef.current.prev;setSuddenBest(prev=>({...prev,[qSec]:revertBest}));setSuddenBestNew(p=>{const n={...p};delete n[qSec];return n;});suddenBestSnapRef.current=null;}const now=performance.now();qDeadlineRef.current=now+qSec*1000;qPausedAccRef.current=0;qPausedAtRef.current=null;setQRemain(qSec);}if(mode==="flash"){setFlashPhase("show");clearTimeout(flashTimerRef.current);const now=performance.now();flashDeadlineRef.current=now+flashMs;setFlashRemainMs(flashMs);flashTimerRef.current=setTimeout(endFlashPhase,Math.max(50,flashMs));startFlashBar(flashMs);}}
           const overrideBtns=mode==="deduction"?{[getDedCorrectIdx()]:'correct'}:{[correct]:'correct'};pushAndNext(overrideBtns);if(mode==="deduction")setDedStack(s=>{if(!s.length)return s;return[...s.slice(0,-1),{...s[s.length-1],overrideUsed:true}];});else setStack(s=>{if(!s.length)return s;return[...s.slice(0,-1),{...s[s.length-1],overrideUsed:true}];});setPendingWrongOverride(null);return;
         }
         if(pendingWrongOverride!=null){
@@ -910,16 +951,28 @@
           const fy=lo>0?lo:1;setDed({type:"year",y:fy,m:1,d:1,w:activeWday(fy,1,1),options:[fy]});return;
         }
         if(dedType==="month"){
-          const shuffle=arr=>{for(let i=arr.length-1;i>0;i--){const j=rint(0,i);[arr[i],arr[j]]=[arr[j],arr[i]];}return arr;};
-          const buildMonth=(yc,rand=true)=>{const julYc=useJulian&&isJulianDate(yc,1,1);const table=(julYc?isLeapJulian(yc):isLeap(yc))?DOOMSDAY_MONTH.leap:DOOMSDAY_MONTH.common;const bOpts=cm=>{const used=new Set([table[cm-1]]);const months=[cm];for(let i=0;i<12&&months.length<MONTH_OPTION_COUNT;i++){const mi=i+1;if(mi===cm)continue;const v=table[i];if(used.has(v))continue;used.add(v);months.push(mi);}if(months.length!==MONTH_OPTION_COUNT)return null;months.sort((a,b)=>a-b);return months;};const dl=Array.from({length:31},(_,i)=>i+1),wl=Array.from({length:7},(_,i)=>i);if(rand){shuffle(dl);shuffle(wl);}for(const d of dl){for(const w of wl){const cands=[];for(let m=1;m<=12;m++){if(d<=dimFn(yc,m)&&activeWday(yc,m,d)===w)cands.push(m);}if(cands.length!==1)continue;const m=cands[0];const opts=bOpts(m);if(!opts)continue;return{y:yc,d,w,m,options:opts};}}return null;};
-          for(let t=0;t<800;t++){const yc=rint(lo,hi);if(yc===0)continue;const b=buildMonth(yc);if(b){setDed({type:"month",...b});return;}}
-          for(let yc=lo;yc<=hi;yc++){if(yc===0)continue;const b=buildMonth(yc,false);if(b){setDed({type:"month",...b});return;}}
-          const fy=lo>0?lo:1;const b=buildMonth(fy,false);if(b){setDed({type:"month",...b});}else{const julFy=useJulian&&isJulianDate(fy,1,1);const table=(julFy?isLeapJulian(fy):isLeap(fy))?DOOMSDAY_MONTH.leap:DOOMSDAY_MONTH.common;const months=[1];const used=new Set([table[0]]);for(let i=1;i<12&&months.length<MONTH_OPTION_COUNT;i++){if(used.has(table[i]))continue;used.add(table[i]);months.push(i+1);}setDed({type:"month",y:fy,d:1,w:activeWday(fy,1,1),m:1,options:months});}return;
+          // Pick a year, pick a box uniformly, pick a month from that box uniformly, pick a day uniformly
+          let yc=null;for(let t=0;t<600;t++){const c=rint(lo,hi);if(c!==0){yc=c;break;}}if(yc==null)yc=lo>0?lo:1;
+          const julYc=useJulian&&isJulianDate(yc,1,1);
+          const isLeapY=julYc?isLeapJulian(yc):isLeap(yc);
+          const boxes=isLeapY?MONTH_BOXES_LEAP:MONTH_BOXES_COMMON;
+          const boxIdx=rint(0,boxes.length-1);
+          const box=boxes[boxIdx];
+          const m=box.months[rint(0,box.months.length-1)];
+          const D=dimFn(yc,m),d=rint(1,D),w=activeWday(yc,m,d);
+          // Store the boxes array as options so the UI can render box labels
+          setDed({type:"month",y:yc,d,w,m,options:boxes.map(b=>b.label),boxes:boxes.map(b=>({...b,months:[...b.months]}))});
+          return;
         }
         if(dedType==="day"){
           let yc=null;for(let t=0;t<600;t++){const c=rint(lo,hi);if(c!==0){yc=c;break;}}if(yc==null)yc=lo>0?lo:1;
-          const m=rint(1,12),D=dimFn(yc,m),d=rint(1,D),w=activeWday(yc,m,d);
-          const span=Math.min(DAY_OPTION_COUNT,D),half=Math.floor(span/2);let start=d-half;if(start<1)start=1;let end=start+span-1;if(end>D){end=D;start=Math.max(1,end-span+1);}
+          const m=rint(1,12),D=dimFn(yc,m);
+          const span=Math.min(DAY_OPTION_COUNT,D);
+          // Pick correct-answer position P uniformly in [0, span-1], then pick d so window [d-P, d-P+span-1] fits in [1, D]
+          const P=rint(0,span-1);
+          const dLo=P+1,dHi=D-(span-1)+P;
+          const d=rint(dLo,dHi),w=activeWday(yc,m,d);
+          const start=d-P,end=start+span-1;
           const opts=[];for(let v=start;v<=end;v++)opts.push(v);setDed({type:"day",y:yc,m,w,d,options:opts});return;
         }
       }
@@ -931,7 +984,7 @@
         const sctn=()=>{const ci=getDedCorrectIdx();const dedBtns=mkBtnsWithCorrect(persistBtns,ci);const capsule={snapshot:prevStatsSnapshotRef.current?{...prevStatsSnapshotRef.current}:null,wrongTime:wrongTimeRef.current};setDedStack(s=>ded?[...s,{...ded,btns:dedBtns,overrideUsed:false,capsule,hasCredit:computeHasCredit(dedBtns)}]:s);setDedForwardStack([]);spawnDed();setMsg("");setGuesses([]);setCountedWrong(false);setCanOverrideCorrect(false);setLocked(false);setRevealed(false);setOverrideUsedThisQ(false);setBackDepth(0);wrongTimeRef.current=null;prevStatsSnapshotRef.current=null;resetPB();};
         const sw=(label,idx)=>{if(!countedWrong){wrongTimeRef.current=tStartRef.current?(performance.now()-tStartRef.current)/1000:null;prevStatsSnapshotRef.current={played:S.played,good:S.good,streak:S.streak,best:S.best,timesLen:S.times.length,blitzPlayed:blitzRoundStats.played,blitzGood:blitzRoundStats.good,wasWrong:true};}markWrong(idx);setGuesses(g=>g.includes(label)?g:[...g,label]);setCountedWrong(true);setCanOverrideCorrect(false);};
         if(ded.type==="year"){const ok=(+val)===ded.y;flashDed("year",index,ok);if(ok){if(!countedWrong){prevStatsSnapshotRef.current={played:S.played,good:S.good,streak:S.streak,best:S.best,timesLen:S.times.length,blitzPlayed:blitzRoundStats.played,blitzGood:blitzRoundStats.good,wasWrong:false};setCanOverrideCorrect(true);if(tStartRef.current){const dt=(performance.now()-tStartRef.current)/1000;updateStats(c=>{c.times=[...c.times,dt];});}}else if(countedWrong&&prevStatsSnapshotRef.current){setCanOverrideCorrect(true);}if(!countedWrong)updateStats(c=>{c.played+=1;c.good+=1;c.streak+=1;if(c.streak>c.best)c.best=c.streak;});sctn();}else{if(!countedWrong)updateStats(c=>{c.played+=1;c.streak=0;});sw(fmtYear(+val),index);}}
-        if(ded.type==="month"){const ok=(+val)===ded.m;flashDed("month",index,ok);if(ok){if(!countedWrong){prevStatsSnapshotRef.current={played:S.played,good:S.good,streak:S.streak,best:S.best,timesLen:S.times.length,blitzPlayed:blitzRoundStats.played,blitzGood:blitzRoundStats.good,wasWrong:false};setCanOverrideCorrect(true);if(tStartRef.current){const dt=(performance.now()-tStartRef.current)/1000;updateStats(c=>{c.times=[...c.times,dt];});}}else if(countedWrong&&prevStatsSnapshotRef.current){setCanOverrideCorrect(true);}if(!countedWrong)updateStats(c=>{c.played+=1;c.good+=1;c.streak+=1;if(c.streak>c.best)c.best=c.streak;});sctn();}else{if(!countedWrong)updateStats(c=>{c.played+=1;c.streak=0;});sw(MONTH[+val-1],index);}}
+        if(ded.type==="month"){const ok=ded.boxes?ded.boxes[index]?.months.includes(ded.m):((+val)===ded.m);flashDed("month",index,ok);if(ok){if(!countedWrong){prevStatsSnapshotRef.current={played:S.played,good:S.good,streak:S.streak,best:S.best,timesLen:S.times.length,blitzPlayed:blitzRoundStats.played,blitzGood:blitzRoundStats.good,wasWrong:false};setCanOverrideCorrect(true);if(tStartRef.current){const dt=(performance.now()-tStartRef.current)/1000;updateStats(c=>{c.times=[...c.times,dt];});}}else if(countedWrong&&prevStatsSnapshotRef.current){setCanOverrideCorrect(true);}if(!countedWrong)updateStats(c=>{c.played+=1;c.good+=1;c.streak+=1;if(c.streak>c.best)c.best=c.streak;});sctn();}else{if(!countedWrong)updateStats(c=>{c.played+=1;c.streak=0;});sw(String(val),index);}}
         if(ded.type==="day"){const ok=(+val)===ded.d;flashDed("day",index,ok);if(ok){if(!countedWrong){prevStatsSnapshotRef.current={played:S.played,good:S.good,streak:S.streak,best:S.best,timesLen:S.times.length,blitzPlayed:blitzRoundStats.played,blitzGood:blitzRoundStats.good,wasWrong:false};setCanOverrideCorrect(true);if(tStartRef.current){const dt=(performance.now()-tStartRef.current)/1000;updateStats(c=>{c.times=[...c.times,dt];});}}else if(countedWrong&&prevStatsSnapshotRef.current){setCanOverrideCorrect(true);}if(!countedWrong)updateStats(c=>{c.played+=1;c.good+=1;c.streak+=1;if(c.streak>c.best)c.best=c.streak;});sctn();}else{if(!countedWrong)updateStats(c=>{c.played+=1;c.streak=0;});sw(String(+val),index);}}
       }
       useLayoutEffect(()=>{
@@ -1040,7 +1093,7 @@
       const lookupCalcTargetKey=lookupCalcDate?`${lookupCalcDate.y}-${lookupCalcDate.m}-${lookupCalcDate.d}`:"none";
       useEffect(()=>{if(calcInstantClose){const t=setTimeout(()=>setCalcInstantClose(false),50);return()=>clearTimeout(t);}},[calcInstantClose]);
       useEffect(()=>{const pm=prevModeRef.current;if(pm!==mode){prevModeRef.current=mode;return;}setCalcOpen(false);setCalcInstantClose(false);prevModeRef.current=mode;},[calcTargetKey,mode]);
-      const handleResetStats=()=>{resetStatsCurrent();if(mode==='blitz'){setBlitzBest({});setSuddenBest({});}setStack([]);setForwardStack([]);setDedStack([]);setDedForwardStack([]);setBackDepth(0);resetPB();setGuesses([]);setMsg("");setLocked(false);setRevealed(false);setCountedWrong(false);setCanOverrideCorrect(false);setPendingWrongOverride(null);setOverrideUsedThisQ(false);setCalcPenalty(false);setCalcOpen(false);setCalcInstantClose(false);wrongTimeRef.current=null;prevStatsSnapshotRef.current=null;preCalcPenaltySnapshotRef.current=null;setDate(randomDate(minY,maxY,useJulian));if(mode==="deduction")spawnDed();tStartRef.current=performance.now();};
+      const handleResetStats=()=>{resetStatsCurrent();if(mode==='blitz'){setBlitzBest({});setSuddenBest({});setBlitzBestNew({});setSuddenBestNew({});}setStack([]);setForwardStack([]);setDedStack([]);setDedForwardStack([]);setBackDepth(0);resetPB();setGuesses([]);setMsg("");setLocked(false);setRevealed(false);setCountedWrong(false);setCanOverrideCorrect(false);setPendingWrongOverride(null);setOverrideUsedThisQ(false);setCalcPenalty(false);setCalcOpen(false);setCalcInstantClose(false);wrongTimeRef.current=null;prevStatsSnapshotRef.current=null;preCalcPenaltySnapshotRef.current=null;if(!avgVisOff){setDate(randomDate(minY,maxY,useJulian));if(mode==="deduction")spawnDed();}tStartRef.current=performance.now();};
       const togglePerQBtn=()=>{if(active||timerDone)return;const newPerQ=!perQ;if(newPerQ&&allowMistakes)setAllowMistakes(false);setPerQ(newPerQ);};
       const toggleAllowMistakesBtn=()=>{if(active||timerDone)return;const newAM=!allowMistakes;if(newAM&&perQ)setPerQ(false);setAllowMistakes(newAM);};
       const canHideStats=["classic","deduction","flash"].includes(mode);
@@ -1069,6 +1122,9 @@
             const cur=prev[bk]??{score:0,streak:0};
             const newScore=Math.max(cur.score,blitzRoundStats.good);
             const newStreak=Math.max(cur.streak,blitzRoundStats.best);
+            const scoreImproved=newScore>cur.score;
+            const streakImproved=newStreak>cur.streak;
+            if(scoreImproved||streakImproved){setBlitzBestNew(p=>{const ent=p[bk]||{score:false,streak:false};return{...p,[bk]:{score:ent.score||scoreImproved,streak:ent.streak||streakImproved}};});}
             if(newScore===cur.score&&newStreak===cur.streak)return prev;
             return{...prev,[bk]:{score:newScore,streak:newStreak}};
           });
@@ -1077,6 +1133,7 @@
             const cur=prev[qSec]??{score:0};
             suddenBestSnapRef.current={key:qSec,prev:{...cur}};
             const newScore=Math.max(cur.score,S.good);
+            if(newScore>cur.score)setSuddenBestNew(p=>({...p,[qSec]:true}));
             if(newScore===cur.score)return prev;
             return{...prev,[qSec]:{score:newScore}};
           });
@@ -1088,7 +1145,8 @@
       const sAvg=calcAvg(S.times),sLast=calcLast(S.times),sMed=calcMed(S.times);
       const [dateOrder,setDateOrder]=useState('month-first');
       const [dateStyle,setDateStyle]=useState('written');
-      const fmtDate=(y,m,d)=>fmt(y,m,d,dateOrder,dateStyle);
+      const [yearFirst,setYearFirst]=useState(false);
+      const fmtDate=(y,m,d)=>fmt(y,m,d,dateOrder,dateStyle,yearFirst);
       const [settingsOpen,setSettingsOpen]=useState(false);
       const settingsRef=useRef(null);
       const settingsPopoverRef=useRef(null);
@@ -1107,6 +1165,7 @@
             <button type="button" onClick={()=>setDateStyle('written')} className={`flex-1 px-2 py-1.5 rounded-xl text-xs font-medium border ${dateStyle==='written'?"btn-solid border-transparent":"surface-toggle text-purple-100/80"}`}>Written</button>
             <button type="button" onClick={()=>setDateStyle('numeric')} className={`flex-1 px-2 py-1.5 rounded-xl text-xs font-medium border ${dateStyle==='numeric'?"btn-solid border-transparent":"surface-toggle text-purple-100/80"}`}>Numeric</button>
           </div>
+          <div className="flex items-center justify-between"><span className="text-xs text-purple-200/80">Year First</span><button type="button" onClick={()=>setYearFirst(v=>!v)} className={`px-3 py-1 rounded-xl text-xs font-medium border ${yearFirst?"btn-solid border-transparent":"surface-toggle border-purple-800/60 text-purple-100/80"}`}>{yearFirst?"On":"Off"}</button></div>
         </div>
         <div className="space-y-2">
           <div className="text-[10px] uppercase tracking-widest text-purple-300/60">Calendar System</div>
@@ -1127,7 +1186,7 @@
           <div className="flex items-center justify-between"><span className="text-xs text-purple-200/80">Use System Settings</span><button type="button" onClick={()=>setUseSystem(v=>!v)} className={`px-3 py-1 rounded-xl text-xs font-medium border ${useSystem?"btn-solid border-transparent":"surface-toggle border-purple-800/60 text-purple-100/80"}`}>{useSystem?"On":"Off"}</button></div>
           {useSystem?(<><div className="flex items-center gap-3"><span className="text-xs text-purple-200/80 w-10 shrink-0">Dark:</span><select value={darkTheme} onChange={e=>setDarkTheme(e.target.value)} className="panel rounded-xl px-2 py-1 text-sm flex-1 focus:outline-none focus:ring-2 focus:ring-purple-400 appearance-none">{DARK_THEMES.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></div><div className="flex items-center gap-3"><span className="text-xs text-purple-200/80 w-10 shrink-0">Light:</span><select value={lightTheme} onChange={e=>setLightTheme(e.target.value)} className="panel rounded-xl px-2 py-1 text-sm flex-1 focus:outline-none focus:ring-2 focus:ring-purple-400 appearance-none">{LIGHT_THEMES.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></div></>):(<div className="flex items-center gap-3"><span className="text-xs text-purple-200/80 w-10 shrink-0">Theme:</span><select value={manualTheme} onChange={e=>setManualTheme(e.target.value)} className="panel rounded-xl px-2 py-1 text-sm flex-1 focus:outline-none focus:ring-2 focus:ring-purple-400 appearance-none">{ALL_THEMES_LABELED.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></div>)}
         </div>
-        <div className="pt-2 border-t border-purple-500/20 text-[11px] text-purple-300/60">Last Updated: {(()=>{const d=DEPLOY_TS;const y=String(d.getFullYear()).slice(-2);const m=d.getMonth()+1;const day=d.getDate();const datePart=dateOrder==='day-first'?`${day}/${m}/${y}`:`${m}/${day}/${y}`;const timePart=d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',hour12:false});return`${datePart} ${timePart}`;})()}</div>
+        <div className="pt-2 border-t border-purple-500/20 text-[11px] text-purple-300/60">Last Updated: {(()=>{const d=DEPLOY_TS;const y=String(d.getFullYear()).slice(-2);const m=d.getMonth()+1;const day=d.getDate();const df=dateOrder==='day-first';const datePart=yearFirst?(df?`${y}/${day}/${m}`:`${y}/${m}/${day}`):(df?`${day}/${m}/${y}`:`${m}/${day}/${y}`);const timePart=d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',hour12:false});return`${datePart} ${timePart}`;})()}</div>
       </div>);
       return(
         <div className="mx-auto px-4 py-5 w-full max-w-[480px]">
@@ -1159,12 +1218,12 @@
               {label:"Median",value:fmtTime(sMed),off:effectiveAvgVisOff,fn:canHideStats?toggleTimingVis:null},
             ]}/>
             {["classic","deduction"].includes(mode)&&(<div className="mt-3"><button type="button" className="w-full px-3 py-1.5 rounded-xl btn-solid border border-transparent text-sm font-medium" onClick={handleResetStats}>Reset Stats</button></div>)}
-            {mode==='blitz'&&!perQ&&(<div className="mt-3 flex gap-4 text-xs text-purple-300/60"><span>Best Score: {blitzBest[`${allowMistakes?'m':'n'}${blitzSec}`]?.score??'—'}</span><span>Best Streak: {blitzBest[`${allowMistakes?'m':'n'}${blitzSec}`]?.streak??'—'}</span></div>)}
-            {mode==='blitz'&&perQ&&(<div className="mt-3 text-xs text-purple-300/60"><span>Best Score: {suddenBest[qSec]?.score??'—'}</span></div>)}
+            {mode==='blitz'&&!perQ&&(()=>{const bk=`${allowMistakes?'m':'n'}${blitzSec}`;const newF=blitzBestNew[bk]||{score:false,streak:false};return(<div className="mt-3 flex gap-4 text-xs text-purple-300/60"><span>Best Score: {blitzBest[bk]?.score??'—'}{newF.score&&<sup className="text-purple-400 font-bold ml-0.5">★</sup>}</span><span>Best Streak: {blitzBest[bk]?.streak??'—'}{newF.streak&&<sup className="text-purple-400 font-bold ml-0.5">★</sup>}</span></div>);})()}
+            {mode==='blitz'&&perQ&&(<div className="mt-3 text-xs text-purple-300/60"><span>Best Score: {suddenBest[qSec]?.score??'—'}{suddenBestNew[qSec]&&<sup className="text-purple-400 font-bold ml-0.5">★</sup>}</span></div>)}
             {mode==='blitz'&&(<div className="mt-3 rounded-2xl panel p-3 space-y-2">
               <div className="flex gap-2">
                 <button type="button" onClick={toggleAllowMistakesBtn} className={`flex-1 px-2 py-1 rounded-xl text-xs font-medium border ${allowMistakes?"btn-solid border-transparent":"surface-toggle text-purple-100/80"}${(active||timerDone)?" opacity-60 pointer-events-none":""}`}>Allow Mistakes</button>
-                <button type="button" onClick={togglePerQBtn} className={`flex-1 px-2 py-1 rounded-xl text-xs font-medium border btn-solid border-transparent${(active||timerDone)?" opacity-60 pointer-events-none":""}`}>{perQ?"Per Q":"Per Round"}</button>
+                <button type="button" onClick={togglePerQBtn} className={`flex-1 px-2 py-1 rounded-xl text-xs font-medium border btn-solid border-transparent${(active||timerDone)?" opacity-60 pointer-events-none":""}`}>{perQ?"Per Question":"Per Round"}</button>
               </div>
               {timerSettingControl}
             </div>)}
@@ -1174,7 +1233,7 @@
             </>)}
           </>)}
           <AoxMode minY={minY} maxY={maxY} visible={mode==="aox"} extStats={extStats} setExtStats={setExtStats} fmtDate={fmtDate} useJulian={useJulian}/>
-          {mode==="lookup"&&(<div className="mt-5"><LookupCard history={lookupHistory} onAddHistory={pushLookupHistory} onMoveHistory={moveHistoryEntryToTop} onClearHistory={clearLookupHistory} inputValue={lookupInput} onInputChange={setLookupInput} outputValue={lookupOutput} onOutputChange={setLookupOutput} calcDate={lookupCalcDate} onCalcDateChange={setLookupCalcDate} selectedHistoryId={lookupSelectedHistoryId} onSelectedHistoryIdChange={setLookupSelectedHistoryId} calcOpen={lookupCalcOpen} onCalcOpenChange={setLookupCalcOpen} fmtDate={fmtDate} dateOrder={dateOrder} useJulian={useJulian}/></div>)}
+          {mode==="lookup"&&(<div className="mt-5"><LookupCard history={lookupHistory} onAddHistory={pushLookupHistory} onMoveHistory={moveHistoryEntryToTop} onClearHistory={clearLookupHistory} inputValue={lookupInput} onInputChange={setLookupInput} outputValue={lookupOutput} onOutputChange={setLookupOutput} calcDate={lookupCalcDate} onCalcDateChange={setLookupCalcDate} selectedHistoryId={lookupSelectedHistoryId} onSelectedHistoryIdChange={setLookupSelectedHistoryId} calcOpen={lookupCalcOpen} onCalcOpenChange={setLookupCalcOpen} fmtDate={fmtDate} dateOrder={dateOrder} yearFirst={yearFirst} useJulian={useJulian}/></div>)}
           {mode==="guide"&&(<div className="mt-5"><GuidePage/></div>)}
           {["classic","blitz","flash"].includes(mode)&&(
             <div className="mt-5">
@@ -1219,7 +1278,7 @@
                 </div>
                 <div className="mt-4">
                   {ded&&ded.type==="year"&&(<div className="grid grid-cols-3 gap-2">{ded.options.map((y,idx)=>{const ps=persistBtns[idx];let bCls;if(ps==='correct')bCls='btn-correct-persist border-transparent';else if(ps==='wrong-latest')bCls='btn-wrong-persist border-transparent';else if(ps==='wrong-prev')bCls='btn-wrong-dim border-transparent';else if(dedFlash&&dedFlash.kind==="year"&&dedFlash.index===idx)bCls=(dedFlash.ok?"flash-good":"flash-bad")+' border-transparent';else bCls=idleBtn;const perLocked=!!ps;const shouldDim=(locked||calcOpen||calcPenaltyActive)&&!ps;return(<button key={idx} type="button" onClick={()=>submitDedAnswer(y,idx)} className={`${baseBtn} py-2 text-sm ${bCls} ${(perLocked||(locked||calcOpen||calcPenaltyActive))?"pointer-events-none":""} ${shouldDim?"opacity-60":""} ${centerLastOpt(idx,ded.options.length)}`}>{fmtYear(y)}</button>);})}</div>)}
-                  {ded&&ded.type==="month"&&(<div className="grid grid-cols-3 gap-2">{ded.options.map((mv,idx)=>{const ps=persistBtns[idx];let bCls;if(ps==='correct')bCls='btn-correct-persist border-transparent';else if(ps==='wrong-latest')bCls='btn-wrong-persist border-transparent';else if(ps==='wrong-prev')bCls='btn-wrong-dim border-transparent';else if(dedFlash&&dedFlash.kind==="month"&&dedFlash.index===idx)bCls=(dedFlash.ok?"flash-good":"flash-bad")+' border-transparent';else bCls=idleBtn;const perLocked=!!ps;const shouldDim=(locked||calcOpen||calcPenaltyActive)&&!ps;return(<button key={idx} type="button" onClick={()=>submitDedAnswer(mv,idx)} className={`${baseBtn} py-2 text-sm ${bCls} ${(perLocked||(locked||calcOpen||calcPenaltyActive))?"pointer-events-none":""} ${shouldDim?"opacity-60":""} ${centerLastOpt(idx,ded.options.length)}`}>{MONTH_ABBR[mv-1]}</button>);})}</div>)}
+                  {ded&&ded.type==="month"&&(<div className="grid grid-cols-3 gap-2">{ded.options.map((mv,idx)=>{const ps=persistBtns[idx];let bCls;if(ps==='correct')bCls='btn-correct-persist border-transparent';else if(ps==='wrong-latest')bCls='btn-wrong-persist border-transparent';else if(ps==='wrong-prev')bCls='btn-wrong-dim border-transparent';else if(dedFlash&&dedFlash.kind==="month"&&dedFlash.index===idx)bCls=(dedFlash.ok?"flash-good":"flash-bad")+' border-transparent';else bCls=idleBtn;const perLocked=!!ps;const shouldDim=(locked||calcOpen||calcPenaltyActive)&&!ps;return(<button key={idx} type="button" onClick={()=>submitDedAnswer(mv,idx)} className={`${baseBtn} py-2 text-xs ${bCls} ${(perLocked||(locked||calcOpen||calcPenaltyActive))?"pointer-events-none":""} ${shouldDim?"opacity-60":""} ${centerLastOpt(idx,ded.options.length)}`}>{mv}</button>);})}</div>)}
                   {ded&&ded.type==="day"&&(<div className="grid grid-cols-3 gap-2">{ded.options.map((dv,idx)=>{const ps=persistBtns[idx];let bCls;if(ps==='correct')bCls='btn-correct-persist border-transparent';else if(ps==='wrong-latest')bCls='btn-wrong-persist border-transparent';else if(ps==='wrong-prev')bCls='btn-wrong-dim border-transparent';else if(dedFlash&&dedFlash.kind==="day"&&dedFlash.index===idx)bCls=(dedFlash.ok?"flash-good":"flash-bad")+' border-transparent';else bCls=idleBtn;const perLocked=!!ps;const shouldDim=(locked||calcOpen||calcPenaltyActive)&&!ps;return(<button key={idx} type="button" onClick={()=>submitDedAnswer(dv,idx)} className={`${baseBtn} py-2 text-sm ${bCls} ${(perLocked||(locked||calcOpen||calcPenaltyActive))?"pointer-events-none":""} ${shouldDim?"opacity-60":""} ${centerLastOpt(idx,ded.options.length)}`}>{dv}</button>);})}</div>)}
                 </div>
               </div>
@@ -1271,7 +1330,7 @@
           </GuideSection>
           <GuideSection id="range" title="Year Range" openId={open} onToggle={toggle}><p>Set via the ⚙ settings menu. Controls which years dates are drawn from. Defaults to 1–10000 AD. Changing the range resets the current round.</p></GuideSection>
           <GuideSection id="theme" title="Theme" openId={open} onToggle={toggle}><p>Five themes: Dusk (default dark navy), Midnight (true black with purple), Nebula (deep purple), Light (clean white), and Parchment (warm cream). Accessible from the ⚙ settings menu in any tab. Enable Use System Settings to match your device's light/dark mode automatically, with separate theme choices for each. Disable to pick one manually.</p></GuideSection>
-          <GuideSection id="dateformat" title="Date Format" openId={open} onToggle={toggle}><p>Set via the ⚙ settings menu. The Month First / Day First and Written / Numeric settings apply site-wide — to all game modes, lookup results, and the Last Updated timestamp. The lookup input also follows your order setting (month/day/year or day/month/year). The time in Last Updated is in 24-hour format.</p></GuideSection>
+          <GuideSection id="dateformat" title="Date Format" openId={open} onToggle={toggle}><p>Set via the ⚙ settings menu. The Month First / Day First, Written / Numeric, and Year First settings apply site-wide — to all game modes, lookup results, and the Last Updated timestamp. Year First is an additional toggle: when on, the year moves to the front and the remaining order still follows Month First / Day First. The lookup input also follows these settings (e.g. month/day/year, day/month/year, year/month/day, or year/day/month). The time in Last Updated is in 24-hour format.</p></GuideSection>
           <GuideSection id="julian" title="Julian Calendar" openId={open} onToggle={toggle}><p>Toggle via the ⚙ settings menu under Calendar System. Off by default. When on, dates on or before October 4, 1582 are treated as Julian calendar dates, which have different leap year rules — every year divisible by 4 is a leap year, with no century exception. This affects weekday calculation and the codes shown in Show Codes. October 5–14, 1582 are always excluded since those dates never existed; the Gregorian calendar skipped them to correct accumulated calendar drift.</p></GuideSection>
           <Divider label="Modes"/>
           <GuideSection id="classic" title="Classic" openId={open} onToggle={toggle}><p>The main practice mode with no time pressure. Answer at your own pace. Override works after both wrong and correct answers. Reset Stats clears your stats and question history.</p></GuideSection>
@@ -1284,17 +1343,17 @@
             <p><b>Override</b> — after wrong: gives credit with time recorded, preserves streak. After correct: undoes the credit, resets streak, and either ends the run (Allow Mistakes off) or advances to a new date (Allow Mistakes on). You can also override past dates while browsing back with Back/Forward. If overriding on the last question with Allow Mistakes on, a new date is generated to complete the average. One override per question.</p>
             <p>Stats in AoX are always visible and always track. Best average and best median are tracked independently per n and Allow Mistakes combination — they can come from different runs. If you override a correct answer that set a new best, the best is also restored. The score display freezes when a run ends and only resets after pressing Reset.</p>
           </GuideSection>
-          <GuideSection id="deduction" title="Deduction" openId={open} onToggle={toggle}><p>Identify the missing piece of a date given the rest plus the weekday. Choose Day, Month, or Year mode. Each question has exactly one correct answer. Switch subtypes anytime — progress in each is preserved. Stats are tracked separately for each subtype (Day, Month, Year). Reset Stats only resets the current subtype and clears its question history.</p></GuideSection>
+          <GuideSection id="deduction" title="Deduction" openId={open} onToggle={toggle}><p>Identify the missing piece of a date given the rest plus the weekday. Choose Day, Month, or Year mode.</p><p className="mt-2"><b>Day</b> — seven consecutive days are shown. The correct day can appear in any position.</p><p className="mt-2"><b>Month</b> — seven fixed boxes group months that share the same month code, so tapping any month within a box gives the same weekday for that date. Tap the box containing the correct month. The boxes are always in the same position. In leap years, January shifts into the Apr/Jul box (becoming Jan/Apr/Jul) and February shifts into the Aug box (becoming Feb/Aug); the other boxes are unchanged.</p><p className="mt-2"><b>Year</b> — nine year options centered on the correct year, all landing on the same weekday for the given month and day.</p><p className="mt-2">Switch subtypes anytime — progress in each is preserved. Stats are tracked separately for each subtype. Reset Stats only resets the current subtype and clears its question history.</p></GuideSection>
           <GuideSection id="blitz" title="Blitz" openId={open} onToggle={toggle}>
             <p>Answer as many dates as possible before time runs out. Score shows correct answers for the current round only.</p>
             <p><b>Allow Mistakes</b> — when on, wrong answers count against accuracy but don't end the round. When off, a wrong answer ends the round immediately.</p>
-            <p><b>Per Round / Per Q</b> — tap to switch. Per Round uses a single countdown for the whole round (10s–3m, default 60s). Per Q gives each question its own countdown (1s–20s, default 5s); running out of time ends the round. Per Q always enforces no mistakes: tapping Per Q auto-disables Allow Mistakes, and tapping Allow Mistakes on while in Per Q auto-switches back to Per Round.</p>
+            <p><b>Per Round / Per Question</b> — tap to switch. Per Round uses a single countdown for the whole round (10s–3m, default 60s). Per Question gives each question its own countdown (1s–20s, default 5s); running out of time ends the round. Per Question always enforces no mistakes: tapping Per Question auto-disables Allow Mistakes, and tapping Allow Mistakes on while in Per Question auto-switches back to Per Round.</p>
             <p>When the round ends, the correct answer for the current date is highlighted and your bests are recorded. You can then browse your round's history with Back/Forward and override past dates to adjust your score and saved bests. Overriding a wrong answer that ended the round resumes it.</p>
-            <p>Streak is hidden in Per Q since any wrong answer ends the round, making streak equal to score.</p>
-            <p>Best scores are tracked per exact configuration (duration + Allow Mistakes + Per Round/Per Q). Best score and best streak are tracked independently in Per Round — they can come from different rounds. Press Reset to clear your current round, unlock the settings, and start fresh. Changing settings while idle resets the current round.</p>
+            <p>Streak is hidden in Per Question since any wrong answer ends the round, making streak equal to score.</p>
+            <p>Best scores are tracked per exact configuration (duration + Allow Mistakes + Per Round/Per Question). Best score and best streak are tracked independently in Per Round — they can come from different rounds. Press Reset to clear your current round, unlock the settings, and start fresh. Changing settings while idle resets the current round.</p>
           </GuideSection>
           <GuideSection id="flash" title="Flash" openId={open} onToggle={toggle}><p>The date is briefly revealed (0.1s–3.0s, default 0.5s, adjustable via the slider) then hidden. Answer from memory. Reset Stats clears your stats and question history.</p></GuideSection>
-          <GuideSection id="lookup" title="Lookup" openId={open} onToggle={toggle}><p>Enter any AD date as month/day/year (or day/month/year if Day First is selected) to instantly see its weekday. Supports years 1–10000. Show Codes is available for all results and stays open as you browse your history. The history panel shows up to 10 entries before scrolling. October 5–14, 1582 never existed and will appear in history as "Does Not Exist" with Show Codes unavailable.</p></GuideSection>
+          <GuideSection id="lookup" title="Lookup" openId={open} onToggle={toggle}><p>Enter any AD date to instantly see its weekday. The input format follows your Date Format settings — month/day/year, day/month/year, year/month/day, or year/day/month. Supports years 1–10000. Show Codes is available for all results and stays open as you browse your history. The history panel shows up to 10 entries before scrolling. October 5–14, 1582 never existed and will appear in history as "Does Not Exist" with Show Codes unavailable.</p></GuideSection>
         </div>
       );
     }
@@ -1340,7 +1399,7 @@
       return(<div className={className??"mt-5"}><button type="button" onClick={toggle} className={`w-full px-4 py-2 rounded-xl btn-solid text-sm font-medium${!hasDate?" opacity-60 cursor-not-allowed pointer-events-none":""}`} aria-disabled={!hasDate}>{open?"Hide Codes":"Show Codes"}</button><Expander open={open&&hasDate} instant={!!instant}><div className={contentClassName??"mt-3 rounded-2xl panel p-4 pb-1"}><MethodExplanation date={frozenDate} useJulian={useJulian}/></div></Expander></div>);
     }
 
-    function LookupCard({history=[],onAddHistory,onMoveHistory,onClearHistory,inputValue="",onInputChange,outputValue="",onOutputChange,calcDate,onCalcDateChange,selectedHistoryId,onSelectedHistoryIdChange,calcOpen=false,onCalcOpenChange,fmtDate,dateOrder='month-first',useJulian=false}){
+    function LookupCard({history=[],onAddHistory,onMoveHistory,onClearHistory,inputValue="",onInputChange,outputValue="",onOutputChange,calcDate,onCalcDateChange,selectedHistoryId,onSelectedHistoryIdChange,calcOpen=false,onCalcOpenChange,fmtDate,dateOrder='month-first',yearFirst=false,useJulian=false}){
       const li=typeof inputValue==="string"?inputValue:String(inputValue??"");
       const sli=typeof onInputChange==="function"?onInputChange:()=>{};
       const lo=typeof outputValue==="string"?outputValue:String(outputValue??"");
@@ -1358,11 +1417,20 @@
       function runLookup(){
         const s=li.trim();
         const dayFirst=dateOrder==='day-first';
-        const match=/^(\d{1,2})\/(\d{1,2})\/(\d{1,5})$/.exec(s);
-        if(!match){ssid(null);slo(`Enter date as ${dayFirst?'day/month':'month/day'}/year, e.g. ${dayFirst?'4/7':'7/4'}/1776.`);lookupInputRef.current?.focus();return;}
-        let mm,dd;
-        if(dayFirst){dd=+match[1];mm=+match[2];}else{mm=+match[1];dd=+match[2];}
-        let yy=+match[3];
+        // Build format hint strings for error messages / placeholder
+        const orderLabel=yearFirst?(dayFirst?'year/day/month':'year/month/day'):(dayFirst?'day/month/year':'month/day/year');
+        const exampleLabel=yearFirst?(dayFirst?'1776/4/7':'1776/7/4'):(dayFirst?'4/7/1776':'7/4/1776');
+        // Year field accepts 1–5 digits; other two fields 1–2 digits
+        const match=yearFirst?/^(\d{1,5})\/(\d{1,2})\/(\d{1,2})$/.exec(s):/^(\d{1,2})\/(\d{1,2})\/(\d{1,5})$/.exec(s);
+        if(!match){ssid(null);slo(`Enter date as ${orderLabel}, e.g. ${exampleLabel}.`);lookupInputRef.current?.focus();return;}
+        let mm,dd,yy;
+        if(yearFirst){
+          yy=+match[1];
+          if(dayFirst){dd=+match[2];mm=+match[3];}else{mm=+match[2];dd=+match[3];}
+        }else{
+          if(dayFirst){dd=+match[1];mm=+match[2];}else{mm=+match[1];dd=+match[2];}
+          yy=+match[3];
+        }
         if(yy<1||yy>10000){ssid(null);slo("Year must be between 1 and 10000.");lookupInputRef.current?.focus();return;}
         if(mm<1||mm>12){ssid(null);slo("Month must be 1–12.");lookupInputRef.current?.focus();return;}
         const existing=entries.find(e=>e.y===yy&&e.m===mm&&e.d===dd);
@@ -1374,7 +1442,7 @@
         }
         if(isGapDate(yy,mm,dd)){
           const gapMsg="October 5–14, 1582 never existed. When the Gregorian calendar was adopted, 10 days were skipped to correct accumulated calendar drift.";
-          const displayDate=`${MONTH[mm-1]} ${dd}, ${yy}`;
+          const displayDate=fmtDate?fmtDate(yy,mm,dd):`${MONTH[mm-1]} ${dd}, ${yy}`;
           const entry={id:`${Date.now().toString(36)}-${Math.random().toString(36).slice(2,8)}`,label:displayDate,weekday:"Does Not Exist",result:gapMsg,y:yy,m:mm,d:dd,isGap:true};
           lastLookupRef.current=s;slo(gapMsg);scd(null);ssid(entry.id);sco(false);if(onAddHistory)onAddHistory(entry);lookupInputRef.current?.blur();return;
         }
@@ -1400,12 +1468,12 @@
         <div className="mt-1 space-y-4">
           <div className="rounded-2xl panel p-4 space-y-4">
             <div className="flex flex-wrap items-stretch gap-2">
-              <input ref={lookupInputRef} value={li} onChange={e=>sli(e.target.value)} placeholder={dayFirst?"e.g., 4/7/1776":"e.g., 7/4/1776"} className="panel rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-400 flex-1 min-w-0"/>
+              <input ref={lookupInputRef} value={li} onChange={e=>sli(e.target.value)} placeholder={yearFirst?(dayFirst?"e.g., 1776/4/7":"e.g., 1776/7/4"):(dayFirst?"e.g., 4/7/1776":"e.g., 7/4/1776")} className="panel rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-400 flex-1 min-w-0"/>
               <button type="button" onClick={runLookup} onMouseDown={e=>e.preventDefault()} className="px-4 py-2 rounded-xl btn-solid text-sm font-medium">Lookup</button>
               <button type="button" onClick={clearLookup} onMouseDown={e=>e.preventDefault()} className="px-4 py-2 rounded-xl bg-zinc-700 text-white text-sm font-medium">Clear</button>
             </div>
             {displayNote&&<div className="text-sm text-purple-100/90">{displayNote}</div>}
-            <p className="text-xs text-purple-100/90">Format: <b>{dayFirst?"day/month":"month/day"}/year</b> — e.g. <b>{dayFirst?"4/7":"7/4"}/1776</b>. AD dates only, 1–10000.</p>
+            <p className="text-xs text-purple-100/90">Format: <b>{yearFirst?(dayFirst?"year/day/month":"year/month/day"):(dayFirst?"day/month/year":"month/day/year")}</b> — e.g. <b>{yearFirst?(dayFirst?"1776/4/7":"1776/7/4"):(dayFirst?"4/7/1776":"7/4/1776")}</b>. AD dates only, 1–10000.</p>
           </div>
           <div className="rounded-2xl panel p-4 space-y-4">
             <div className="flex items-center justify-between text-[11px] uppercase tracking-wide text-purple-200/70"><span>History</span>{entries.length>0&&(<button type="button" onClick={clearHist} className="text-purple-200/70 font-medium">Clear History</button>)}</div>
