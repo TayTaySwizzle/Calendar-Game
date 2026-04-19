@@ -210,7 +210,7 @@
 
 
 
-    const DEPLOY_TS=new Date('2026-04-19T23:10:00Z');
+    const DEPLOY_TS=new Date('2026-04-19T23:46:00Z');
 
     function StatPanel({stats}){
       return(
@@ -310,7 +310,7 @@
         if(codesOpen)setCodesOpen(false);
         // Save current view to aox forward stack
         const fwdHC=!inBackMode?computeHCAox(aoxPersistBtns):aoxBrowseHasCredit;
-        const fwdEntry={...date,btns:{...aoxPersistBtns},overrideUsed:overrideUsedAox,capsule:{snapshot:prevTimesSnapRef.current?[...prevTimesSnapRef.current]:null,streakSnap:prevStreakSnapRef.current?{...prevStreakSnapRef.current}:null,wrongTime:wrongTimeRef.current,canOverrideCorrect,questionCounted,pendingWrongCredit},isLive:!inBackMode,liveCodesOpen:codesOpen,hasCredit:fwdHC};
+        const fwdEntry={...date,btns:{...aoxPersistBtns},overrideUsed:overrideUsedAox,capsule:{snapshot:prevTimesSnapRef.current?[...prevTimesSnapRef.current]:null,streakSnap:prevStreakSnapRef.current?{...prevStreakSnapRef.current}:null,wrongTime:wrongTimeRef.current,canOverrideCorrect,questionCounted,pendingWrongCredit},isLive:!inBackMode,hasCredit:fwdHC};
         setAoxForwardStack(s=>[...s,fwdEntry]);
         setAoxStack(s=>s.slice(0,-1));setDate({...prevEntry});setInBackMode(true);setAoxBackDepth(d=>d+1);
         // Restore capsule for override
@@ -335,7 +335,7 @@
           setCanOverrideCorrect(!!fwd.capsule?.canOverrideCorrect);
           setQuestionCounted(!!fwd.capsule?.questionCounted);
           setPendingWrongCredit(fwd.capsule?.pendingWrongCredit||null);
-          setCodesOpen(!!fwd.liveCodesOpen);setGuesses([]);
+          setCodesOpen(false);setGuesses([]);
           const fc=fwd.capsule||{};
           prevTimesSnapRef.current=fc.snapshot||null;prevStreakSnapRef.current=fc.streakSnap||null;wrongTimeRef.current=fc.wrongTime??null;
           setInBackMode(false);setAoxBrowseHasCredit(fwd.hasCredit??false);
@@ -526,14 +526,16 @@
             {label:"Median",value:fmtTime(calcMed(times)),off:false,fn:null},
           ]}/>
           <div className="mt-3 text-xs text-purple-300/60">
-            <div className="flex items-start justify-between gap-2">
-              <div className="grid grid-cols-2 gap-x-4 flex-1">
+            <div className="flex items-start gap-4">
+              <div>
                 <div>Best Average: {bestData.avg!=null?`${bestData.avg.toFixed(2)}s`:"—"}{bestNew[bestKey]?.avg&&<sup className="text-purple-400 font-bold ml-0.5">★</sup>}</div>
-                <div>Best Median: {bestData.med!=null?`${bestData.med.toFixed(2)}s`:"—"}{bestNew[bestKey]?.med&&<sup className="text-purple-400 font-bold ml-0.5">★</sup>}</div>
                 <div className="text-[11px] opacity-70">With Median: {bestData.avgMed!=null?`${bestData.avgMed.toFixed(2)}s`:"—"}</div>
+              </div>
+              <div>
+                <div>Best Median: {bestData.med!=null?`${bestData.med.toFixed(2)}s`:"—"}{bestNew[bestKey]?.med&&<sup className="text-purple-400 font-bold ml-0.5">★</sup>}</div>
                 <div className="text-[11px] opacity-70">With Average: {bestData.medAvg!=null?`${bestData.medAvg.toFixed(2)}s`:"—"}</div>
               </div>
-              {bestData.avgRoundId!=null&&bestData.medRoundId!=null&&<span className="shrink-0">{bestData.avgRoundId===bestData.medRoundId?"Same Round":"Different Rounds"}</span>}
+              {bestData.avgRoundId!=null&&bestData.medRoundId!=null&&<span className="shrink-0 ml-auto">{bestData.avgRoundId===bestData.medRoundId?"Same Round":"Different Rounds"}</span>}
             </div>
           </div>
           <div className="mt-3 flex items-center gap-2 flex-nowrap">
@@ -1036,9 +1038,7 @@
       }
       useLayoutEffect(()=>{
         const prevMode=prevModeForSwitchRef.current;prevModeForSwitchRef.current=mode;
-        // Interaction check for prevMode: used to decide whether to preserve question state
         const prevCalcOpen=calcOpenByMode[prevMode]??false;
-        const hasInteracted=countedWrong||revealed||prevCalcOpen||Object.keys(persistBtns).length>0;
         // === LEAVING prevMode ===
         // Blitz: mid-round (active) resets on return; timerDone preserves on return
         const blitzLeavingMidRound=(prevMode==="blitz")&&active;
@@ -1075,10 +1075,10 @@
             timerDoneSnapRef.current=null;
           }
         }
-        // Preserve question state only when timing OFF AND no interaction with current date
-        const leavingTimingOff=["classic","deduction","flash"].includes(prevMode)&&(avgVisOffByMode[prevMode]??false)&&!hasInteracted;
+        // Preserve question state whenever leaving a timing-off mode (no interaction gate)
+        const leavingTimingOff=["classic","deduction","flash"].includes(prevMode)&&(avgVisOffByMode[prevMode]??false);
         if(leavingTimingOff){
-          preservedByModeRef.current[prevMode]={persistBtns:{...persistBtns},locked,revealed,countedWrong,guesses:[...guesses],msg,date:{...date}};
+          preservedByModeRef.current[prevMode]={persistBtns:{...persistBtns},locked,revealed,countedWrong,guesses:[...guesses],msg,date:{...date},calcOpen:prevCalcOpen};
           if(prevMode==="deduction"&&ded)setSavedDedByType(prev=>({...prev,[dedType]:captureDedSnap()}));
         } else if(["classic","deduction","flash"].includes(prevMode)){
           delete preservedByModeRef.current[prevMode];
@@ -1086,7 +1086,7 @@
         // === RESET & RESTORE ===
         const snap=timerDoneSnapRef.current;
         const restoringTimerDone=(mode==="blitz")&&snap?.mode===mode;
-        const arrivedTimingOff=["classic","flash"].includes(mode)&&(avgVisOffByMode[mode]??false);
+        const arrivedTimingOff=["classic","flash","deduction"].includes(mode)&&(avgVisOffByMode[mode]??false);
         const preservedQ=arrivedTimingOff?preservedByModeRef.current[mode]:null;
         const arrivedDedPreserve=mode==="deduction"&&(avgVisOffByMode["deduction"]??false)&&!!preservedByModeRef.current["deduction"];
         const savedStacks=stacksByModeRef.current[mode];
@@ -1148,6 +1148,7 @@
             if(preservedQ.countedWrong)setOverrideUsedThisQ(true);
             setGuesses([...preservedQ.guesses]);setMsg(preservedQ.msg);
             if(preservedQ.date)setDate({...preservedQ.date});
+            if(preservedQ.calcOpen)setCalcOpen(true);
           } else if(["classic","flash","deduction"].includes(mode)){
             // No preservation (timing on, or interacted): generate a fresh date/ded.
             // Deduction handles its own spawn via the setDed(null) + savedDedByType clear above.
@@ -1429,7 +1430,7 @@
             <p><b>Accuracy</b> — percentage of questions answered correctly on the first try. Shows — until your first attempt.</p>
             <p><b>Streak</b> — your current consecutive correct streak / your best in this session.</p>
             <p><b>Last / Avg / Med</b> — timing stats, calculated using correct answers only. Last is your most recent correct time; Avg is the average across all correct answers; Med is the median, which is less skewed by outliers.</p>
-            <p className="text-purple-300/70 text-[12px]">In modes designed for casual practice (Classic, Deduction, Flash), you can tap any stat to hide it. Tapping Score, Accuracy, or Streak hides all three; tapping any timing stat hides all three. Stats always track in the background regardless of visibility. Enabling timing stats resets all stats so the score and timing always reflect the same set of questions. In all other modes, stats are always visible.</p>
+            <p className="text-purple-300/70 text-[12px]">In modes designed for casual practice (Classic, Deduction, Flash), you can tap any stat to hide it. Tapping Score, Accuracy, or Streak hides all three; tapping any timing stat hides all three. Stats always track in the background regardless of visibility. Enabling timing stats resets all stats so the score and timing always reflect the same set of questions. When timing stats are off, leaving and returning to a mode preserves the current question exactly as you left it — same date, same answers, codes panel in the same state. In all other modes, stats are always visible.</p>
           </GuideSection>
           <GuideSection id="range" title="Year Range" openId={open} onToggle={toggle}><p>Set via the ⚙ settings menu. Controls which years dates are drawn from. Defaults to 1–10000 AD. Changing the range resets the current round.</p></GuideSection>
           <GuideSection id="theme" title="Theme" openId={open} onToggle={toggle}><p>Five themes: Dusk (default dark navy), Midnight (true black with purple), Nebula (deep purple), Light (clean white), and Parchment (warm cream). Accessible from the ⚙ settings menu in any tab. Enable Use System Settings to match your device's light/dark mode automatically, with separate theme choices for each. Disable to pick one manually.</p></GuideSection>
