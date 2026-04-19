@@ -210,7 +210,7 @@
 
 
 
-    const DEPLOY_TS=new Date('2026-04-19T21:30:00Z');
+    const DEPLOY_TS=new Date('2026-04-19T22:34:00Z');
 
     function StatPanel({stats}){
       return(
@@ -250,6 +250,7 @@
       const prevTimesSnapRef=useRef(null);
       const prevStreakSnapRef=useRef(null);
       const prevBestSnapRef=useRef(null);
+      const nextRoundIdRef=useRef(1);
       const bestRef=useRef({});
       const [bestNew,setBestNew]=useState({});// {[key]:{avg:bool,med:bool}}
       const [pendingWrongCredit,setPendingWrongCredit]=useState(null);
@@ -261,14 +262,14 @@
       const correct=useMemo(()=>(useJulian&&isJulianDate(date.y,date.m,date.d))?wdayJulian(date.y,date.m,date.d):wday(date.y,date.m,date.d),[date,useJulian]);
       const n=Math.max(2,Math.min(1000,parseInt(aoxN)||10));
       const bestKey=`${n}|${mistakesOk}`;
-      const bestData=bestRef.current[bestKey]||{avg:null,med:null};
+      const bestData=bestRef.current[bestKey]||{avg:null,avgMed:null,avgRoundId:null,med:null,medAvg:null,medRoundId:null};
       const aoLabel=`Ao${n}`;
       const doneCount=times.length;
       const isRunning=runPhase==="running";
       const isLocked=runPhase==="done"||runPhase==="failed";
       const dateVisible=runPhase==="failed"||runPhase==="done"||(isRunning&&(!oneByOne||shown))||inBackMode;
       const revealLocked=!isRunning||isLocked||codesOpen||(oneByOne&&!shown)||inBackMode;
-      const backDisabled=aoxStack.length===0||runPhase==="idle";
+      const backDisabled=aoxStack.length===0||runPhase==="idle"||runPhase==="running";
       const overrideAvail=!overrideUsedAox&&(
         (isRunning&&(Object.keys(aoxPersistBtns).length>0||codesOpen||canOverrideCorrect||pendingWrongCredit!=null))||
         (runPhase==="failed")||
@@ -278,12 +279,12 @@
       const optionsDisabled=isLocked||codesOpen||(oneByOne&&!shown&&!inBackMode)||runPhase==="idle"||inBackMode;
       const baseBtn="w-full rounded-2xl border px-4 py-3 text-base transition shadow-sm select-none";
 
-      function reset(){setRunPhase("idle");setDisplayN(n);setShown(false);setInBackMode(false);setAoxStack([]);setAoxForwardStack([]);setTimes([]);setStreak(0);setBestStreak(0);setAttempts(0);setGuesses([]);setMsg("");setFlash(null);resetAoxPB();setCodesOpen(false);setCanOverrideCorrect(false);setQuestionCounted(false);setPendingWrongCredit(null);setOverrideUsedAox(false);setAoxBackDepth(0);setBestNew({});setDate(randomDate(minY,maxY));tStartRef.current=null;wrongTimeRef.current=null;prevTimesSnapRef.current=null;prevStreakSnapRef.current=null;prevBestSnapRef.current=null;}
-      useEffect(()=>{if(!visible&&(runPhase==="running"||runPhase==="failed"))reset();},[visible]);
+      function reset(){setRunPhase("idle");setDisplayN(n);setShown(false);setInBackMode(false);setAoxStack([]);setAoxForwardStack([]);setTimes([]);setStreak(0);setBestStreak(0);setAttempts(0);setGuesses([]);setMsg("");setFlash(null);resetAoxPB();setAoxCodesInstant(true);setCodesOpen(false);setCanOverrideCorrect(false);setQuestionCounted(false);setPendingWrongCredit(null);setOverrideUsedAox(false);setAoxBackDepth(0);setBestNew({});setDate(randomDate(minY,maxY));tStartRef.current=null;wrongTimeRef.current=null;prevTimesSnapRef.current=null;prevStreakSnapRef.current=null;prevBestSnapRef.current=null;}
+      useEffect(()=>{if(!visible&&runPhase==="running")reset();},[visible]);
       useEffect(()=>{if(aoxCodesInstant){const t=setTimeout(()=>setAoxCodesInstant(false),50);return()=>clearTimeout(t);}},[aoxCodesInstant]);
       function startOrContinue(){
         if(runPhase==="idle"){setRunPhase("running");setDisplayN(n);setShown(true);tStartRef.current=performance.now();}
-        else if(inBackMode){setInBackMode(false);setAoxForwardStack([]);const nd=randomDate(minY,maxY);setDate(nd);setMsg("");setGuesses([]);resetAoxPB();setCodesOpen(false);wrongTimeRef.current=null;setCanOverrideCorrect(false);setQuestionCounted(false);setPendingWrongCredit(null);setOverrideUsedAox(false);setAoxBackDepth(0);if(oneByOne){setShown(false);tStartRef.current=null;}else{setShown(true);tStartRef.current=performance.now();}}
+        else if(inBackMode){setInBackMode(false);setAoxForwardStack([]);const nd=randomDate(minY,maxY);setAoxCodesInstant(true);setDate(nd);setMsg("");setGuesses([]);resetAoxPB();setCodesOpen(false);wrongTimeRef.current=null;setCanOverrideCorrect(false);setQuestionCounted(false);setPendingWrongCredit(null);setOverrideUsedAox(false);setAoxBackDepth(0);if(oneByOne){setShown(false);tStartRef.current=null;}else{setShown(true);tStartRef.current=performance.now();}}
         else if(isRunning&&!shown){setShown(true);setGuesses([]);setMsg("");tStartRef.current=performance.now();wrongTimeRef.current=null;setCanOverrideCorrect(false);setQuestionCounted(false);setPendingWrongCredit(null);}
       }
       function goBackAox(){if(backDisabled)return;const prevEntry=aoxStack[aoxStack.length-1];
@@ -334,7 +335,7 @@
         const completing=newTimes.length>=displayN;
         wrongTimeRef.current=null;
         // do NOT clear prevTimesSnapRef/prevStreakSnapRef here — they must survive to next date for override-after-correct
-        setGuesses([]);setMsg("");setCodesOpen(false);
+        setGuesses([]);setMsg("");setAoxCodesInstant(true);setCodesOpen(false);
         setQuestionCounted(false);
         setStreak(newStreak);setBestStreak(newBest);
         if(!completing){
@@ -344,11 +345,19 @@
         if(completing){
           const avg=newTimes.reduce((a,b)=>a+b,0)/newTimes.length;
           const med=calcMed(newTimes);
-          const prev=bestRef.current[bestKey]||{avg:null,med:null};
+          const thisRoundId=nextRoundIdRef.current++;
+          const prev=bestRef.current[bestKey]||{avg:null,avgMed:null,avgRoundId:null,med:null,medAvg:null,medRoundId:null};
           prevBestSnapRef.current={key:bestKey,best:{...prev}};
           const avgImp=prev.avg==null||avg<prev.avg;
           const medImp=prev.med==null||med<prev.med;
-          bestRef.current[bestKey]={avg:avgImp?avg:prev.avg,med:medImp?med:prev.med};
+          bestRef.current[bestKey]={
+            avg:avgImp?avg:prev.avg,
+            avgMed:avgImp?med:prev.avgMed,
+            avgRoundId:avgImp?thisRoundId:prev.avgRoundId,
+            med:medImp?med:prev.med,
+            medAvg:medImp?avg:prev.medAvg,
+            medRoundId:medImp?thisRoundId:prev.medRoundId,
+          };
           if(avgImp||medImp)setBestNew(p=>{const e=p[bestKey]||{avg:false,med:false};return{...p,[bestKey]:{avg:e.avg||avgImp,med:e.med||medImp}};});
           setRunPhase("done");
         }
@@ -426,7 +435,7 @@
           setAoxStack(s=>s.slice(0,-1));
           setGuesses([]);setCodesOpen(false);wrongTimeRef.current=null;
           if(!mistakesOk){setRunPhase("failed");}
-          else if(wasLastQ){resetAoxPB();setRunPhase("running");setMsg("");setGuesses([]);setCodesOpen(false);setQuestionCounted(false);setOverrideUsedAox(false);setDate(randomDate(minY,maxY));if(oneByOne){setShown(false);tStartRef.current=null;}else tStartRef.current=performance.now();}
+          else if(wasLastQ){resetAoxPB();setRunPhase("running");setMsg("");setGuesses([]);setAoxCodesInstant(true);setCodesOpen(false);setQuestionCounted(false);setOverrideUsedAox(false);setDate(randomDate(minY,maxY));if(oneByOne){setShown(false);tStartRef.current=null;}else tStartRef.current=performance.now();}
           else{resetAoxPB();setRunPhase("running");setMsg("");tStartRef.current=performance.now();}
           return;
         }
@@ -441,10 +450,19 @@
           const greenOnly={[correctIdx??correct]:'correct'};
           if(newTimes.length>=displayN){
             const avg=newTimes.reduce((a,b)=>a+b,0)/newTimes.length;const med=calcMed(newTimes);
-            const prev=bestRef.current[bestKey]||{avg:null,med:null};
+            const thisRoundId=nextRoundIdRef.current++;
+            const prev=bestRef.current[bestKey]||{avg:null,avgMed:null,avgRoundId:null,med:null,medAvg:null,medRoundId:null};
+            prevBestSnapRef.current={key:bestKey,best:{...prev}};
             const avgImp=prev.avg==null||avg<prev.avg;
             const medImp=prev.med==null||med<prev.med;
-            bestRef.current[bestKey]={avg:avgImp?avg:prev.avg,med:medImp?med:prev.med};
+            bestRef.current[bestKey]={
+              avg:avgImp?avg:prev.avg,
+              avgMed:avgImp?med:prev.avgMed,
+              avgRoundId:avgImp?thisRoundId:prev.avgRoundId,
+              med:medImp?med:prev.med,
+              medAvg:medImp?avg:prev.medAvg,
+              medRoundId:medImp?thisRoundId:prev.medRoundId,
+            };
             if(avgImp||medImp)setBestNew(p=>{const e=p[bestKey]||{avg:false,med:false};return{...p,[bestKey]:{avg:e.avg||avgImp,med:e.med||medImp}};});
             setAoxStack(s=>s.slice(0,-1));
             if(prevDate)setDate({...prevDate});
@@ -462,7 +480,7 @@
           wrongTimeRef.current=null;prevTimesSnapRef.current=null;prevStreakSnapRef.current=null;
           const newTimes=[...times,dt];setTimes(newTimes);
           const ns=preStreak+1,nb=Math.max(bestStreak,ns);
-          setCodesOpen(false);setGuesses([]);setMsg("");setCanOverrideCorrect(false);setPendingWrongCredit(null);
+          setAoxCodesInstant(true);setCodesOpen(false);setGuesses([]);setMsg("");setCanOverrideCorrect(false);setPendingWrongCredit(null);
           setAoxStack(s=>[...s,{...date,btns:{[correct]:'correct'},overrideUsed:true,capsule:{snapshot:null,streakSnap:null,wrongTime:null},hasCredit:true}]);
           if(runPhase==="failed")setRunPhase("running");
           const completing=newTimes.length>=displayN;
@@ -488,9 +506,14 @@
             {label:"Average",value:fmtTime(calcAvg(times)),off:false,fn:null},
             {label:"Median",value:fmtTime(calcMed(times)),off:false,fn:null},
           ]}/>
-          <div className="mt-3 flex gap-4 text-xs text-purple-300/60">
-            <span>Best Average: {bestData.avg!=null?`${bestData.avg.toFixed(2)}s`:"—"}{bestNew[bestKey]?.avg&&<sup className="text-purple-400 font-bold ml-0.5">★</sup>}</span>
-            <span>Best Median: {bestData.med!=null?`${bestData.med.toFixed(2)}s`:"—"}{bestNew[bestKey]?.med&&<sup className="text-purple-400 font-bold ml-0.5">★</sup>}</span>
+          <div className="mt-3 text-xs text-purple-300/60">
+            <div className="flex items-start justify-between gap-2">
+              <div className="space-y-1">
+                <div>Best Average: {bestData.avg!=null?`${bestData.avg.toFixed(2)}s`:"—"} <span className="opacity-60">(med {bestData.avgMed!=null?`${bestData.avgMed.toFixed(2)}s`:"—"})</span>{bestNew[bestKey]?.avg&&<sup className="text-purple-400 font-bold ml-0.5">★</sup>}</div>
+                <div>Best Median: {bestData.med!=null?`${bestData.med.toFixed(2)}s`:"—"} <span className="opacity-60">(avg {bestData.medAvg!=null?`${bestData.medAvg.toFixed(2)}s`:"—"})</span>{bestNew[bestKey]?.med&&<sup className="text-purple-400 font-bold ml-0.5">★</sup>}</div>
+              </div>
+              {bestData.avgRoundId!=null&&bestData.medRoundId!=null&&bestData.avgRoundId===bestData.medRoundId&&<span className="shrink-0">· Same Round</span>}
+            </div>
           </div>
           <div className="mt-3 flex items-center gap-2 flex-nowrap">
             <div className="flex items-center shrink-0"><span className={`text-sm leading-none text-purple-200/80${runPhase!=="idle"?" opacity-60":""}`}>Ao</span><input type="text" inputMode="numeric" readOnly={runPhase!=="idle"} value={aoxN} onChange={e=>{if(runPhase==="idle")setAoxN(e.target.value);}} onBlur={()=>setAoxN(String(Math.max(2,Math.min(1000,parseInt(aoxN)||10))))} className={`panel rounded-xl px-2 py-1 w-14 text-center tabular-nums text-sm focus:outline-none shrink-0${runPhase!=="idle"?" opacity-60 pointer-events-none":""}`}/></div>
@@ -499,7 +522,7 @@
           </div>
           <div className="mt-4 rounded-2xl panel p-4">
             <div className="text-center relative">
-              {inBackMode&&<span className="absolute right-0 top-0 text-[11px] tabular-nums text-purple-300/60">Q{aoxStack.length+1}</span>}
+              {(inBackMode||runPhase==="done"||runPhase==="failed")&&<span className="absolute right-0 top-0 text-[11px] tabular-nums text-purple-300/60">Q{inBackMode?aoxStack.length+1:aoxStack.length}</span>}
               <div className="text-xs uppercase tracking-widest text-purple-100/80">What Day Is This?</div>
               <div className="mt-1 text-3xl font-bold">{dateVisible?fmtDate(date.y,date.m,date.d):"—"}</div>
             </div>
@@ -512,7 +535,7 @@
               {primaryBtn}
               <div className="col-span-1 flex gap-1">
                 <button type="button" className={`flex-1 px-1 py-2 rounded-xl border surface-button text-sm font-medium flex items-center justify-center ${backDisabled?"opacity-60 pointer-events-none":""}`} onClick={goBackAox}><span style={{position:'relative',top:'-1.5px'}}>&lt;</span></button>
-                <button type="button" className={`flex-1 px-1 py-2 rounded-xl border surface-button text-sm font-medium flex items-center justify-center ${aoxForwardStack.length===0?"opacity-60 pointer-events-none":""}`} onClick={goForwardAox}><span style={{position:'relative',top:'-1.5px'}}>&gt;</span></button>
+                <button type="button" className={`flex-1 px-1 py-2 rounded-xl border surface-button text-sm font-medium flex items-center justify-center ${(aoxForwardStack.length===0||runPhase==="idle"||runPhase==="running")?"opacity-60 pointer-events-none":""}`} onClick={goForwardAox}><span style={{position:'relative',top:'-1.5px'}}>&gt;</span></button>
               </div>
               <button type="button" className={`col-span-1 px-3 py-2 rounded-xl border surface-button text-sm font-medium text-center ${revealLocked?"opacity-60 pointer-events-none":""}`} onClick={revealAnswer}>Reveal</button>
               <button type="button" className={`col-span-1 px-3 py-2 rounded-xl border surface-button text-sm font-medium text-center ${!overrideAvail?"opacity-60 pointer-events-none":""}`} onClick={handleOverride}>Override</button>
@@ -622,6 +645,7 @@
       const [allowMistakes,setAllowMistakes]=useState(true);
       const [perQ,setPerQ]=useState(false);
       const blitzConfigPrevRef=useRef({perQ:false,allowMistakes:true});
+      const blitzRoundIdRef=useRef(1);
       const [blitzSec,setBlitzSec]=useState(60),[blitzRemain,setBlitzRemain]=useState(60),[blitzRunning,setBlitzRunning]=useState(false);
       const blitzStartRef=useRef(null),blitzPausedAtRef=useRef(null),blitzPausedAccRef=useRef(0);
       const blitzRemainRef=useRef(60);
@@ -841,7 +865,7 @@
         for(const h of history){if(h){run++;if(run>bestStreak)bestStreak=run;}else run=0;}
         updateStats(c=>{c.streak=curStreak;c.best=bestStreak;});
         if(mode==="blitz"){setBlitzRoundStats(p=>({...p,streak:curStreak,best:bestStreak}));
-          if(timerDone){const bk=`${allowMistakes?'m':'n'}${blitzSec}`;setBlitzBest(prev=>{const cur=prev[bk]??{score:0,streak:0};return{...prev,[bk]:{score:cur.score,streak:Math.max(cur.streak===blitzRoundStats.best?bestStreak:cur.streak,bestStreak)}};});}
+          if(timerDone){const bk=`${allowMistakes?'m':'n'}${blitzSec}`;setBlitzBest(prev=>{const cur=prev[bk]??{score:0,streak:0,scoreRoundId:null,streakRoundId:null};return{...prev,[bk]:{...cur,score:cur.score,streak:Math.max(cur.streak===blitzRoundStats.best?bestStreak:cur.streak,bestStreak)}};});}
         }
         return{curStreak,bestStreak};
       }
@@ -864,7 +888,7 @@
             updateStats(c=>{c.good=Math.max(0,c.good-1);if(tIdx!=null&&tIdx<c.times.length)c.times=[...c.times.slice(0,tIdx),...c.times.slice(tIdx+1)];});
             if(mode==="blitz")setBlitzRoundStats(p=>({...p,good:Math.max(0,p.good-1)}));
             if(timerDone){
-              if(mode==='blitz'&&!perQ){const bk=`${allowMistakes?'m':'n'}${blitzSec}`;setBlitzBest(prev=>{const cur=prev[bk];if(!cur)return prev;const ng=Math.max(0,blitzRoundStats.good-1);return{...prev,[bk]:{score:cur.score===blitzRoundStats.good?ng:cur.score,streak:cur.streak}};});}
+              if(mode==='blitz'&&!perQ){const bk=`${allowMistakes?'m':'n'}${blitzSec}`;setBlitzBest(prev=>{const cur=prev[bk];if(!cur)return prev;const ng=Math.max(0,blitzRoundStats.good-1);return{...prev,[bk]:{...cur,score:cur.score===blitzRoundStats.good?ng:cur.score,streak:cur.streak}};});}
               if(mode==='blitz'&&perQ)setSuddenBest(prev=>{const cur=prev[qSec];if(!cur)return prev;const ng=Math.max(0,S.good-1);return cur.score===S.good?{...prev,[qSec]:{score:ng}}:prev;});
             }
           }
@@ -993,12 +1017,39 @@
         const prevCalcOpen=calcOpenByMode[prevMode]??false;
         const hasInteracted=countedWrong||revealed||prevCalcOpen||Object.keys(persistBtns).length>0;
         // === LEAVING prevMode ===
-        // Save stacks for all modes except blitz mid-round or blitz timerDone (both should reset on return)
-        const blitzLeavingRound=(prevMode==="blitz")&&(active||timerDone);
-        if(!blitzLeavingRound){stacksByModeRef.current[prevMode]={stack:[...stack],forwardStack:[...forwardStack],dedStack:[...dedStack],dedForwardStack:[...dedForwardStack],backDepth};}
+        // Blitz: mid-round (active) resets on return; timerDone preserves on return
+        const blitzLeavingMidRound=(prevMode==="blitz")&&active;
+        const blitzLeavingDone=(prevMode==="blitz")&&!active&&timerDone;
+        if(!blitzLeavingMidRound){stacksByModeRef.current[prevMode]={stack:[...stack],forwardStack:[...forwardStack],dedStack:[...dedStack],dedForwardStack:[...dedForwardStack],backDepth};}
         else{delete stacksByModeRef.current[prevMode];}
-        // Blitz: never preserve done state across mode switches — return should act as Reset
-        if(prevMode==="blitz"){timerDoneSnapRef.current=null;}
+        // Blitz: save full snap when leaving in timerDone state; null it when leaving mid-round
+        if(prevMode==="blitz"){
+          if(blitzLeavingDone){
+            timerDoneSnapRef.current={
+              mode:prevMode,
+              S:{...S},
+              blitzRoundStats:{...blitzRoundStats},
+              persistBtns:{...persistBtns},
+              date:{...date},
+              calcOpen:prevCalcOpen,
+              canOverrideCorrect,
+              pendingWrongOverride,
+              overrideUsedThisQ,
+              browseHasCredit,
+              guesses:[...guesses],
+              msg,
+              locked,
+              revealed,
+              countedWrong,
+              showTimerDate,
+              prevStatsSnapshot:prevStatsSnapshotRef.current?{...prevStatsSnapshotRef.current}:null,
+              preCalcPenaltySnapshot:preCalcPenaltySnapshotRef.current?{...preCalcPenaltySnapshotRef.current}:null,
+              wrongTime:wrongTimeRef.current,
+            };
+          }else{
+            timerDoneSnapRef.current=null;
+          }
+        }
         // Preserve question state only when timing OFF AND no interaction with current date
         const leavingTimingOff=["classic","deduction","flash"].includes(prevMode)&&(avgVisOffByMode[prevMode]??false)&&!hasInteracted;
         if(leavingTimingOff){
@@ -1015,23 +1066,33 @@
         const arrivedDedPreserve=mode==="deduction"&&(avgVisOffByMode["deduction"]??false)&&!!preservedByModeRef.current["deduction"];
         const savedStacks=stacksByModeRef.current[mode];
         if(restoringTimerDone){
-          // Slim reset (no stat wipe), then restore done state
-          resetPB();setActive(false);setShowTimerDate(false);setMsg("");setGuesses([]);setFlash(null);
-          setOverrideUsedThisQ(false);setBackDepth(0);setTimerDone(false);setLocked(false);setRevealed(false);
-          setCountedWrong(false);setCanOverrideCorrect(false);setPendingWrongOverride(null);
+          // Slim reset (no stat wipe), then restore full done state including override, browse, and codes state
+          setActive(false);setFlash(null);
           setBlitzRunning(false);blitzStartRef.current=null;blitzPausedAtRef.current=null;blitzPausedAccRef.current=0;
           qDeadlineRef.current=null;qPausedAtRef.current=null;qPausedAccRef.current=0;
           clearTimeout(flashTimerRef.current);flashTimerRef.current=null;setFlashPhase("dash");
           flashDeadlineRef.current=null;setFlashRemainMs(flashMs);resetFlashBar();
-          tStartRef.current=null;wrongTimeRef.current=null;prevStatsSnapshotRef.current=null;
-          // Restore stacks from saved
+          tStartRef.current=null;
+          // Restore stacks
           if(savedStacks){setStack(savedStacks.stack);setForwardStack(savedStacks.forwardStack);setDedStack(savedStacks.dedStack);setDedForwardStack(savedStacks.dedForwardStack);setBackDepth(savedStacks.backDepth);}
-          else{setStack([]);setDedStack([]);setForwardStack([]);setDedForwardStack([]);}
-          setCalcOpen(false);
-          setTimerDone(true);setBlitzRoundStats({...snap.blitzRoundStats});
+          else{setStack([]);setDedStack([]);setForwardStack([]);setDedForwardStack([]);setBackDepth(0);}
+          // Restore full done-state snapshot
+          setTimerDone(true);
+          setBlitzRoundStats({...snap.blitzRoundStats});
           setStatsByMode(prev=>({...prev,[mode]:{...(prev[mode]||blankStatsByEra()),AD:{...snap.S}}}));
-          setPersistBtns({...snap.persistBtns});setDate({...snap.date});
-          setLocked(true);setShowTimerDate(true);
+          setPersistBtns({...snap.persistBtns});
+          setDate({...snap.date});
+          setGuesses([...snap.guesses]);setMsg(snap.msg);
+          setLocked(snap.locked);setRevealed(snap.revealed);setCountedWrong(snap.countedWrong);
+          setCanOverrideCorrect(snap.canOverrideCorrect);
+          setPendingWrongOverride(snap.pendingWrongOverride);
+          setOverrideUsedThisQ(snap.overrideUsedThisQ);
+          setBrowseHasCredit(snap.browseHasCredit);
+          setShowTimerDate(snap.showTimerDate);
+          prevStatsSnapshotRef.current=snap.prevStatsSnapshot;
+          preCalcPenaltySnapshotRef.current=snap.preCalcPenaltySnapshot;
+          wrongTimeRef.current=snap.wrongTime;
+          setCalcOpen(!!snap.calcOpen);
         } else {
           arm();
           // Restore stacks from saved, or clear
@@ -1118,15 +1179,21 @@
         if(mode!=="blitz"||!timerDone)return;
         if(!perQ){
           const bk=`${allowMistakes?'m':'n'}${blitzSec}`;
+          const thisRoundId=blitzRoundIdRef.current++;
           setBlitzBest(prev=>{
-            const cur=prev[bk]??{score:0,streak:0};
+            const cur=prev[bk]??{score:0,streak:0,scoreRoundId:null,streakRoundId:null};
             const newScore=Math.max(cur.score,blitzRoundStats.good);
             const newStreak=Math.max(cur.streak,blitzRoundStats.best);
             const scoreImproved=newScore>cur.score;
             const streakImproved=newStreak>cur.streak;
             if(scoreImproved||streakImproved){setBlitzBestNew(p=>{const ent=p[bk]||{score:false,streak:false};return{...p,[bk]:{score:ent.score||scoreImproved,streak:ent.streak||streakImproved}};});}
             if(newScore===cur.score&&newStreak===cur.streak)return prev;
-            return{...prev,[bk]:{score:newScore,streak:newStreak}};
+            return{...prev,[bk]:{
+              score:newScore,
+              streak:newStreak,
+              scoreRoundId:scoreImproved?thisRoundId:cur.scoreRoundId,
+              streakRoundId:streakImproved?thisRoundId:cur.streakRoundId,
+            }};
           });
         }else{
           setSuddenBest(prev=>{
@@ -1218,7 +1285,7 @@
               {label:"Median",value:fmtTime(sMed),off:effectiveAvgVisOff,fn:canHideStats?toggleTimingVis:null},
             ]}/>
             {["classic","deduction"].includes(mode)&&(<div className="mt-3"><button type="button" className="w-full px-3 py-1.5 rounded-xl btn-solid border border-transparent text-sm font-medium" onClick={handleResetStats}>Reset Stats</button></div>)}
-            {mode==='blitz'&&!perQ&&(()=>{const bk=`${allowMistakes?'m':'n'}${blitzSec}`;const newF=blitzBestNew[bk]||{score:false,streak:false};return(<div className="mt-3 flex gap-4 text-xs text-purple-300/60"><span>Best Score: {blitzBest[bk]?.score??'—'}{newF.score&&<sup className="text-purple-400 font-bold ml-0.5">★</sup>}</span><span>Best Streak: {blitzBest[bk]?.streak??'—'}{newF.streak&&<sup className="text-purple-400 font-bold ml-0.5">★</sup>}</span></div>);})()}
+            {mode==='blitz'&&!perQ&&(()=>{const bk=`${allowMistakes?'m':'n'}${blitzSec}`;const newF=blitzBestNew[bk]||{score:false,streak:false};const b=blitzBest[bk];const sameRound=b&&b.scoreRoundId!=null&&b.streakRoundId!=null&&b.scoreRoundId===b.streakRoundId;return(<div className="mt-3 text-xs text-purple-300/60 flex items-center justify-between gap-2"><div className="flex gap-4"><span>Best Score: {b?.score??'—'}{newF.score&&<sup className="text-purple-400 font-bold ml-0.5">★</sup>}</span><span>Best Streak: {b?.streak??'—'}{newF.streak&&<sup className="text-purple-400 font-bold ml-0.5">★</sup>}</span></div>{sameRound&&<span className="shrink-0">· Same Round</span>}</div>);})()}
             {mode==='blitz'&&perQ&&(<div className="mt-3 text-xs text-purple-300/60"><span>Best Score: {suddenBest[qSec]?.score??'—'}{suddenBestNew[qSec]&&<sup className="text-purple-400 font-bold ml-0.5">★</sup>}</span></div>)}
             {mode==='blitz'&&(<div className="mt-3 rounded-2xl panel p-3 space-y-2">
               <div className="flex gap-2">
@@ -1278,7 +1345,7 @@
                 </div>
                 <div className="mt-4">
                   {ded&&ded.type==="year"&&(<div className="grid grid-cols-3 gap-2">{ded.options.map((y,idx)=>{const ps=persistBtns[idx];let bCls;if(ps==='correct')bCls='btn-correct-persist border-transparent';else if(ps==='wrong-latest')bCls='btn-wrong-persist border-transparent';else if(ps==='wrong-prev')bCls='btn-wrong-dim border-transparent';else if(dedFlash&&dedFlash.kind==="year"&&dedFlash.index===idx)bCls=(dedFlash.ok?"flash-good":"flash-bad")+' border-transparent';else bCls=idleBtn;const perLocked=!!ps;const shouldDim=(locked||calcOpen||calcPenaltyActive)&&!ps;return(<button key={idx} type="button" onClick={()=>submitDedAnswer(y,idx)} className={`${baseBtn} py-2 text-sm ${bCls} ${(perLocked||(locked||calcOpen||calcPenaltyActive))?"pointer-events-none":""} ${shouldDim?"opacity-60":""} ${centerLastOpt(idx,ded.options.length)}`}>{fmtYear(y)}</button>);})}</div>)}
-                  {ded&&ded.type==="month"&&(<div className="grid grid-cols-3 gap-2">{ded.options.map((mv,idx)=>{const ps=persistBtns[idx];let bCls;if(ps==='correct')bCls='btn-correct-persist border-transparent';else if(ps==='wrong-latest')bCls='btn-wrong-persist border-transparent';else if(ps==='wrong-prev')bCls='btn-wrong-dim border-transparent';else if(dedFlash&&dedFlash.kind==="month"&&dedFlash.index===idx)bCls=(dedFlash.ok?"flash-good":"flash-bad")+' border-transparent';else bCls=idleBtn;const perLocked=!!ps;const shouldDim=(locked||calcOpen||calcPenaltyActive)&&!ps;return(<button key={idx} type="button" onClick={()=>submitDedAnswer(mv,idx)} className={`${baseBtn} py-2 text-xs ${bCls} ${(perLocked||(locked||calcOpen||calcPenaltyActive))?"pointer-events-none":""} ${shouldDim?"opacity-60":""} ${centerLastOpt(idx,ded.options.length)}`}>{mv}</button>);})}</div>)}
+                  {ded&&ded.type==="month"&&(<div className="grid grid-cols-2 gap-3">{ded.options.map((mv,idx)=>{const last=idx===ded.options.length-1?"col-span-2":"";const ps=persistBtns[idx];let bCls;if(ps==='correct')bCls='btn-correct-persist border-transparent';else if(ps==='wrong-latest')bCls='btn-wrong-persist border-transparent';else if(ps==='wrong-prev')bCls='btn-wrong-dim border-transparent';else if(dedFlash&&dedFlash.kind==="month"&&dedFlash.index===idx)bCls=(dedFlash.ok?"flash-good":"flash-bad")+' border-transparent';else bCls=idleBtn;const perLocked=!!ps;const shouldDim=(locked||calcOpen||calcPenaltyActive)&&!ps;return(<button key={idx} type="button" onClick={()=>submitDedAnswer(mv,idx)} className={`${baseBtn} ${bCls} ${(perLocked||(locked||calcOpen||calcPenaltyActive))?"pointer-events-none":""} ${shouldDim?"opacity-60":""} ${last}`}>{mv}</button>);})}</div>)}
                   {ded&&ded.type==="day"&&(<div className="grid grid-cols-3 gap-2">{ded.options.map((dv,idx)=>{const ps=persistBtns[idx];let bCls;if(ps==='correct')bCls='btn-correct-persist border-transparent';else if(ps==='wrong-latest')bCls='btn-wrong-persist border-transparent';else if(ps==='wrong-prev')bCls='btn-wrong-dim border-transparent';else if(dedFlash&&dedFlash.kind==="day"&&dedFlash.index===idx)bCls=(dedFlash.ok?"flash-good":"flash-bad")+' border-transparent';else bCls=idleBtn;const perLocked=!!ps;const shouldDim=(locked||calcOpen||calcPenaltyActive)&&!ps;return(<button key={idx} type="button" onClick={()=>submitDedAnswer(dv,idx)} className={`${baseBtn} py-2 text-sm ${bCls} ${(perLocked||(locked||calcOpen||calcPenaltyActive))?"pointer-events-none":""} ${shouldDim?"opacity-60":""} ${centerLastOpt(idx,ded.options.length)}`}>{dv}</button>);})}</div>)}
                 </div>
               </div>
@@ -1341,7 +1408,7 @@
             <p><b>Last / Avg / Med</b> — tap any of these to show or hide all three time stats.</p>
             <p><b>Back/Forward</b> — browse previous dates from the current run without affecting it. Press Continue to resume. After a run completes, Back and Forward let you browse all dates from that run; press Reset to start fresh.</p>
             <p><b>Override</b> — after wrong: gives credit with time recorded, preserves streak. After correct: undoes the credit, resets streak, and either ends the run (Allow Mistakes off) or advances to a new date (Allow Mistakes on). You can also override past dates while browsing back with Back/Forward. If overriding on the last question with Allow Mistakes on, a new date is generated to complete the average. One override per question.</p>
-            <p>Stats in AoX are always visible and always track. Best average and best median are tracked independently per n and Allow Mistakes combination — they can come from different runs. If you override a correct answer that set a new best, the best is also restored. The score display freezes when a run ends and only resets after pressing Reset.</p>
+            <p>Stats in AoX are always visible and always track. Best average and best median are tracked independently per n and Allow Mistakes combination — they can come from different runs. The value in parentheses after each best shows the companion metric from the run that set it (e.g. the median from the run that set your best average). When both bests come from the same run, a · Same Round tag appears on the right. If you override a correct answer that set a new best, the best is also restored. The score display freezes when a run ends and only resets after pressing Reset.</p>
           </GuideSection>
           <GuideSection id="deduction" title="Deduction" openId={open} onToggle={toggle}><p>Identify the missing piece of a date given the rest plus the weekday. Choose Day, Month, or Year mode.</p><p className="mt-2"><b>Day</b> — seven consecutive days are shown. The correct day can appear in any position.</p><p className="mt-2"><b>Month</b> — seven fixed boxes group months that share the same month code, so tapping any month within a box gives the same weekday for that date. Tap the box containing the correct month. The boxes are always in the same position. In leap years, January shifts into the Apr/Jul box (becoming Jan/Apr/Jul) and February shifts into the Aug box (becoming Feb/Aug); the other boxes are unchanged.</p><p className="mt-2"><b>Year</b> — nine year options centered on the correct year, all landing on the same weekday for the given month and day.</p><p className="mt-2">Switch subtypes anytime — progress in each is preserved. Stats are tracked separately for each subtype. Reset Stats only resets the current subtype and clears its question history.</p></GuideSection>
           <GuideSection id="blitz" title="Blitz" openId={open} onToggle={toggle}>
@@ -1350,7 +1417,7 @@
             <p><b>Per Round / Per Question</b> — tap to switch. Per Round uses a single countdown for the whole round (10s–3m, default 60s). Per Question gives each question its own countdown (1s–20s, default 5s); running out of time ends the round. Per Question always enforces no mistakes: tapping Per Question auto-disables Allow Mistakes, and tapping Allow Mistakes on while in Per Question auto-switches back to Per Round.</p>
             <p>When the round ends, the correct answer for the current date is highlighted and your bests are recorded. You can then browse your round's history with Back/Forward and override past dates to adjust your score and saved bests. Overriding a wrong answer that ended the round resumes it.</p>
             <p>Streak is hidden in Per Question since any wrong answer ends the round, making streak equal to score.</p>
-            <p>Best scores are tracked per exact configuration (duration + Allow Mistakes + Per Round/Per Question). Best score and best streak are tracked independently in Per Round — they can come from different rounds. Press Reset to clear your current round, unlock the settings, and start fresh. Changing settings while idle resets the current round.</p>
+            <p>Best scores are tracked per exact configuration (duration + Allow Mistakes + Per Round/Per Question). Best score and best streak are tracked independently in Per Round — they can come from different rounds. When both came from the same round, a · Same Round tag appears on the right of the Best row. If you leave Blitz after a round ends without pressing Reset, the round state (bests, history, final date) is preserved when you return. Press Reset to clear your current round, unlock the settings, and start fresh. Changing settings while idle resets the current round.</p>
           </GuideSection>
           <GuideSection id="flash" title="Flash" openId={open} onToggle={toggle}><p>The date is briefly revealed (0.1s–3.0s, default 0.5s, adjustable via the slider) then hidden. Answer from memory. Reset Stats clears your stats and question history.</p></GuideSection>
           <GuideSection id="lookup" title="Lookup" openId={open} onToggle={toggle}><p>Enter any AD date to instantly see its weekday. The input format follows your Date Format settings — month/day/year, day/month/year, year/month/day, or year/day/month. Supports years 1–10000. Show Codes is available for all results and stays open as you browse your history. The history panel shows up to 10 entries before scrolling. October 5–14, 1582 never existed and will appear in history as "Does Not Exist" with Show Codes unavailable.</p></GuideSection>
