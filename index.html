@@ -210,7 +210,7 @@
 
 
 
-    const DEPLOY_TS=new Date('2026-04-20T04:15:00Z');
+    const DEPLOY_TS=new Date('2026-04-20T04:32:00Z');
 
     function StatPanel({stats}){
       return(
@@ -527,11 +527,11 @@
           ]}/>
           <div className="mt-3 text-xs text-purple-300/60">
             <div className="flex flex-wrap items-start gap-4">
-              <div className="min-w-[140px]">
+              <div className="min-w-[125px]">
                 <div>Best Average: {fmtTime(bestData.avg)}{bestNew[bestKey]?.avg&&<sup className="text-purple-400 font-bold ml-0.5">★</sup>}</div>
                 <div className="text-[11px] opacity-70">With Median: {fmtTime(bestData.avgMed)}</div>
               </div>
-              <div className="min-w-[140px]">
+              <div className="min-w-[125px]">
                 <div>Best Median: {fmtTime(bestData.med)}{bestNew[bestKey]?.med&&<sup className="text-purple-400 font-bold ml-0.5">★</sup>}</div>
                 <div className="text-[11px] opacity-70">With Average: {fmtTime(bestData.medAvg)}</div>
               </div>
@@ -715,7 +715,7 @@
       function resetFlashBar(){if(flashBarRef.current){flashBarRef.current.style.transition="none";flashBarRef.current.style.width="100%";}}
       function startFlashBar(ms){requestAnimationFrame(()=>{if(!flashBarRef.current)return;const s=flashBarRef.current;s.style.transition="none";s.style.width="100%";s.getBoundingClientRect();s.style.transition=`width ${ms}ms linear`;s.style.width="0%";});}
       const refreshForRange=useCallback(()=>{
-        setActive(false);setShowTimerDate(false);setMsg("");setGuesses([]);setFlash(null);setLocked(false);setRevealed(false);setCountedWrong(false);setCanOverrideCorrect(false);setCalcPenalty(false);setCalcOpen(false);setOverrideUsedThisQ(false);setBackDepth(0);resetPB();setStack([]);setDedStack([]);setForwardStack([]);setDedForwardStack([]);calcPenaltyStatesRef.current.set(mode,false);setBlitzRemain(blitzSec);setBlitzRunning(false);blitzStartRef.current=null;blitzPausedAtRef.current=null;blitzPausedAccRef.current=0;blitzRemainRef.current=blitzSec;qDeadlineRef.current=null;qPausedAtRef.current=null;qPausedAccRef.current=0;setQRemain(qSec);clearTimeout(flashTimerRef.current);flashTimerRef.current=null;setFlashPhase("dash");flashDeadlineRef.current=null;setFlashRemainMs(flashMs);resetFlashBar();tStartRef.current=null;wrongTimeRef.current=null;prevStatsSnapshotRef.current=null;setDateByMode({classic:randomDate(minY,maxY,useJulian),blitz:randomDate(minY,maxY,useJulian),flash:randomDate(minY,maxY,useJulian)});console.log('[setDate] refreshForRange',{mode});preservedByModeRef.current={};spawnDedWithRange(minY,maxY);setSavedDedByType(blankDedTypeStore());
+        setActive(false);setShowTimerDate(false);setMsg("");setGuesses([]);setFlash(null);setLocked(false);setRevealed(false);setCountedWrong(false);setCanOverrideCorrect(false);setCalcPenalty(false);setCalcOpen(false);setOverrideUsedThisQ(false);setBackDepth(0);resetPB();setStack([]);setDedStack([]);setForwardStack([]);setDedForwardStack([]);calcPenaltyStatesRef.current.set(mode,false);setBlitzRemain(blitzSec);setBlitzRunning(false);blitzStartRef.current=null;blitzPausedAtRef.current=null;blitzPausedAccRef.current=0;blitzRemainRef.current=blitzSec;qDeadlineRef.current=null;qPausedAtRef.current=null;qPausedAccRef.current=0;setQRemain(qSec);clearTimeout(flashTimerRef.current);flashTimerRef.current=null;setFlashPhase("dash");flashDeadlineRef.current=null;setFlashRemainMs(flashMs);resetFlashBar();tStartRef.current=null;wrongTimeRef.current=null;prevStatsSnapshotRef.current=null;setDateByMode({classic:randomDate(minY,maxY,useJulian),blitz:randomDate(minY,maxY,useJulian),flash:randomDate(minY,maxY,useJulian)});preservedByModeRef.current={};spawnDedWithRange(minY,maxY);setSavedDedByType(blankDedTypeStore());
       },[mode,blitzSec,qSec,flashMs,minY,maxY,useJulian]);
       useEffect(()=>{if(!rangeRefreshPendingRef.current)return;rangeRefreshPendingRef.current=false;refreshForRange();},[minY,maxY,refreshForRange]);
       useEffect(()=>{const onVis=()=>{const now=performance.now();if(document.hidden){if(blitzRunning&&blitzPausedAtRef.current==null)blitzPausedAtRef.current=now;if(qDeadlineRef.current&&qPausedAtRef.current==null)qPausedAtRef.current=now;}else{if(blitzPausedAtRef.current!=null){blitzPausedAccRef.current+=now-blitzPausedAtRef.current;blitzPausedAtRef.current=null;}if(qPausedAtRef.current!=null){qPausedAccRef.current+=now-qPausedAtRef.current;qPausedAtRef.current=null;}}};document.addEventListener("visibilitychange",onVis);return()=>document.removeEventListener("visibilitychange",onVis);},[blitzRunning]);
@@ -743,7 +743,7 @@
           const finalBtns=btnsForStack??{...persistBtns};
           const wasAnswered=Object.keys(finalBtns).length>0;
           if(wasAnswered){const capsule={snapshot:prevStatsSnapshotRef.current?{...prevStatsSnapshotRef.current}:null,wrongTime:wrongTimeRef.current};setStack(s=>[...s,{...date,btns:finalBtns,overrideUsed:false,capsule,hasCredit:computeHasCredit(finalBtns)}]);}
-          setForwardStack([]);console.log('[setDate] pushAndNext',{mode});setDate(randomDate(minY,maxY,useJulian));
+          setForwardStack([]);setDate(randomDate(minY,maxY,useJulian));
           setGuesses([]);setRevealed(false);setLocked(false);setMsg("");setCalcPenalty(false);
           setCalcOpen(false);resetPB();
           setCalcInstantClose(true);
@@ -1039,7 +1039,6 @@
       useLayoutEffect(()=>{
         const prevMode=prevModeForSwitchRef.current;prevModeForSwitchRef.current=mode;
         const prevCalcOpen=calcOpenByMode[prevMode]??false;
-        console.log('[ms-enter]',{prevMode,mode,prevCalcOpen,persistBtns:{...persistBtns},revealed,countedWrong,calcOpenByMode:{...calcOpenByMode},dateClassic:dateByMode.classic,avgVisOffClassic:avgVisOffByMode.classic});
         // === LEAVING prevMode ===
         // Blitz: mid-round (active) resets on return; timerDone preserves on return
         const blitzLeavingMidRound=(prevMode==="blitz")&&active;
@@ -1079,12 +1078,11 @@
         // Preserve question state whenever leaving a timing-off mode (no interaction gate)
         const leavingTimingOff=["classic","deduction","flash"].includes(prevMode)&&(avgVisOffByMode[prevMode]??false);
         if(leavingTimingOff){
-          preservedByModeRef.current[prevMode]={persistBtns:{...persistBtns},locked,revealed,countedWrong,guesses:[...guesses],msg,date:{...date},calcOpen:prevCalcOpen};
+          preservedByModeRef.current[prevMode]={persistBtns:{...persistBtns},locked,revealed,countedWrong,guesses:[...guesses],msg,date:{...(dateByMode[prevMode]??dateByMode.classic)},calcOpen:prevCalcOpen};
           if(prevMode==="deduction"&&ded)setSavedDedByType(prev=>({...prev,[dedType]:captureDedSnap()}));
         } else if(["classic","deduction","flash"].includes(prevMode)){
           delete preservedByModeRef.current[prevMode];
         }
-        console.log('[ms-after-save]',{leavingTimingOff,preserved:JSON.parse(JSON.stringify(preservedByModeRef.current))});
         // === RESET & RESTORE ===
         const snap=timerDoneSnapRef.current;
         const restoringTimerDone=(mode==="blitz")&&snap?.mode===mode;
@@ -1092,7 +1090,6 @@
         const preservedQ=arrivedTimingOff?preservedByModeRef.current[mode]:null;
         const arrivedDedPreserve=mode==="deduction"&&(avgVisOffByMode["deduction"]??false)&&!!preservedByModeRef.current["deduction"];
         const savedStacks=stacksByModeRef.current[mode];
-        console.log('[ms-restore]',{arrivedTimingOff,preservedQ:preservedQ?JSON.parse(JSON.stringify(preservedQ)):null,branch:restoringTimerDone?'timerDone':(preservedQ?'restore':(["classic","flash","deduction"].includes(mode)?'else-if-fresh':'none'))});
         if(restoringTimerDone){
           // Slim reset (no stat wipe), then restore full done state including override, browse, and codes state
           setActive(false);setFlash(null);
@@ -1156,15 +1153,13 @@
             // No preservation (timing on, or interacted): generate a fresh date/ded.
             // Deduction handles its own spawn via the setDed(null) + savedDedByType clear above.
             if(["classic","flash"].includes(mode)){
-              console.log('[setDate] mode-switch-else-if',{mode,prevMode,arrivedTimingOff});
               setDate(randomDate(minY,maxY,useJulian));
               tStartRef.current=performance.now();
             }
             // If codes were showing, close with animation. wasOpenRef freeze keeps old codes visible during the 310ms close.
-            if(calcOpen){console.log('[setCalcOpen-false] mode-switch-else-if',{mode});setCalcOpen(false);}
+            if(calcOpen)setCalcOpen(false);
           }
         }
-        console.log('[ms-end]',{mode,prevMode,restoringTimerDone,hadPreservedQ:!!preservedQ,arrivedTimingOff});
       },[mode]);
       useEffect(()=>{
         if(mode!=="deduction")return;setDedFlash(null);
@@ -1195,8 +1190,8 @@
       const calcTargetKey=calcTarget?`${calcTarget.y}-${calcTarget.m}-${calcTarget.d}`:"none";
       const lookupCalcTargetKey=lookupCalcDate?`${lookupCalcDate.y}-${lookupCalcDate.m}-${lookupCalcDate.d}`:"none";
       useEffect(()=>{if(calcInstantClose){const t=setTimeout(()=>setCalcInstantClose(false),50);return()=>clearTimeout(t);}},[calcInstantClose]);
-      useEffect(()=>{const pm=prevModeRef.current;const sameMode=pm===mode;console.log('[effect-1193]',{pm,mode,calcTargetKey,sameMode,willFire:sameMode});if(!sameMode){prevModeRef.current=mode;return;}console.log('[setCalcOpen-false] effect-1193',{mode});setCalcOpen(false);setCalcInstantClose(false);prevModeRef.current=mode;},[calcTargetKey,mode]);
-      const handleResetStats=()=>{resetStatsCurrent();if(mode==='blitz'){setBlitzBest({});setSuddenBest({});setBlitzBestNew({});setSuddenBestNew({});}setStack([]);setForwardStack([]);setDedStack([]);setDedForwardStack([]);setBackDepth(0);resetPB();setGuesses([]);setMsg("");setLocked(false);setRevealed(false);setCountedWrong(false);setCanOverrideCorrect(false);setPendingWrongOverride(null);setOverrideUsedThisQ(false);setCalcPenalty(false);setCalcOpen(false);setCalcInstantClose(false);wrongTimeRef.current=null;prevStatsSnapshotRef.current=null;preCalcPenaltySnapshotRef.current=null;if(!avgVisOff){console.log('[setDate] handleResetStats',{mode});setDate(randomDate(minY,maxY,useJulian));if(mode==="deduction")spawnDed();}tStartRef.current=performance.now();};
+      useEffect(()=>{const pm=prevModeRef.current;if(pm!==mode){prevModeRef.current=mode;return;}setCalcOpen(false);setCalcInstantClose(false);prevModeRef.current=mode;},[calcTargetKey,mode]);
+      const handleResetStats=()=>{resetStatsCurrent();if(mode==='blitz'){setBlitzBest({});setSuddenBest({});setBlitzBestNew({});setSuddenBestNew({});}setStack([]);setForwardStack([]);setDedStack([]);setDedForwardStack([]);setBackDepth(0);resetPB();setGuesses([]);setMsg("");setLocked(false);setRevealed(false);setCountedWrong(false);setCanOverrideCorrect(false);setPendingWrongOverride(null);setOverrideUsedThisQ(false);setCalcPenalty(false);setCalcOpen(false);setCalcInstantClose(false);wrongTimeRef.current=null;prevStatsSnapshotRef.current=null;preCalcPenaltySnapshotRef.current=null;if(!avgVisOff){setDate(randomDate(minY,maxY,useJulian));if(mode==="deduction")spawnDed();}tStartRef.current=performance.now();};
       const togglePerQBtn=()=>{if(active||timerDone)return;const newPerQ=!perQ;if(newPerQ&&allowMistakes)setAllowMistakes(false);setPerQ(newPerQ);};
       const toggleAllowMistakesBtn=()=>{if(active||timerDone)return;const newAM=!allowMistakes;if(newAM&&perQ)setPerQ(false);setAllowMistakes(newAM);};
       const canHideStats=["classic","deduction","flash"].includes(mode);
@@ -1213,7 +1208,7 @@
           setCountedWrong(false);setCanOverrideCorrect(false);setPendingWrongOverride(null);setOverrideUsedThisQ(false);
           setCalcPenalty(false);setCalcOpen(false);setCalcInstantClose(false);
           wrongTimeRef.current=null;prevStatsSnapshotRef.current=null;preCalcPenaltySnapshotRef.current=null;
-          setDate(randomDate(minY,maxY,useJulian));tStartRef.current=performance.now();console.log('[setDate] blitz-config',{mode});
+          setDate(randomDate(minY,maxY,useJulian));tStartRef.current=performance.now();
         }
         blitzConfigPrevRef.current={perQ,allowMistakes};
       },[perQ,allowMistakes,mode,active,timerDone]);
