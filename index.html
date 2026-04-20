@@ -145,7 +145,7 @@
     const isTimer=m=>m==="blitz"||m==="flash";
     const fmtBlitzT=s=>{const sec=Math.ceil(s);if(sec<60)return sec+"s";const m=Math.floor(sec/60),r=sec%60;return m+"m "+r+"s";};
     const fmtFlashT=ms=>(ms/1000).toFixed(1)+"s";
-    const fmtTime=t=>t!=null?`${t.toFixed(2)}s`:"—";
+    const fmtTime=t=>{if(t==null)return"—";if(t<60)return`${t.toFixed(2)}s`;return`${Math.floor(t/60)}m ${(t%60).toFixed(2)}s`;};
     const calcAvg=t=>t.length?t.reduce((a,b)=>a+b,0)/t.length:null;
     const calcLast=t=>t.length?t[t.length-1]:null;
     const calcMed=t=>{if(!t.length)return null;const s=[...t].sort((a,b)=>a-b),m=Math.floor(s.length/2);return s.length%2?s[m]:(s[m-1]+s[m])/2;};
@@ -210,7 +210,7 @@
 
 
 
-    const DEPLOY_TS=new Date('2026-04-19T23:46:00Z');
+    const DEPLOY_TS=new Date('2026-04-20T03:36:00Z');
 
     function StatPanel({stats}){
       return(
@@ -526,14 +526,14 @@
             {label:"Median",value:fmtTime(calcMed(times)),off:false,fn:null},
           ]}/>
           <div className="mt-3 text-xs text-purple-300/60">
-            <div className="flex items-start gap-4">
-              <div>
-                <div>Best Average: {bestData.avg!=null?`${bestData.avg.toFixed(2)}s`:"—"}{bestNew[bestKey]?.avg&&<sup className="text-purple-400 font-bold ml-0.5">★</sup>}</div>
-                <div className="text-[11px] opacity-70">With Median: {bestData.avgMed!=null?`${bestData.avgMed.toFixed(2)}s`:"—"}</div>
+            <div className="flex flex-wrap items-start gap-4">
+              <div className="min-w-[165px]">
+                <div>Best Average: {fmtTime(bestData.avg)}{bestNew[bestKey]?.avg&&<sup className="text-purple-400 font-bold ml-0.5">★</sup>}</div>
+                <div className="text-[11px] opacity-70">With Median: {fmtTime(bestData.avgMed)}</div>
               </div>
-              <div>
-                <div>Best Median: {bestData.med!=null?`${bestData.med.toFixed(2)}s`:"—"}{bestNew[bestKey]?.med&&<sup className="text-purple-400 font-bold ml-0.5">★</sup>}</div>
-                <div className="text-[11px] opacity-70">With Average: {bestData.medAvg!=null?`${bestData.medAvg.toFixed(2)}s`:"—"}</div>
+              <div className="min-w-[165px]">
+                <div>Best Median: {fmtTime(bestData.med)}{bestNew[bestKey]?.med&&<sup className="text-purple-400 font-bold ml-0.5">★</sup>}</div>
+                <div className="text-[11px] opacity-70">With Average: {fmtTime(bestData.medAvg)}</div>
               </div>
               {bestData.avgRoundId!=null&&bestData.medRoundId!=null&&<span className="shrink-0 ml-auto">{bestData.avgRoundId===bestData.medRoundId?"Same Round":"Different Rounds"}</span>}
             </div>
@@ -1039,6 +1039,7 @@
       useLayoutEffect(()=>{
         const prevMode=prevModeForSwitchRef.current;prevModeForSwitchRef.current=mode;
         const prevCalcOpen=calcOpenByMode[prevMode]??false;
+        console.log('[ms-enter]',{prevMode,mode,prevCalcOpen,persistBtns:{...persistBtns},revealed,countedWrong,calcOpenByMode:{...calcOpenByMode},dateClassic:dateByMode.classic,avgVisOffClassic:avgVisOffByMode.classic});
         // === LEAVING prevMode ===
         // Blitz: mid-round (active) resets on return; timerDone preserves on return
         const blitzLeavingMidRound=(prevMode==="blitz")&&active;
@@ -1083,6 +1084,7 @@
         } else if(["classic","deduction","flash"].includes(prevMode)){
           delete preservedByModeRef.current[prevMode];
         }
+        console.log('[ms-after-save]',{leavingTimingOff,preserved:JSON.parse(JSON.stringify(preservedByModeRef.current))});
         // === RESET & RESTORE ===
         const snap=timerDoneSnapRef.current;
         const restoringTimerDone=(mode==="blitz")&&snap?.mode===mode;
@@ -1090,6 +1092,7 @@
         const preservedQ=arrivedTimingOff?preservedByModeRef.current[mode]:null;
         const arrivedDedPreserve=mode==="deduction"&&(avgVisOffByMode["deduction"]??false)&&!!preservedByModeRef.current["deduction"];
         const savedStacks=stacksByModeRef.current[mode];
+        console.log('[ms-restore]',{arrivedTimingOff,preservedQ:preservedQ?JSON.parse(JSON.stringify(preservedQ)):null,branch:restoringTimerDone?'timerDone':(preservedQ?'restore':(["classic","flash","deduction"].includes(mode)?'else-if-fresh':'none'))});
         if(restoringTimerDone){
           // Slim reset (no stat wipe), then restore full done state including override, browse, and codes state
           setActive(false);setFlash(null);
