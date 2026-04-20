@@ -145,7 +145,7 @@
     const isTimer=m=>m==="blitz"||m==="flash";
     const fmtBlitzT=s=>{const sec=Math.ceil(s);if(sec<60)return sec+"s";const m=Math.floor(sec/60),r=sec%60;return m+"m "+r+"s";};
     const fmtFlashT=ms=>(ms/1000).toFixed(1)+"s";
-    const fmtTime=t=>{if(t==null)return"—";if(t<60)return`${t.toFixed(2)}s`;return`${Math.floor(t/60)}m ${(t%60).toFixed(2)}s`;};
+    const fmtTime=t=>(t==null||t>=60)?"—":`${t.toFixed(2)}s`;
     const calcAvg=t=>t.length?t.reduce((a,b)=>a+b,0)/t.length:null;
     const calcLast=t=>t.length?t[t.length-1]:null;
     const calcMed=t=>{if(!t.length)return null;const s=[...t].sort((a,b)=>a-b),m=Math.floor(s.length/2);return s.length%2?s[m]:(s[m-1]+s[m])/2;};
@@ -210,7 +210,7 @@
 
 
 
-    const DEPLOY_TS=new Date('2026-04-20T03:36:00Z');
+    const DEPLOY_TS=new Date('2026-04-20T04:15:00Z');
 
     function StatPanel({stats}){
       return(
@@ -527,11 +527,11 @@
           ]}/>
           <div className="mt-3 text-xs text-purple-300/60">
             <div className="flex flex-wrap items-start gap-4">
-              <div className="min-w-[165px]">
+              <div className="min-w-[140px]">
                 <div>Best Average: {fmtTime(bestData.avg)}{bestNew[bestKey]?.avg&&<sup className="text-purple-400 font-bold ml-0.5">★</sup>}</div>
                 <div className="text-[11px] opacity-70">With Median: {fmtTime(bestData.avgMed)}</div>
               </div>
-              <div className="min-w-[165px]">
+              <div className="min-w-[140px]">
                 <div>Best Median: {fmtTime(bestData.med)}{bestNew[bestKey]?.med&&<sup className="text-purple-400 font-bold ml-0.5">★</sup>}</div>
                 <div className="text-[11px] opacity-70">With Average: {fmtTime(bestData.medAvg)}</div>
               </div>
@@ -715,7 +715,7 @@
       function resetFlashBar(){if(flashBarRef.current){flashBarRef.current.style.transition="none";flashBarRef.current.style.width="100%";}}
       function startFlashBar(ms){requestAnimationFrame(()=>{if(!flashBarRef.current)return;const s=flashBarRef.current;s.style.transition="none";s.style.width="100%";s.getBoundingClientRect();s.style.transition=`width ${ms}ms linear`;s.style.width="0%";});}
       const refreshForRange=useCallback(()=>{
-        setActive(false);setShowTimerDate(false);setMsg("");setGuesses([]);setFlash(null);setLocked(false);setRevealed(false);setCountedWrong(false);setCanOverrideCorrect(false);setCalcPenalty(false);setCalcOpen(false);setOverrideUsedThisQ(false);setBackDepth(0);resetPB();setStack([]);setDedStack([]);setForwardStack([]);setDedForwardStack([]);calcPenaltyStatesRef.current.set(mode,false);setBlitzRemain(blitzSec);setBlitzRunning(false);blitzStartRef.current=null;blitzPausedAtRef.current=null;blitzPausedAccRef.current=0;blitzRemainRef.current=blitzSec;qDeadlineRef.current=null;qPausedAtRef.current=null;qPausedAccRef.current=0;setQRemain(qSec);clearTimeout(flashTimerRef.current);flashTimerRef.current=null;setFlashPhase("dash");flashDeadlineRef.current=null;setFlashRemainMs(flashMs);resetFlashBar();tStartRef.current=null;wrongTimeRef.current=null;prevStatsSnapshotRef.current=null;setDateByMode({classic:randomDate(minY,maxY,useJulian),blitz:randomDate(minY,maxY,useJulian),flash:randomDate(minY,maxY,useJulian)});preservedByModeRef.current={};spawnDedWithRange(minY,maxY);setSavedDedByType(blankDedTypeStore());
+        setActive(false);setShowTimerDate(false);setMsg("");setGuesses([]);setFlash(null);setLocked(false);setRevealed(false);setCountedWrong(false);setCanOverrideCorrect(false);setCalcPenalty(false);setCalcOpen(false);setOverrideUsedThisQ(false);setBackDepth(0);resetPB();setStack([]);setDedStack([]);setForwardStack([]);setDedForwardStack([]);calcPenaltyStatesRef.current.set(mode,false);setBlitzRemain(blitzSec);setBlitzRunning(false);blitzStartRef.current=null;blitzPausedAtRef.current=null;blitzPausedAccRef.current=0;blitzRemainRef.current=blitzSec;qDeadlineRef.current=null;qPausedAtRef.current=null;qPausedAccRef.current=0;setQRemain(qSec);clearTimeout(flashTimerRef.current);flashTimerRef.current=null;setFlashPhase("dash");flashDeadlineRef.current=null;setFlashRemainMs(flashMs);resetFlashBar();tStartRef.current=null;wrongTimeRef.current=null;prevStatsSnapshotRef.current=null;setDateByMode({classic:randomDate(minY,maxY,useJulian),blitz:randomDate(minY,maxY,useJulian),flash:randomDate(minY,maxY,useJulian)});console.log('[setDate] refreshForRange',{mode});preservedByModeRef.current={};spawnDedWithRange(minY,maxY);setSavedDedByType(blankDedTypeStore());
       },[mode,blitzSec,qSec,flashMs,minY,maxY,useJulian]);
       useEffect(()=>{if(!rangeRefreshPendingRef.current)return;rangeRefreshPendingRef.current=false;refreshForRange();},[minY,maxY,refreshForRange]);
       useEffect(()=>{const onVis=()=>{const now=performance.now();if(document.hidden){if(blitzRunning&&blitzPausedAtRef.current==null)blitzPausedAtRef.current=now;if(qDeadlineRef.current&&qPausedAtRef.current==null)qPausedAtRef.current=now;}else{if(blitzPausedAtRef.current!=null){blitzPausedAccRef.current+=now-blitzPausedAtRef.current;blitzPausedAtRef.current=null;}if(qPausedAtRef.current!=null){qPausedAccRef.current+=now-qPausedAtRef.current;qPausedAtRef.current=null;}}};document.addEventListener("visibilitychange",onVis);return()=>document.removeEventListener("visibilitychange",onVis);},[blitzRunning]);
@@ -743,7 +743,7 @@
           const finalBtns=btnsForStack??{...persistBtns};
           const wasAnswered=Object.keys(finalBtns).length>0;
           if(wasAnswered){const capsule={snapshot:prevStatsSnapshotRef.current?{...prevStatsSnapshotRef.current}:null,wrongTime:wrongTimeRef.current};setStack(s=>[...s,{...date,btns:finalBtns,overrideUsed:false,capsule,hasCredit:computeHasCredit(finalBtns)}]);}
-          setForwardStack([]);setDate(randomDate(minY,maxY,useJulian));
+          setForwardStack([]);console.log('[setDate] pushAndNext',{mode});setDate(randomDate(minY,maxY,useJulian));
           setGuesses([]);setRevealed(false);setLocked(false);setMsg("");setCalcPenalty(false);
           setCalcOpen(false);resetPB();
           setCalcInstantClose(true);
@@ -1156,13 +1156,15 @@
             // No preservation (timing on, or interacted): generate a fresh date/ded.
             // Deduction handles its own spawn via the setDed(null) + savedDedByType clear above.
             if(["classic","flash"].includes(mode)){
+              console.log('[setDate] mode-switch-else-if',{mode,prevMode,arrivedTimingOff});
               setDate(randomDate(minY,maxY,useJulian));
               tStartRef.current=performance.now();
             }
             // If codes were showing, close with animation. wasOpenRef freeze keeps old codes visible during the 310ms close.
-            if(calcOpen)setCalcOpen(false);
+            if(calcOpen){console.log('[setCalcOpen-false] mode-switch-else-if',{mode});setCalcOpen(false);}
           }
         }
+        console.log('[ms-end]',{mode,prevMode,restoringTimerDone,hadPreservedQ:!!preservedQ,arrivedTimingOff});
       },[mode]);
       useEffect(()=>{
         if(mode!=="deduction")return;setDedFlash(null);
@@ -1193,8 +1195,8 @@
       const calcTargetKey=calcTarget?`${calcTarget.y}-${calcTarget.m}-${calcTarget.d}`:"none";
       const lookupCalcTargetKey=lookupCalcDate?`${lookupCalcDate.y}-${lookupCalcDate.m}-${lookupCalcDate.d}`:"none";
       useEffect(()=>{if(calcInstantClose){const t=setTimeout(()=>setCalcInstantClose(false),50);return()=>clearTimeout(t);}},[calcInstantClose]);
-      useEffect(()=>{const pm=prevModeRef.current;if(pm!==mode){prevModeRef.current=mode;return;}setCalcOpen(false);setCalcInstantClose(false);prevModeRef.current=mode;},[calcTargetKey,mode]);
-      const handleResetStats=()=>{resetStatsCurrent();if(mode==='blitz'){setBlitzBest({});setSuddenBest({});setBlitzBestNew({});setSuddenBestNew({});}setStack([]);setForwardStack([]);setDedStack([]);setDedForwardStack([]);setBackDepth(0);resetPB();setGuesses([]);setMsg("");setLocked(false);setRevealed(false);setCountedWrong(false);setCanOverrideCorrect(false);setPendingWrongOverride(null);setOverrideUsedThisQ(false);setCalcPenalty(false);setCalcOpen(false);setCalcInstantClose(false);wrongTimeRef.current=null;prevStatsSnapshotRef.current=null;preCalcPenaltySnapshotRef.current=null;if(!avgVisOff){setDate(randomDate(minY,maxY,useJulian));if(mode==="deduction")spawnDed();}tStartRef.current=performance.now();};
+      useEffect(()=>{const pm=prevModeRef.current;const sameMode=pm===mode;console.log('[effect-1193]',{pm,mode,calcTargetKey,sameMode,willFire:sameMode});if(!sameMode){prevModeRef.current=mode;return;}console.log('[setCalcOpen-false] effect-1193',{mode});setCalcOpen(false);setCalcInstantClose(false);prevModeRef.current=mode;},[calcTargetKey,mode]);
+      const handleResetStats=()=>{resetStatsCurrent();if(mode==='blitz'){setBlitzBest({});setSuddenBest({});setBlitzBestNew({});setSuddenBestNew({});}setStack([]);setForwardStack([]);setDedStack([]);setDedForwardStack([]);setBackDepth(0);resetPB();setGuesses([]);setMsg("");setLocked(false);setRevealed(false);setCountedWrong(false);setCanOverrideCorrect(false);setPendingWrongOverride(null);setOverrideUsedThisQ(false);setCalcPenalty(false);setCalcOpen(false);setCalcInstantClose(false);wrongTimeRef.current=null;prevStatsSnapshotRef.current=null;preCalcPenaltySnapshotRef.current=null;if(!avgVisOff){console.log('[setDate] handleResetStats',{mode});setDate(randomDate(minY,maxY,useJulian));if(mode==="deduction")spawnDed();}tStartRef.current=performance.now();};
       const togglePerQBtn=()=>{if(active||timerDone)return;const newPerQ=!perQ;if(newPerQ&&allowMistakes)setAllowMistakes(false);setPerQ(newPerQ);};
       const toggleAllowMistakesBtn=()=>{if(active||timerDone)return;const newAM=!allowMistakes;if(newAM&&perQ)setPerQ(false);setAllowMistakes(newAM);};
       const canHideStats=["classic","deduction","flash"].includes(mode);
@@ -1211,7 +1213,7 @@
           setCountedWrong(false);setCanOverrideCorrect(false);setPendingWrongOverride(null);setOverrideUsedThisQ(false);
           setCalcPenalty(false);setCalcOpen(false);setCalcInstantClose(false);
           wrongTimeRef.current=null;prevStatsSnapshotRef.current=null;preCalcPenaltySnapshotRef.current=null;
-          setDate(randomDate(minY,maxY,useJulian));tStartRef.current=performance.now();
+          setDate(randomDate(minY,maxY,useJulian));tStartRef.current=performance.now();console.log('[setDate] blitz-config',{mode});
         }
         blitzConfigPrevRef.current={perQ,allowMistakes};
       },[perQ,allowMistakes,mode,active,timerDone]);
@@ -1432,7 +1434,7 @@
             <p><b>Score</b> — correct first-try answers out of total attempts. In Blitz, only the current round is shown. In AoX, shows correct answers out of total attempts; the run ends once correct answers reach the set number.</p>
             <p><b>Accuracy</b> — percentage of questions answered correctly on the first try. Shows — until your first attempt.</p>
             <p><b>Streak</b> — your current consecutive correct streak / your best in this session.</p>
-            <p><b>Last / Avg / Med</b> — timing stats, calculated using correct answers only. Last is your most recent correct time; Avg is the average across all correct answers; Med is the median, which is less skewed by outliers.</p>
+            <p><b>Last / Avg / Med</b> — timing stats, calculated using correct answers only. Last is your most recent correct time; Avg is the average across all correct answers; Med is the median, which is less skewed by outliers. Values of 60 seconds or more display as "—" but still count toward averages, medians, and bests in the background.</p>
             <p className="text-purple-300/70 text-[12px]">In modes designed for casual practice (Classic, Deduction, Flash), you can tap any stat to hide it. Tapping Score, Accuracy, or Streak hides all three; tapping any timing stat hides all three. Stats always track in the background regardless of visibility. Enabling timing stats resets all stats so the score and timing always reflect the same set of questions. When timing stats are off, leaving and returning to a mode preserves the current question exactly as you left it — same date, same answers, codes panel in the same state. In all other modes, stats are always visible.</p>
           </GuideSection>
           <GuideSection id="range" title="Year Range" openId={open} onToggle={toggle}><p>Set via the ⚙ settings menu. Controls which years dates are drawn from. Defaults to 1–10000 AD. Changing the range resets the current round.</p></GuideSection>
