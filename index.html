@@ -249,7 +249,7 @@
 
 
 
-    const DEPLOY_TS=new Date('2026-04-29T02:31:00Z');
+    const DEPLOY_TS=new Date('2026-04-29T03:57:00Z');
 
     function StatPanel({stats}){
       return(
@@ -285,6 +285,7 @@
       const [aoxFrozenDate,setAoxFrozenDate]=useState(()=>({...date}));
       const latestAoxDateRef=useRef(null);
       const wasCodesOpenRef=useRef(false);
+      const prevAoxPopRef=useRef({randomFormat,dateFormat,useJulian,minY,maxY,leapChance,forceJanFebOnLeap});
       const [canOverrideCorrect,setCanOverrideCorrect]=useState(false);
       const tStartRef=useRef(null);
       const wrongTimeRef=useRef(null);
@@ -321,15 +322,33 @@
       function reset(){setRunPhase("idle");setDisplayN(n);setShown(false);setInBackMode(false);setAoxStack([]);setAoxForwardStack([]);setTimes([]);setStreak(0);setBestStreak(0);setAttempts(0);setGuesses([]);setMsg("");setFlash(null);resetAoxPB();setCodesOpen(false);setCanOverrideCorrect(false);setQuestionCounted(false);setPendingWrongCredit(null);setOverrideUsedAox(false);setBestNew({});setDate(genDate(minY,maxY));tStartRef.current=null;wrongTimeRef.current=null;prevTimesSnapRef.current=null;prevStreakSnapRef.current=null;prevBestSnapRef.current=null;}
       useEffect(()=>{if(!visible&&runPhase==="running")reset();},[visible]);
       // Auto-reset/regen on popover setting change.
-      // Running: any setting change resets the round. Done/failed: preserve historical state
-      // (the displayed date is the run's last question — don't auto-replace it).
-      // Idle: regen the displayed date only if it violates new leap settings.
+      // Running: any setting change resets the round (Cat B).
+      // Done/failed: never auto-replace the displayed last-question date (Cat C).
+      // Idle (Cat A): per-setting rules for the currently displayed date —
+      //   Date Format / Random Format / Leap Chance → always regen
+      //   Force Jan/Feb → regen only if current date is leap-year non-Jan/Feb
+      //   Year range → regen only if current date is out of new range
+      //   Julian → keep date (idle has no wrong guesses; current useJulian flows naturally
+      //            through correct-answer + codes panel)
       useEffect(()=>{
+        const prev=prevAoxPopRef.current;
+        const dateFormatChanged=prev.dateFormat!==dateFormat;
+        const randomFormatChanged=prev.randomFormat!==randomFormat;
+        const leapChanceChanged=prev.leapChance!==leapChance;
+        const forceJanFebChanged=prev.forceJanFebOnLeap!==forceJanFebOnLeap;
+        const yearRangeChanged=prev.minY!==minY||prev.maxY!==maxY;
+        const julianChanged=prev.useJulian!==useJulian;
+        prevAoxPopRef.current={randomFormat,dateFormat,useJulian,minY,maxY,leapChance,forceJanFebOnLeap};
+        const anyChanged=dateFormatChanged||randomFormatChanged||leapChanceChanged||forceJanFebChanged||yearRangeChanged||julianChanged;
+        if(!anyChanged)return;
         if(runPhase==='running'){reset();return;}
         if(runPhase!=='idle')return;
+        const anyAlwaysRegen=dateFormatChanged||randomFormatChanged||leapChanceChanged;
+        if(anyAlwaysRegen){setDate(genDate(minY,maxY));return;}
         const isLeapY=(useJulian&&isJulianDate(date.y,date.m,date.d))?isLeapJulian(date.y):isLeap(date.y);
-        const violates=(leapChance==='100'&&!isLeapY)||(forceJanFebOnLeap&&isLeapY&&date.m!==1&&date.m!==2);
-        if(violates)setDate(genDate(minY,maxY));
+        if(forceJanFebChanged&&forceJanFebOnLeap&&isLeapY&&date.m!==1&&date.m!==2){setDate(genDate(minY,maxY));return;}
+        if(yearRangeChanged&&(date.y<minY||date.y>maxY)){setDate(genDate(minY,maxY));return;}
+        // Julian change in idle: no wrong guesses, so keep date — current useJulian flows naturally.
       },[randomFormat,dateFormat,useJulian,minY,maxY,leapChance,forceJanFebOnLeap]);
       // Frozen date for codes panel: during close animation, keep showing old codes; update new codes only after close finishes
       latestAoxDateRef.current=date;
@@ -610,7 +629,7 @@
               <button type="button" className={`col-span-1 px-3 py-2 rounded-xl border surface-button text-sm font-medium text-center ${!overrideAvail?"opacity-60 pointer-events-none":""}`} onClick={handleOverride}>Override</button>
             </div>
             <button type="button" className={`w-full px-4 py-2 rounded-xl btn-solid text-sm font-medium ${codesDisabled&&!inBackMode?"opacity-60 pointer-events-none":""}`} onClick={openCodes}>{codesOpen?"Hide Codes":"Show Codes"}</button>
-            <Expander open={codesOpen}><div className="mt-3 rounded-2xl thin px-4 pt-[3px] pb-1.5"><MethodExplanation date={aoxFrozenDate} useJulian={useJulian}/></div></Expander>
+            <Expander open={codesOpen}><div className="mt-3 rounded-2xl thin px-4 pt-[3px] pb-1.5"><MethodExplanation date={aoxFrozenDate} useJulian={inBackMode?(aoxFrozenDate?._jul??useJulian):useJulian}/></div></Expander>
           </div>
         </div>
       );
@@ -699,7 +718,6 @@
       const calcOpen=calcOpenByMode[mode]??false;
       const setCalcOpen=v=>setCalcOpenByMode(p=>({...p,[mode]:typeof v==="function"?v(p[mode]??false):v}));
       const [calcPenaltyActive,setCalcPenaltyActive]=useState(false);
-      const rangeRefreshPendingRef=useRef(false);
       const prevStatsSnapshotRef=useRef(null);
       const [savedDedByType,setSavedDedByType]=useState(()=>blankDedTypeStore());
       const blankStats=()=>({played:0,good:0,streak:0,best:0,times:[]});
@@ -760,19 +778,14 @@
       const updateStats=mutator=>{const sk=mode==="deduction"?`deduction-${dedType}`:mode;setStatsByMode(prev=>{const ms={...(prev[sk]||blankStatsByEra())};const es={...(ms.AD||blankStats())};mutator(es);return{...prev,[sk]:{...ms,AD:es}};});};
       const resetStatsCurrent=()=>{const sk=mode==="deduction"?`deduction-${dedType}`:mode;setStatsByMode(prev=>{const ms={...(prev[sk]||blankStatsByEra())};return{...prev,[sk]:{...ms,AD:blankStats()}};});};
       const setCalcPenalty=v=>setCalcPenaltyActive(v);
-      const scheduleRangeRefresh=()=>{rangeRefreshPendingRef.current=true;};
-      function applyMinValue(val){if(val!==minY){setMinY(val);scheduleRangeRefresh();}}
-      function applyMaxValue(val){if(val!==maxY){setMaxY(val);scheduleRangeRefresh();}}
+      function applyMinValue(val){if(val!==minY)setMinY(val);}
+      function applyMaxValue(val){if(val!==maxY)setMaxY(val);}
       const commitMin=()=>{const p=parseInt(minInputVal);if(isNaN(p)){setMinInputVal(String(minY));return;}const v=Math.max(1,Math.min(maxY,p));applyMinValue(v);setMinInputVal(String(v));};
       const commitMax=()=>{const p=parseInt(maxInputVal);if(isNaN(p)){setMaxInputVal(String(maxY));return;}const v=Math.max(minY,Math.min(10000,p));applyMaxValue(v);setMaxInputVal(String(v));};
       useEffect(()=>{if(document.activeElement===minInputRef.current)return;setMinInputVal(String(minY));},[minY]);
       useEffect(()=>{if(document.activeElement===maxInputRef.current)return;setMaxInputVal(String(maxY));},[maxY]);
       function resetFlashBar(){if(flashBarRef.current){flashBarRef.current.style.transition="none";flashBarRef.current.style.width="100%";}}
       function startFlashBar(ms){requestAnimationFrame(()=>{if(!flashBarRef.current)return;const s=flashBarRef.current;s.style.transition="none";s.style.width="100%";s.getBoundingClientRect();s.style.transition=`width ${ms}ms linear`;s.style.width="0%";});}
-      const refreshForRange=useCallback(()=>{
-        setActive(false);setShowTimerDate(false);setMsg("");setGuesses([]);setFlash(null);setLocked(false);setRevealed(false);setCountedWrong(false);setCanOverrideCorrect(false);setCalcPenalty(false);setCalcOpen(false);setOverrideUsedThisQ(false);setBackDepth(0);resetPB();setStack([]);setDedStack([]);setForwardStack([]);setDedForwardStack([]);setBlitzRemain(blitzSec);setBlitzRunning(false);blitzStartRef.current=null;blitzPausedAtRef.current=null;blitzPausedAccRef.current=0;blitzRemainRef.current=blitzSec;qDeadlineRef.current=null;qPausedAtRef.current=null;qPausedAccRef.current=0;setQRemain(qSec);clearTimeout(flashTimerRef.current);flashTimerRef.current=null;setFlashPhase("dash");flashDeadlineRef.current=null;setFlashRemainMs(flashMs);resetFlashBar();tStartRef.current=null;wrongTimeRef.current=null;prevStatsSnapshotRef.current=null;setDateByMode({classic:genDate(minY,maxY),blitz:genDate(minY,maxY),flash:genDate(minY,maxY)});preservedByModeRef.current={};spawnDedWithRange(minY,maxY);setSavedDedByType(blankDedTypeStore());
-      },[mode,blitzSec,qSec,flashMs,minY,maxY,useJulian]);
-      useEffect(()=>{if(!rangeRefreshPendingRef.current)return;rangeRefreshPendingRef.current=false;refreshForRange();},[minY,maxY,refreshForRange]);
       useEffect(()=>{const onVis=()=>{const now=performance.now();if(document.hidden){if(blitzRunning&&blitzPausedAtRef.current==null)blitzPausedAtRef.current=now;if(qDeadlineRef.current&&qPausedAtRef.current==null)qPausedAtRef.current=now;}else{if(blitzPausedAtRef.current!=null){blitzPausedAccRef.current+=now-blitzPausedAtRef.current;blitzPausedAtRef.current=null;}if(qPausedAtRef.current!=null){qPausedAccRef.current+=now-qPausedAtRef.current;qPausedAtRef.current=null;}}};document.addEventListener("visibilitychange",onVis);return()=>document.removeEventListener("visibilitychange",onVis);},[blitzRunning]);
       useEffect(()=>{
         const need=blitzRunning||(mode==="blitz"&&perQ&&qDeadlineRef.current)||(mode==="flash"&&active&&flashPhase==="show");
@@ -1075,7 +1088,7 @@
         else if(leapChance==='50')wantLeap=r<0.5;
         const isLeapForY=yc=>{const jul=useJulian&&isJulianDate(yc,1,1);return jul?isLeapJulian(yc):isLeap(yc);};
         const pickMonth=isLeapY=>(forceJanFebOnLeap&&isLeapY)?rint(1,2):rint(1,12);
-        const attachFmt=o=>{if(randomFormat)o._fmt=rollFormat();return o;};
+        const attachFmt=o=>{if(randomFormat)o._fmt=rollFormat();o._jul=useJulian;return o;};
         if(dedType==="year"){
           const pt=pc>0?Math.min(YEAR_OPTION_DEFAULT,pc):0;
           const buildOpts=(yc,mc,dc,target)=>{if(target<=0||dc>dimFn(yc,mc))return null;const w=activeWday(yc,mc,dc);const nb=dir=>{const s=dir>0?1:-1;for(let k=1;k<=2000;k++){let yy=yc+k*s;if(yy===0)yy+=s;if(yy<lo||yy>hi)break;if(dc<=dimFn(yy,mc)&&activeWday(yy,mc,dc)===w)return yy;}return null;};const ln=nb(-1),un=nb(1);let lb=ln==null?lo:Math.max(lo,ln+1),ub=un==null?hi:Math.min(hi,un-1);lb=Math.max(lb,1);if(lb>ub||yc<lb||yc>ub)return null;const span=ub-lb+1;if(span<target)return null;const half=Math.floor(target/2);let start=yc-half;if(start<lb)start=lb;let end=start+target-1;if(end>ub){end=ub;start=Math.max(lb,end-target+1);}if(end-start+1!==target||yc<start||yc>end)return null;const opts=[];for(let yy=start;yy<=end;yy++)opts.push(yy);return{w,options:opts};};
@@ -1288,7 +1301,7 @@
       const revealDisabled=(locked&&revealed)||calcOpen||calcPenaltyActive||timerBlocksReveal||timerDone;
       const timerBusy=isTimer(mode)&&active;
       const overrideAvail=(countedWrong||canOverrideCorrect||pendingWrongOverride!=null)&&!overrideUsedThisQ;
-      const calcTarget=useMemo(()=>{if(mode==="lookup"||mode==="guide"||mode==="aox")return null;if(isTimer(mode)&&!shouldShowTimerDate)return null;if(mode==="deduction")return ded?{y:ded.y,m:ded.m,d:ded.d}:null;return date;},[mode,shouldShowTimerDate,date?.y,date?.m,date?.d,ded?.y,ded?.m,ded?.d]);
+      const calcTarget=useMemo(()=>{if(mode==="lookup"||mode==="guide"||mode==="aox")return null;if(isTimer(mode)&&!shouldShowTimerDate)return null;if(mode==="deduction")return ded?{y:ded.y,m:ded.m,d:ded.d,_jul:ded._jul}:null;return date;},[mode,shouldShowTimerDate,date?.y,date?.m,date?.d,date?._jul,ded?.y,ded?.m,ded?.d,ded?._jul]);
       const calcTargetKey=calcTarget?`${calcTarget.y}-${calcTarget.m}-${calcTarget.d}`:"none";
       const lookupCalcTargetKey=lookupCalcDate?`${lookupCalcDate.y}-${lookupCalcDate.m}-${lookupCalcDate.d}`:"none";
       useEffect(()=>{const pm=prevModeRef.current;if(pm!==mode){prevModeRef.current=mode;return;}setCalcOpen(false);prevModeRef.current=mode;},[calcTargetKey,mode]);
@@ -1362,91 +1375,137 @@
       // Toggling Random off makes already-displayed dates immediately fall back to the selected format.
       const fmtDate=(y,m,d,storedFmt)=>fmt(y,m,d,(randomFormat&&storedFmt)||dateFormat);
       // Generate a new game-mode date with the current settings baked in.
-      // Attaches _fmt if randomFormat is on so each date keeps its rolled format across re-renders.
+      // Stamps _fmt (if Random Format on) and _jul (calendar system snapshot) at generation.
+      // _jul is the calendar system in effect when the date was generated; used by stack
+      // entries (and deduction) so revisiting a past question shows codes consistent with
+      // the system that was active when it was created. Live questions ignore _jul and use
+      // current useJulian, so toggling Julian on a live (un-guessed) date updates the answer.
       const genDate=(lo,hi)=>{
         const dt=randomDate(lo,hi,useJulian,leapChance,forceJanFebOnLeap);
         if(randomFormat)dt._fmt=rollFormat();
+        dt._jul=useJulian;
         return dt;
       };
-      // Returns true if `dt` violates the currently-active leap settings.
-      // Used by the auto-regen effect below to detect stored dates that need refreshing
-      // when leapChance or forceJanFebOnLeap changes.
-      const dateViolatesSettings=(dt)=>{
+      // Permanent leap/range violations make a date invalid in any mode (current OR not).
+      // Always-regen settings (Date Format / Random Format / Leap Chance) and Force Jan/Feb
+      // and year range and Julian each have their own per-mode rules — see the unified effect below.
+      const isPermanentlyViolating=(dt)=>{
         if(!dt)return false;
         const isLeapY=(useJulian&&isJulianDate(dt.y,dt.m,dt.d))?isLeapJulian(dt.y):isLeap(dt.y);
         if(leapChance==='100'&&!isLeapY)return true;
         if(forceJanFebOnLeap&&isLeapY&&dt.m!==1&&dt.m!==2)return true;
+        if(dt.y<minY||dt.y>maxY)return true;
         return false;
       };
-      // Auto-regen on settings change. When leapChance becomes '100' or forceJanFebOnLeap
-      // becomes true, any stored date that now violates is regenerated. For Flash/Blitz mid-run,
-      // the round is fully reset to idle (partial run stats discarded). AoX has its own
-      // internal effect inside AoxMode that handles its date the same way.
+      // Track previous popover values so the unified effect can tell which setting changed.
+      const prevPopRef=useRef({randomFormat,dateFormat,useJulian,minY,maxY,leapChance,forceJanFebOnLeap});
+      // Unified popover-settings effect. Replaces the old Effect 1/Effect 2/refreshForRange split.
+      // Per-setting rules in idle Cat A states (Classic, Deduction, Flash idle, Blitz pre-round):
+      //   Date Format / Random Format / Leap Chance — always regen
+      //   Force Jan/Feb — regen only if current date is leap-year non-Jan/Feb
+      //   Year range — regen only if current date is out of new range
+      //   Julian — keep date (answer/codes float to current useJulian) unless current date is
+      //            Julian-eligible AND a wrong guess has been made → regen
+      // Cat B (Blitz active timer): always full reset on any popover change.
+      // Cat C (Blitz timerDone): never auto-regen. Stale stored dates in non-current modes
+      //   that are *permanently violating* (leap-100/jan-feb/range) are still cleaned up.
+      // Flash mid-dash is Cat A: a regen tears down the dash + lands at idle with the new date.
+      // AoX is owned by AoxMode's internal effect, which mirrors this logic.
       useEffect(()=>{
-        // Identify violating game-mode dates
-        const gmViolations={};
-        for(const m of ['classic','flash','blitz']){
-          if(dateByMode[m]&&dateViolatesSettings(dateByMode[m]))gmViolations[m]=true;
-        }
-        const dedViolates=ded&&dateViolatesSettings({y:ded.y,m:ded.m,d:ded.d});
-        // 1. Regen violating game-mode dates
-        if(Object.keys(gmViolations).length){
-          setDateByMode(prev=>{const next={...prev};for(const m of Object.keys(gmViolations))next[m]=genDate(minY,maxY);return next;});
-        }
-        // 2. Clear stale preserved per-mode entries (classic/flash only — deduction's .date is
-        //    a fallback to classic's date and isn't authoritative for deduction state)
-        for(const m of ['classic','flash']){
-          const p=preservedByModeRef.current[m];
-          if(p?.date&&dateViolatesSettings(p.date))delete preservedByModeRef.current[m];
-        }
-        // 3. Clear violating savedDedByType entries (will respawn fresh on next subtype switch)
-        setSavedDedByType(prev=>{
-          let changed=false;const next={...prev};
-          for(const k of Object.keys(prev)){
-            const sd=prev[k];
-            if(sd?.ded&&dateViolatesSettings({y:sd.ded.y,m:sd.ded.m,d:sd.ded.d})){next[k]=null;changed=true;}
+        const prev=prevPopRef.current;
+        const dateFormatChanged=prev.dateFormat!==dateFormat;
+        const randomFormatChanged=prev.randomFormat!==randomFormat;
+        const leapChanceChanged=prev.leapChance!==leapChance;
+        const forceJanFebChanged=prev.forceJanFebOnLeap!==forceJanFebOnLeap;
+        const yearRangeChanged=prev.minY!==minY||prev.maxY!==maxY;
+        const julianChanged=prev.useJulian!==useJulian;
+        prevPopRef.current={randomFormat,dateFormat,useJulian,minY,maxY,leapChance,forceJanFebOnLeap};
+        const anyChanged=dateFormatChanged||randomFormatChanged||leapChanceChanged||forceJanFebChanged||yearRangeChanged||julianChanged;
+        if(!anyChanged)return;
+        const anyAlwaysRegen=dateFormatChanged||randomFormatChanged||leapChanceChanged;
+        // Decide whether the current displayed date needs to regen given the rules.
+        const dateNeedsRegen=(dt,hasWrongGuess)=>{
+          if(!dt)return false;
+          if(anyAlwaysRegen)return true;
+          const isLeapY=(useJulian&&isJulianDate(dt.y,dt.m,dt.d))?isLeapJulian(dt.y):isLeap(dt.y);
+          if(forceJanFebChanged&&forceJanFebOnLeap&&isLeapY&&dt.m!==1&&dt.m!==2)return true;
+          if(yearRangeChanged&&(dt.y<minY||dt.y>maxY))return true;
+          if(julianChanged&&isJulianDate(dt.y,dt.m,dt.d)&&hasWrongGuess)return true;
+          return false;
+        };
+        // Helper: cleanup permanently-violating non-current-mode storage (always runs).
+        const cleanseNonCurrent=(skipCurrentGm,skipCurrentDed)=>{
+          setDateByMode(p=>{
+            let changed=false;const next={...p};
+            for(const m of ['classic','flash','blitz']){
+              if(skipCurrentGm===m)continue;
+              if(next[m]&&isPermanentlyViolating(next[m])){next[m]=genDate(minY,maxY);changed=true;}
+            }
+            return changed?next:p;
+          });
+          for(const m of ['classic','flash']){
+            if(skipCurrentGm===m)continue;
+            const pe=preservedByModeRef.current[m];
+            if(pe?.date&&isPermanentlyViolating(pe.date))delete preservedByModeRef.current[m];
           }
-          return changed?next:prev;
-        });
-        // 4. Respawn current ded if violating (silent for non-deduction modes)
-        if(dedViolates)spawnDed();
-        // 5. Per-current-mode cleanup. Blitz active-round resets are owned by the
-        //    any-popover-setting effect below; AoX is owned by AoxMode's internal effect.
-        const currentViolated=(mode==='deduction'&&dedViolates)||gmViolations[mode];
-        if(currentViolated){
-          if(mode==='classic'||mode==='deduction'||(mode==='flash'&&!active)){
-            // Light per-question cleanup, preserve Stack history.
-            // Flash active mid-dash is handled by Effect 2 below (full per-dash reset).
+          setSavedDedByType(p=>{
+            let changed=false;const next={...p};
+            for(const k of Object.keys(p)){
+              if(skipCurrentDed&&k===dedType)continue;
+              const sd=p[k];
+              if(sd?.ded&&isPermanentlyViolating({y:sd.ded.y,m:sd.ded.m,d:sd.ded.d})){next[k]=null;changed=true;}
+            }
+            return changed?next:p;
+          });
+        };
+        // Cat C: Blitz post-round (timerDone) — never auto-regen current; only cleanse stale storage.
+        if(mode==='blitz'&&timerDone){cleanseNonCurrent(null,false);return;}
+        // Cat B: Blitz active — full round reset on any change.
+        if(mode==='blitz'&&active){
+          arm();
+          setDateByMode(p=>{const next={...p,blitz:genDate(minY,maxY)};for(const m of ['classic','flash']){if(next[m]&&isPermanentlyViolating(next[m]))next[m]=genDate(minY,maxY);}return next;});
+          for(const m of ['classic','flash']){const pe=preservedByModeRef.current[m];if(pe?.date&&isPermanentlyViolating(pe.date))delete preservedByModeRef.current[m];}
+          setSavedDedByType(p=>{let changed=false;const next={...p};for(const k of Object.keys(p)){const sd=p[k];if(sd?.ded&&isPermanentlyViolating({y:sd.ded.y,m:sd.ded.m,d:sd.ded.d})){next[k]=null;changed=true;}}return changed?next:p;});
+          if(ded&&isPermanentlyViolating({y:ded.y,m:ded.m,d:ded.d}))spawnDed();
+          return;
+        }
+        // Cat A: per-setting rules for current mode's displayed date.
+        let currentNeedsRegen=false;
+        if(mode==='classic'||mode==='flash'||mode==='blitz'){
+          currentNeedsRegen=dateNeedsRegen(dateByMode[mode],countedWrong);
+        }else if(mode==='deduction'){
+          currentNeedsRegen=ded?dateNeedsRegen({y:ded.y,m:ded.m,d:ded.d},countedWrong):false;
+        }
+        if(currentNeedsRegen){
+          if(mode==='flash'&&active){
+            // Flash mid-dash regen: tear down the dash + land at idle with the new date.
+            setActive(false);setShowTimerDate(false);
+            clearTimeout(flashTimerRef.current);flashTimerRef.current=null;
+            setFlashPhase("dash");flashDeadlineRef.current=null;
+            setFlashRemainMs(flashMs);resetFlashBar();
+            resetPB();setMsg("");setGuesses([]);setLocked(false);setRevealed(false);
+            setCountedWrong(false);setCanOverrideCorrect(false);setOverrideUsedThisQ(false);
+            setBackDepth(0);
+            setDateByMode(p=>({...p,flash:genDate(minY,maxY)}));
+            tStartRef.current=null;
+          }else if(mode==='deduction'){
+            spawnDed();
+            resetPB();setMsg("");setGuesses([]);setLocked(false);setRevealed(false);
+            setCountedWrong(false);setCanOverrideCorrect(false);setOverrideUsedThisQ(false);
+            setBackDepth(0);
+            tStartRef.current=performance.now();
+          }else{
+            // Classic, Flash idle, Blitz pre-round
+            setDateByMode(p=>({...p,[mode]:genDate(minY,maxY)}));
             resetPB();setMsg("");setGuesses([]);setLocked(false);setRevealed(false);
             setCountedWrong(false);setCanOverrideCorrect(false);setOverrideUsedThisQ(false);
             setBackDepth(0);
             tStartRef.current=performance.now();
           }
         }
-      },[leapChance,forceJanFebOnLeap]);
-      // Effect 2: Round/dash reset on ANY popover setting change for Blitz active rounds
-      // and Flash active dashes (no penalty — settings would otherwise mismatch the date
-      // being answered for). Theme settings are intentionally excluded (cosmetic).
-      // AoX is handled by AoxMode's own internal effect with the same deps.
-      // Classic/Deduction (and idle Flash) don't reset on non-leap setting changes —
-      // Effect 1 above handles their leap-violation cases.
-      useEffect(()=>{
-        if(mode==='blitz'&&active){
-          arm();
-          setDateByMode(prev=>({...prev,blitz:genDate(minY,maxY)}));
-        }else if(mode==='flash'&&active){
-          // Tear down the dash timer + per-question state, then regen the flash date.
-          // Stack and cumulative Flash stats are preserved (no penalty).
-          setActive(false);setShowTimerDate(false);
-          clearTimeout(flashTimerRef.current);flashTimerRef.current=null;
-          setFlashPhase("dash");flashDeadlineRef.current=null;
-          setFlashRemainMs(flashMs);resetFlashBar();
-          resetPB();setMsg("");setGuesses([]);setLocked(false);setRevealed(false);
-          setCountedWrong(false);setCanOverrideCorrect(false);setOverrideUsedThisQ(false);
-          setBackDepth(0);
-          setDateByMode(prev=>({...prev,flash:genDate(minY,maxY)}));
-          tStartRef.current=null;
-        }
+        // Always cleanse permanently-violating stored dates in non-current modes.
+        const skipGm=(mode==='classic'||mode==='flash'||mode==='blitz')&&currentNeedsRegen?mode:null;
+        cleanseNonCurrent(skipGm,mode==='deduction'&&currentNeedsRegen);
       },[randomFormat,dateFormat,useJulian,minY,maxY,leapChance,forceJanFebOnLeap]);
       const [settingsOpen,setSettingsOpen]=useState(false);
       const settingsRef=useRef(null);
@@ -1497,7 +1556,6 @@
             {['random','50','75','100'].map(v=>(<button key={v} type="button" onClick={()=>setLeapChance(v)} className={`flex-1 px-2 py-1.5 rounded-xl text-xs font-medium border ${leapChance===v?"btn-solid border-transparent":"surface-toggle text-purple-100/80"}`}>{v==='random'?'Random':v+'%'}</button>))}
           </div>
           <div className="flex items-center justify-between"><span className="text-xs text-purple-200/80">Force Jan/Feb on Leap Years</span><button type="button" onClick={()=>setForceJanFebOnLeap(v=>!v)} className={`px-3 py-1 rounded-xl text-xs font-medium border ${forceJanFebOnLeap?"btn-solid border-transparent":"surface-toggle border-purple-800/60 text-purple-100/80"}`}>{forceJanFebOnLeap?"On":"Off"}</button></div>
-          <p className="text-[11px] text-purple-300/60">If the year range has no leap years, the chance setting is silently ignored per date.</p>
         </div>
         <div className="space-y-2">
           <div className="text-[10px] uppercase tracking-widest text-purple-300/60">Theme</div>
@@ -1578,7 +1636,7 @@
                   <button type="button" className={`col-span-1 px-3 py-2 rounded-xl border surface-button text-sm font-medium text-center ${revealDisabled?"opacity-60 pointer-events-none":""}`} onClick={reveal}>Reveal</button>
                   <button type="button" className={`col-span-1 px-3 py-2 rounded-xl border surface-button text-sm font-medium text-center ${!overrideAvail?"opacity-60 pointer-events-none":""}`} onClick={override}>Override</button>
                 </div>
-                <MethodBreakdownSection key={mode} date={calcTarget} open={calcOpen} onOpenChange={handleCalcOpenChange} className="" contentClassName="mt-3 rounded-2xl thin px-4 pt-[3px] pb-1.5" useJulian={useJulian}/>
+                <MethodBreakdownSection key={mode} date={calcTarget} open={calcOpen} onOpenChange={handleCalcOpenChange} className="" contentClassName="mt-3 rounded-2xl thin px-4 pt-[3px] pb-1.5" useJulian={backDepth>0?(calcTarget?._jul??useJulian):useJulian}/>
               </div>
             </div>
           )}
@@ -1610,7 +1668,7 @@
                   <button type="button" className={`col-span-1 px-3 py-2 rounded-xl border surface-button text-sm font-medium text-center ${revealDisabled?"opacity-60 pointer-events-none":""}`} onClick={reveal}>Reveal</button>
                   <button type="button" className={`col-span-1 px-3 py-2 rounded-xl border surface-button text-sm font-medium text-center ${!overrideAvail?"opacity-60 pointer-events-none":""}`} onClick={override}>Override</button>
                 </div>
-                <MethodBreakdownSection date={calcTarget} open={calcOpen} onOpenChange={handleCalcOpenChange} className="" contentClassName="mt-3 rounded-2xl thin px-4 pt-[3px] pb-1.5" useJulian={useJulian}/>
+                <MethodBreakdownSection date={calcTarget} open={calcOpen} onOpenChange={handleCalcOpenChange} className="" contentClassName="mt-3 rounded-2xl thin px-4 pt-[3px] pb-1.5" useJulian={calcTarget?._jul??useJulian}/>
               </div>
             </div>
           )}
@@ -1645,11 +1703,11 @@
             <p><b>Last / Avg / Med</b> — timing stats, calculated using correct answers only. Last is your most recent correct time; Avg is the average across all correct answers; Med is the median, which is less skewed by outliers. Any time of 60 seconds or more — whether an individual solve, a computed average or median, or any Best — displays as "—". Times are still tracked internally and contribute to averages, medians, and best-tracking; only the display is capped.</p>
             <p className="text-purple-300/70 text-[12px]">In modes designed for casual practice (Classic, Deduction, Flash), you can tap any stat to hide it. Tapping Score, Accuracy, or Streak hides all three; tapping any timing stat hides all three. Stats always track in the background regardless of visibility. Enabling timing stats resets all stats so the score and timing always reflect the same set of questions. When timing stats are off, leaving and returning to a mode preserves the current question exactly as you left it — same date, same answers, codes panel in the same state. In all other modes, stats are always visible.</p>
           </GuideSection>
-          <GuideSection id="range" title="Year Range" openId={open} onToggle={toggle}><p>Set via the ⚙ settings menu. Controls which years dates are drawn from. Defaults to 1–10000 AD. Changing the range resets the current round.</p></GuideSection>
-          <GuideSection id="leap" title="Leap Year Settings" openId={open} onToggle={toggle}><p>Two settings in the ⚙ menu control how often leap years appear and what months they're paired with. <b>Leap Year Chance</b> sets how often a generated date lands on a leap year — Random uses the natural rate (~24%); 50%, 75%, and 100% force higher rates. <b>Force Jan/Feb on Leap Years</b>, when on, restricts the month to January or February whenever a leap year is generated. These settings apply to all game modes' date generation; Lookup is unaffected. If your year range happens to contain no leap years and the chance is set to 50/75/100%, the chance is silently ignored per date — the setting itself is preserved.</p></GuideSection>
+          <GuideSection id="range" title="Year Range" openId={open} onToggle={toggle}><p>Set via the ⚙ settings menu. Controls which years dates are drawn from. Defaults to 1–10000 AD. Changing the range regenerates the current date only if it falls outside the new range. In active Blitz rounds and AoX runs, any range change ends the round.</p></GuideSection>
+          <GuideSection id="leap" title="Leap Year Settings" openId={open} onToggle={toggle}><p>Two settings in the ⚙ menu control how often leap years appear and what months they're paired with. <b>Leap Year Chance</b> sets how often a generated date lands on a leap year — Random uses the natural rate (~24%); 50%, 75%, and 100% force higher rates. <b>Force Jan/Feb on Leap Years</b>, when on, restricts the month to January or February whenever a leap year is generated. These settings apply to all game modes' date generation; Lookup is unaffected. If your year range happens to contain no leap years and the chance is set to 50/75/100%, the chance is silently ignored per date — the setting itself is preserved. Changing <b>Leap Year Chance</b> always regenerates the displayed date. Toggling <b>Force Jan/Feb on Leap Years</b> regenerates only if the current date is a leap year with a month other than January or February. In active Blitz rounds and AoX runs, any leap setting change ends the round.</p></GuideSection>
           <GuideSection id="theme" title="Theme" openId={open} onToggle={toggle}><p>Five themes: Dusk (default dark navy), Midnight (true black with purple), Nebula (deep purple), Light (clean white), and Parchment (warm cream). Accessible from the ⚙ settings menu in any tab. Enable Use System Settings to match your device's light/dark mode automatically, with separate theme choices for each. Disable to pick one manually.</p></GuideSection>
-          <GuideSection id="dateformat" title="Date Format" openId={open} onToggle={toggle}><p>Set via the ⚙ settings menu. Choose one of five real-world formats: <b>Written MDY</b> (April 27, 1828), <b>Written DMY</b> (27 April 1828), <b>Numeric MDY</b> (4/27/1828), <b>Numeric DMY</b> (27.4.1828), or <b>Numeric YMD</b> (1828-4-27). Numeric formats use a fixed separator convention: MDY uses '/', DMY uses '.', YMD uses '-'. Years always show in full, never abbreviated.</p><p>Only DMY, MDY, and YMD orderings are offered because those are the only orderings actually used in real life — orderings like YDM aren't standard anywhere.</p><p><b>Random Format</b>, when on, rolls one of the five formats per date in game modes only — your selected format is preserved underneath (the panels just lock visually). Lookup and the Last Updated timestamp ignore Random and always use the selected format. The Last Updated timestamp uses the numeric version of whichever format you've selected.</p></GuideSection>
-          <GuideSection id="julian" title="Julian Calendar" openId={open} onToggle={toggle}><p>Toggle via the ⚙ settings menu under Calendar System. Off by default. When on, dates on or before October 4, 1582 are treated as Julian calendar dates, which have different leap year rules — every year divisible by 4 is a leap year, with no century exception. This affects weekday calculation and the codes shown in Show Codes. October 5–14, 1582 are always excluded since those dates never existed; the Gregorian calendar skipped them to correct accumulated calendar drift.</p></GuideSection>
+          <GuideSection id="dateformat" title="Date Format" openId={open} onToggle={toggle}><p>Set via the ⚙ settings menu. Choose one of five real-world formats: <b>Written MDY</b> (April 27, 1828), <b>Written DMY</b> (27 April 1828), <b>Numeric MDY</b> (4/27/1828), <b>Numeric DMY</b> (27.4.1828), or <b>Numeric YMD</b> (1828-4-27). Numeric formats use a fixed separator convention: MDY uses '/', DMY uses '.', YMD uses '-'. Years always show in full, never abbreviated.</p><p>Only DMY, MDY, and YMD orderings are offered because those are the only orderings actually used in real life — orderings like YDM aren't standard anywhere.</p><p><b>Random Format</b>, when on, rolls one of the five formats per date in game modes only — your selected format is preserved underneath (the panels just lock visually). Lookup and the Last Updated timestamp ignore Random and always use the selected format. The Last Updated timestamp uses the numeric version of whichever format you've selected. In Classic, Deduction, and Flash, changing the format or toggling Random Format regenerates the displayed date. In active Blitz rounds and AoX runs, either change ends the round.</p></GuideSection>
+          <GuideSection id="julian" title="Julian Calendar" openId={open} onToggle={toggle}><p>Toggle via the ⚙ settings menu under Calendar System. Off by default. When on, dates on or before October 4, 1582 are treated as Julian calendar dates, which have different leap year rules — every year divisible by 4 is a leap year, with no century exception. This affects weekday calculation and the codes shown in Show Codes. October 5–14, 1582 are always excluded since those dates never existed; the Gregorian calendar skipped them to correct accumulated calendar drift.</p><p>Toggling Julian doesn't necessarily regenerate the current date. For dates after October 4, 1582, Julian has no effect. For Julian-eligible dates (October 4, 1582 or earlier), the date stays if you haven't made a wrong guess yet — the answer and codes simply update. If you've already wrong-guessed, the date regenerates. Each date snapshots its calendar system at generation, so revisiting an earlier question via Back shows the codes that were correct under the system in effect when that date was generated. In active Blitz rounds and AoX runs, any Julian toggle ends the round.</p></GuideSection>
           <Divider label="Modes"/>
           <GuideSection id="classic" title="Classic" openId={open} onToggle={toggle}><p>The main practice mode with no time pressure. Answer at your own pace. Override works after both wrong and correct answers. Reset Stats clears your stats and question history.</p></GuideSection>
           <GuideSection id="aox" title="AoX" openId={open} onToggle={toggle}>
