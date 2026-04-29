@@ -249,7 +249,7 @@
 
 
 
-    const DEPLOY_TS=new Date('2026-04-29T00:42:00Z');
+    const DEPLOY_TS=new Date('2026-04-29T01:46:00Z');
 
     function StatPanel({stats}){
       return(
@@ -259,7 +259,7 @@
       );
     }
 
-    function AoxMode({minY,maxY,visible,fmtDate,useJulian=false,genDate=randomDate}){
+    function AoxMode({minY,maxY,visible,fmtDate,useJulian=false,genDate=randomDate,leapChance='random',forceJanFebOnLeap=false}){
       const [aoxN,setAoxN]=useState("10");
       const [mistakesOk,setMistakesOk]=useState(false);
       const [oneByOne,setOneByOne]=useState(false);
@@ -320,6 +320,15 @@
 
       function reset(){setRunPhase("idle");setDisplayN(n);setShown(false);setInBackMode(false);setAoxStack([]);setAoxForwardStack([]);setTimes([]);setStreak(0);setBestStreak(0);setAttempts(0);setGuesses([]);setMsg("");setFlash(null);resetAoxPB();setCodesOpen(false);setCanOverrideCorrect(false);setQuestionCounted(false);setPendingWrongCredit(null);setOverrideUsedAox(false);setBestNew({});setDate(genDate(minY,maxY));tStartRef.current=null;wrongTimeRef.current=null;prevTimesSnapRef.current=null;prevStreakSnapRef.current=null;prevBestSnapRef.current=null;}
       useEffect(()=>{if(!visible&&runPhase==="running")reset();},[visible]);
+      // Auto-regen if current AoX date violates new leap settings.
+      // Mid-run (any non-idle phase): full reset to idle via reset(). Idle: just regen the date.
+      useEffect(()=>{
+        const isLeapY=(useJulian&&isJulianDate(date.y,date.m,date.d))?isLeapJulian(date.y):isLeap(date.y);
+        const violates=(leapChance==='100'&&!isLeapY)||(forceJanFebOnLeap&&isLeapY&&date.m!==1&&date.m!==2);
+        if(!violates)return;
+        if(runPhase==='idle')setDate(genDate(minY,maxY));
+        else reset();
+      },[leapChance,forceJanFebOnLeap]);
       // Frozen date for codes panel: during close animation, keep showing old codes; update new codes only after close finishes
       latestAoxDateRef.current=date;
       useEffect(()=>{
@@ -1357,6 +1366,63 @@
         if(randomFormat)dt._fmt=rollFormat();
         return dt;
       };
+      // Returns true if `dt` violates the currently-active leap settings.
+      // Used by the auto-regen effect below to detect stored dates that need refreshing
+      // when leapChance or forceJanFebOnLeap changes.
+      const dateViolatesSettings=(dt)=>{
+        if(!dt)return false;
+        const isLeapY=(useJulian&&isJulianDate(dt.y,dt.m,dt.d))?isLeapJulian(dt.y):isLeap(dt.y);
+        if(leapChance==='100'&&!isLeapY)return true;
+        if(forceJanFebOnLeap&&isLeapY&&dt.m!==1&&dt.m!==2)return true;
+        return false;
+      };
+      // Auto-regen on settings change. When leapChance becomes '100' or forceJanFebOnLeap
+      // becomes true, any stored date that now violates is regenerated. For Flash/Blitz mid-run,
+      // the round is fully reset to idle (partial run stats discarded). AoX has its own
+      // internal effect inside AoxMode that handles its date the same way.
+      useEffect(()=>{
+        // Identify violating game-mode dates
+        const gmViolations={};
+        for(const m of ['classic','flash','blitz']){
+          if(dateByMode[m]&&dateViolatesSettings(dateByMode[m]))gmViolations[m]=true;
+        }
+        const dedViolates=ded&&dateViolatesSettings({y:ded.y,m:ded.m,d:ded.d});
+        // 1. Regen violating game-mode dates
+        if(Object.keys(gmViolations).length){
+          setDateByMode(prev=>{const next={...prev};for(const m of Object.keys(gmViolations))next[m]=genDate(minY,maxY);return next;});
+        }
+        // 2. Clear stale preserved per-mode entries (classic/flash only — deduction's .date is
+        //    a fallback to classic's date and isn't authoritative for deduction state)
+        for(const m of ['classic','flash']){
+          const p=preservedByModeRef.current[m];
+          if(p?.date&&dateViolatesSettings(p.date))delete preservedByModeRef.current[m];
+        }
+        // 3. Clear violating savedDedByType entries (will respawn fresh on next subtype switch)
+        setSavedDedByType(prev=>{
+          let changed=false;const next={...prev};
+          for(const k of Object.keys(prev)){
+            const sd=prev[k];
+            if(sd?.ded&&dateViolatesSettings({y:sd.ded.y,m:sd.ded.m,d:sd.ded.d})){next[k]=null;changed=true;}
+          }
+          return changed?next:prev;
+        });
+        // 4. Respawn current ded if violating (silent for non-deduction modes)
+        if(dedViolates)spawnDed();
+        // 5. Per-current-mode cleanup
+        const currentViolated=(mode==='deduction'&&dedViolates)||gmViolations[mode];
+        if(currentViolated){
+          if(mode==='flash'||mode==='blitz'){
+            // Mid-run or idle: full reset to idle via arm() (clears timers + per-round state)
+            arm();
+          }else{
+            // Classic / Deduction: light per-question cleanup, preserve Stack history
+            resetPB();setMsg("");setGuesses([]);setLocked(false);setRevealed(false);
+            setCountedWrong(false);setCanOverrideCorrect(false);setOverrideUsedThisQ(false);
+            setBackDepth(0);
+            tStartRef.current=performance.now();
+          }
+        }
+      },[leapChance,forceJanFebOnLeap]);
       const [settingsOpen,setSettingsOpen]=useState(false);
       const settingsRef=useRef(null);
       const settingsPopoverRef=useRef(null);
@@ -1459,7 +1525,7 @@
               <div className="mt-3">{timerSettingControl}</div>
             </>)}
           </>)}
-          <AoxMode minY={minY} maxY={maxY} visible={mode==="aox"} fmtDate={fmtDate} useJulian={useJulian} genDate={genDate}/>
+          <AoxMode minY={minY} maxY={maxY} visible={mode==="aox"} fmtDate={fmtDate} useJulian={useJulian} genDate={genDate} leapChance={leapChance} forceJanFebOnLeap={forceJanFebOnLeap}/>
           {mode==="lookup"&&(<div className="mt-5"><LookupCard history={lookupHistory} onAddHistory={pushLookupHistory} onMoveHistory={moveHistoryEntryToTop} onClearHistory={clearLookupHistory} inputValue={lookupInput} onInputChange={setLookupInput} outputValue={lookupOutput} onOutputChange={setLookupOutput} calcDate={lookupCalcDate} onCalcDateChange={setLookupCalcDate} selectedHistoryId={lookupSelectedHistoryId} onSelectedHistoryIdChange={setLookupSelectedHistoryId} calcOpen={lookupCalcOpen} onCalcOpenChange={setLookupCalcOpen} fmtDate={fmtDate} dateFormat={dateFormat} useJulian={useJulian}/></div>)}
           {mode==="guide"&&(<div className="mt-5"><GuidePage/></div>)}
           {["classic","blitz","flash"].includes(mode)&&(
@@ -1551,13 +1617,13 @@
             <p><b>Score</b> — correct first-try answers out of total attempts. In Blitz, only the current round is shown. In AoX, shows correct answers out of total attempts; the run ends once correct answers reach the set number.</p>
             <p><b>Accuracy</b> — percentage of questions answered correctly on the first try. Shows — until your first attempt.</p>
             <p><b>Streak</b> — your current consecutive correct streak / your best in this session.</p>
-            <p><b>Last / Avg / Med</b> — timing stats, calculated using correct answers only. Last is your most recent correct time; Avg is the average across all correct answers; Med is the median, which is less skewed by outliers. Values of 60 seconds or more display as "—" but still count toward averages, medians, and bests in the background.</p>
+            <p><b>Last / Avg / Med</b> — timing stats, calculated using correct answers only. Last is your most recent correct time; Avg is the average across all correct answers; Med is the median, which is less skewed by outliers. Any time of 60 seconds or more — whether an individual solve, a computed average or median, or any Best — displays as "—". Times are still tracked internally and contribute to averages, medians, and best-tracking; only the display is capped.</p>
             <p className="text-purple-300/70 text-[12px]">In modes designed for casual practice (Classic, Deduction, Flash), you can tap any stat to hide it. Tapping Score, Accuracy, or Streak hides all three; tapping any timing stat hides all three. Stats always track in the background regardless of visibility. Enabling timing stats resets all stats so the score and timing always reflect the same set of questions. When timing stats are off, leaving and returning to a mode preserves the current question exactly as you left it — same date, same answers, codes panel in the same state. In all other modes, stats are always visible.</p>
           </GuideSection>
           <GuideSection id="range" title="Year Range" openId={open} onToggle={toggle}><p>Set via the ⚙ settings menu. Controls which years dates are drawn from. Defaults to 1–10000 AD. Changing the range resets the current round.</p></GuideSection>
           <GuideSection id="leap" title="Leap Year Settings" openId={open} onToggle={toggle}><p>Two settings in the ⚙ menu control how often leap years appear and what months they're paired with. <b>Leap Year Chance</b> sets how often a generated date lands on a leap year — Random uses the natural rate (~24%); 50%, 75%, and 100% force higher rates. <b>Force Jan/Feb on Leap Years</b>, when on, restricts the month to January or February whenever a leap year is generated. These settings apply to all game modes' date generation; Lookup is unaffected. If your year range happens to contain no leap years and the chance is set to 50/75/100%, the chance is silently ignored per date — the setting itself is preserved.</p></GuideSection>
           <GuideSection id="theme" title="Theme" openId={open} onToggle={toggle}><p>Five themes: Dusk (default dark navy), Midnight (true black with purple), Nebula (deep purple), Light (clean white), and Parchment (warm cream). Accessible from the ⚙ settings menu in any tab. Enable Use System Settings to match your device's light/dark mode automatically, with separate theme choices for each. Disable to pick one manually.</p></GuideSection>
-          <GuideSection id="dateformat" title="Date Format" openId={open} onToggle={toggle}><p>Set via the ⚙ settings menu. Choose one of five real-world formats: <b>Written MDY</b> (April 27, 1828), <b>Written DMY</b> (27 April 1828), <b>Numeric MDY</b> (4/27/1828), <b>Numeric DMY</b> (27.4.1828), or <b>Numeric YMD</b> (1828-4-27). Numeric formats use a fixed separator convention: MDY uses /, DMY uses ., YMD uses -. Years always show in full, never abbreviated.</p><p>Only DMY, MDY, and YMD orderings are offered because those are the only orderings actually used in real life — orderings like YDM aren't standard anywhere, so including them would train you on a non-real-world skill.</p><p><b>Random Format</b>, when on, rolls one of the five formats per date in game modes only — your selected format is preserved underneath (the panels just lock visually). Lookup and the Last Updated timestamp ignore Random and always use the selected format. The Last Updated timestamp uses the numeric version of whichever format you've selected.</p></GuideSection>
+          <GuideSection id="dateformat" title="Date Format" openId={open} onToggle={toggle}><p>Set via the ⚙ settings menu. Choose one of five real-world formats: <b>Written MDY</b> (April 27, 1828), <b>Written DMY</b> (27 April 1828), <b>Numeric MDY</b> (4/27/1828), <b>Numeric DMY</b> (27.4.1828), or <b>Numeric YMD</b> (1828-4-27). Numeric formats use a fixed separator convention: MDY uses '/', DMY uses '.', YMD uses '-'. Years always show in full, never abbreviated.</p><p>Only DMY, MDY, and YMD orderings are offered because those are the only orderings actually used in real life — orderings like YDM aren't standard anywhere.</p><p><b>Random Format</b>, when on, rolls one of the five formats per date in game modes only — your selected format is preserved underneath (the panels just lock visually). Lookup and the Last Updated timestamp ignore Random and always use the selected format. The Last Updated timestamp uses the numeric version of whichever format you've selected.</p></GuideSection>
           <GuideSection id="julian" title="Julian Calendar" openId={open} onToggle={toggle}><p>Toggle via the ⚙ settings menu under Calendar System. Off by default. When on, dates on or before October 4, 1582 are treated as Julian calendar dates, which have different leap year rules — every year divisible by 4 is a leap year, with no century exception. This affects weekday calculation and the codes shown in Show Codes. October 5–14, 1582 are always excluded since those dates never existed; the Gregorian calendar skipped them to correct accumulated calendar drift.</p></GuideSection>
           <Divider label="Modes"/>
           <GuideSection id="classic" title="Classic" openId={open} onToggle={toggle}><p>The main practice mode with no time pressure. Answer at your own pace. Override works after both wrong and correct answers. Reset Stats clears your stats and question history.</p></GuideSection>
@@ -1580,7 +1646,7 @@
             <p>Best scores are tracked per exact configuration (duration + Allow Mistakes + Per Round/Per Question). Best score and best streak are tracked independently in Per Round — they can come from different rounds. When both came from the same round, a · Same Round tag appears on the right of the Best row. If you leave Blitz after a round ends without pressing Reset, the round state (bests, history, final date) is preserved when you return. Press Reset to clear your current round, unlock the settings, and start fresh. Changing settings while idle resets the current round.</p>
           </GuideSection>
           <GuideSection id="flash" title="Flash" openId={open} onToggle={toggle}><p>The date is briefly revealed (0.1s–3.0s, default 0.5s, adjustable via the slider) then hidden. Answer from memory. Reset Stats clears your stats and question history.</p></GuideSection>
-          <GuideSection id="lookup" title="Lookup" openId={open} onToggle={toggle}><p>Enter any AD date to instantly see its weekday. Lookup input is always numeric and follows your selected Date Format (m/d/yyyy, d.m.yyyy, or yyyy-m-d). Lookup ignores Random Format and always uses the selected format directly. Changing the Date Format clears the input box. Supports years 1–10000. Show Codes is available for all results and stays open as you browse your history. The history panel shows up to 10 entries before scrolling and re-renders live when you change the Date Format. October 5–14, 1582 never existed and will appear in history as "Does Not Exist" with Show Codes unavailable.</p></GuideSection>
+          <GuideSection id="lookup" title="Lookup" openId={open} onToggle={toggle}><p>Enter any AD date to instantly see its weekday. Lookup input is always numeric and follows your selected Date Format (m/d/y, d.m.y, or y-m-d). Lookup ignores Random Format and always uses the selected format directly. Changing the Date Format clears the input box. Supports years 1–10000. Show Codes is available for all results and stays open as you browse your history. The history panel shows up to 10 entries before scrolling and re-renders live when you change the Date Format. October 5–14, 1582 never existed and will appear in history as "Does Not Exist" with Show Codes unavailable.</p></GuideSection>
         </div>
       );
     }
@@ -1648,9 +1714,9 @@
       })();
       // Pattern + example based on which numeric format applies.
       const inputMeta=(()=>{
-        if(numericFmtForInput==='numeric-mdy')return{label:'m/d/yyyy',example:'7/4/1776',sep:'/',orderType:'mdy'};
-        if(numericFmtForInput==='numeric-dmy')return{label:'d.m.yyyy',example:'4.7.1776',sep:'.',orderType:'dmy'};
-        return{label:'yyyy-m-d',example:'1776-7-4',sep:'-',orderType:'ymd'};
+        if(numericFmtForInput==='numeric-mdy')return{label:'m/d/y',example:'7/4/1776',sep:'/',orderType:'mdy'};
+        if(numericFmtForInput==='numeric-dmy')return{label:'d.m.y',example:'4.7.1776',sep:'.',orderType:'dmy'};
+        return{label:'y-m-d',example:'1776-7-4',sep:'-',orderType:'ymd'};
       })();
       // Clear the input when the format changes (silently keeping it would be confusing since it might no longer parse).
       // Use a ref to skip the initial mount so navigating to Lookup doesn't wipe the user's existing input.
@@ -1716,7 +1782,7 @@
               <button type="button" onClick={clearLookup} onMouseDown={e=>e.preventDefault()} className="px-4 py-2 rounded-xl bg-zinc-700 text-white text-sm font-medium">Clear</button>
             </div>
             {displayNote&&<div className="text-sm text-purple-100/90">{displayNote}</div>}
-            <p className="text-xs text-purple-100/90">Format: <b>{inputMeta.label}</b> — e.g. <b>{inputMeta.example}</b><br/>AD dates only, 1–10000</p>
+            <p className="text-xs text-purple-100/90">Format: <b>{inputMeta.label}</b><br/>AD dates only, 1–10000</p>
           </div>
           <div className="rounded-2xl panel p-4 space-y-4">
             <div className="flex items-center justify-between text-[11px] uppercase tracking-wide text-purple-200/70"><span>History</span>{entries.length>0&&(<button type="button" onClick={clearHist} className="text-purple-200/70 font-medium">Clear History</button>)}</div>
