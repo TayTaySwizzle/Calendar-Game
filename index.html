@@ -109,25 +109,64 @@
     function jdnGregorian(y,m,d){const a=Math.floor((14-m)/12),y2=y+4800-a,m2=m-3+12*a;return d+Math.floor((153*m2+2)/5)+365*y2+Math.floor(y2/4)-Math.floor(y2/100)+Math.floor(y2/400)-32045;}
     const wday=(y,m,d)=>((jdnGregorian(toAstro(y),m,d)+1)%7+7)%7;
     const fmtYear=y=>y>0?String(y):`${Math.abs(y)} BC`;
-    const fmt=(y,m,d,order='month-first',style='written',yearFirst=false)=>{
+    // fmt: takes a single format ID. The 5 reachable formats:
+    //   written-mdy  → April 27, 1828
+    //   written-dmy  → 27 April 1828
+    //   numeric-mdy  → 4/27/1828
+    //   numeric-dmy  → 27.4.1828
+    //   numeric-ymd  → 1828-4-27
+    // Convention: numeric MDY uses /, DMY uses ., YMD uses -. Year always full, no leading zeros, no ordinals.
+    const fmt=(y,m,d,formatId='written-mdy')=>{
       const yr=fmtYear(y);
-      if(style==='numeric'){
-        if(yearFirst){
-          if(order==='month-first')return`${yr}/${m}/${d}`;
-          return`${yr}/${d}/${m}`;
-        }
-        if(order==='month-first')return`${m}/${d}/${yr}`;
-        return`${d}/${m}/${yr}`;
+      switch(formatId){
+        case'written-dmy':return`${d} ${MONTH[m-1]} ${yr}`;
+        case'numeric-mdy':return`${m}/${d}/${yr}`;
+        case'numeric-dmy':return`${d}.${m}.${yr}`;
+        case'numeric-ymd':return`${yr}-${m}-${d}`;
+        case'written-mdy':
+        default:return`${MONTH[m-1]} ${d}, ${yr}`;
       }
-      if(yearFirst){
-        if(order==='month-first')return`${yr}, ${MONTH[m-1]} ${d}`;
-        return`${yr}, ${d} ${MONTH[m-1]}`;
-      }
-      if(order==='month-first')return`${MONTH[m-1]} ${d}, ${yr}`;
-      return`${d} ${MONTH[m-1]} ${yr}`;
+    };
+    // Helper: maps any format ID to its corresponding numeric format ID.
+    // Used by Lookup input parsing and DEPLOY_TS (which always render numeric).
+    const numericFormatOf=fid=>{
+      if(fid==='written-mdy'||fid==='numeric-mdy')return'numeric-mdy';
+      if(fid==='written-dmy'||fid==='numeric-dmy')return'numeric-dmy';
+      return'numeric-ymd';
     };
     const rint=(a,b)=>Math.floor(Math.random()*(b-a+1))+a;
-    function randomDate(lo,hi,julian=false){for(;;){let y=rint(lo,hi);if(y===0)continue;let m=rint(1,12);const isJul=julian&&isJulianDate(y,m,1);const maxD=m===2?((isJul?isLeapJulian(y):isLeap(y))?29:28):([4,6,9,11].includes(m)?30:31);let d=rint(1,maxD);if(isGapDate(y,m,d))continue;return{y,m,d};}}
+    function randomDate(lo,hi,julian=false,leapChance='random',forceJanFeb=false){
+      // Decide leap-year preference based on leapChance setting
+      const r=Math.random();
+      let wantLeap=null;
+      if(leapChance==='100')wantLeap=true;
+      else if(leapChance==='75')wantLeap=r<0.75;
+      else if(leapChance==='50')wantLeap=r<0.5;
+      // Try preference-respecting attempts first; fall back to no preference if year range has no leap years
+      for(let attempts=0;attempts<2000;attempts++){
+        let y=rint(lo,hi);if(y===0)continue;
+        const isLeapY=julian?isLeapJulian(y):isLeap(y);
+        if(wantLeap!==null&&wantLeap!==isLeapY)continue;
+        let m;
+        if(forceJanFeb&&isLeapY)m=rint(1,2);
+        else m=rint(1,12);
+        const isJul=julian&&isJulianDate(y,m,1);
+        const maxD=m===2?((isJul?isLeapJulian(y):isLeap(y))?29:28):([4,6,9,11].includes(m)?30:31);
+        let d=rint(1,maxD);
+        if(isGapDate(y,m,d))continue;
+        return{y,m,d};
+      }
+      // Silent fallback: no leap-preference filter
+      for(;;){
+        let y=rint(lo,hi);if(y===0)continue;
+        let m=rint(1,12);
+        const isJul=julian&&isJulianDate(y,m,1);
+        const maxD=m===2?((isJul?isLeapJulian(y):isLeap(y))?29:28):([4,6,9,11].includes(m)?30:31);
+        let d=rint(1,maxD);
+        if(isGapDate(y,m,d))continue;
+        return{y,m,d};
+      }
+    }
     const blankDedTypeStore=()=>({year:null,month:null,day:null});
     const normalizeMod7=v=>((v%7)+7)%7;
     const canonicalizeMod=v=>{const m=normalizeMod7(v);return m>3?m-7:m;};
@@ -210,7 +249,7 @@
 
 
 
-    const DEPLOY_TS=new Date('2026-04-23T07:37:00Z');
+    const DEPLOY_TS=new Date('2026-04-29T00:42:00Z');
 
     function StatPanel({stats}){
       return(
@@ -220,11 +259,11 @@
       );
     }
 
-    function AoxMode({minY,maxY,visible,fmtDate,useJulian=false}){
+    function AoxMode({minY,maxY,visible,fmtDate,useJulian=false,genDate=randomDate}){
       const [aoxN,setAoxN]=useState("10");
       const [mistakesOk,setMistakesOk]=useState(false);
       const [oneByOne,setOneByOne]=useState(false);
-      const [date,setDate]=useState(()=>randomDate(minY,maxY));
+      const [date,setDate]=useState(()=>genDate(minY,maxY));
       const [runPhase,setRunPhase]=useState("idle");
       const [displayN,setDisplayN]=useState(10);
       const [shown,setShown]=useState(false);
@@ -279,7 +318,7 @@
       const optionsDisabled=isLocked||codesOpen||(oneByOne&&!shown&&!inBackMode)||runPhase==="idle"||inBackMode;
       const baseBtn="w-full rounded-2xl border px-4 py-3 text-base transition shadow-sm select-none";
 
-      function reset(){setRunPhase("idle");setDisplayN(n);setShown(false);setInBackMode(false);setAoxStack([]);setAoxForwardStack([]);setTimes([]);setStreak(0);setBestStreak(0);setAttempts(0);setGuesses([]);setMsg("");setFlash(null);resetAoxPB();setCodesOpen(false);setCanOverrideCorrect(false);setQuestionCounted(false);setPendingWrongCredit(null);setOverrideUsedAox(false);setBestNew({});setDate(randomDate(minY,maxY));tStartRef.current=null;wrongTimeRef.current=null;prevTimesSnapRef.current=null;prevStreakSnapRef.current=null;prevBestSnapRef.current=null;}
+      function reset(){setRunPhase("idle");setDisplayN(n);setShown(false);setInBackMode(false);setAoxStack([]);setAoxForwardStack([]);setTimes([]);setStreak(0);setBestStreak(0);setAttempts(0);setGuesses([]);setMsg("");setFlash(null);resetAoxPB();setCodesOpen(false);setCanOverrideCorrect(false);setQuestionCounted(false);setPendingWrongCredit(null);setOverrideUsedAox(false);setBestNew({});setDate(genDate(minY,maxY));tStartRef.current=null;wrongTimeRef.current=null;prevTimesSnapRef.current=null;prevStreakSnapRef.current=null;prevBestSnapRef.current=null;}
       useEffect(()=>{if(!visible&&runPhase==="running")reset();},[visible]);
       // Frozen date for codes panel: during close animation, keep showing old codes; update new codes only after close finishes
       latestAoxDateRef.current=date;
@@ -299,7 +338,7 @@
       },[codesOpen,date.y,date.m,date.d]);
       function startOrContinue(){
         if(runPhase==="idle"){setRunPhase("running");setDisplayN(n);setShown(true);tStartRef.current=performance.now();}
-        else if(inBackMode){setInBackMode(false);setAoxForwardStack([]);const nd=randomDate(minY,maxY);setDate(nd);setMsg("");setGuesses([]);resetAoxPB();setCodesOpen(false);wrongTimeRef.current=null;setCanOverrideCorrect(false);setQuestionCounted(false);setPendingWrongCredit(null);setOverrideUsedAox(false);if(oneByOne){setShown(false);tStartRef.current=null;}else{setShown(true);tStartRef.current=performance.now();}}
+        else if(inBackMode){setInBackMode(false);setAoxForwardStack([]);const nd=genDate(minY,maxY);setDate(nd);setMsg("");setGuesses([]);resetAoxPB();setCodesOpen(false);wrongTimeRef.current=null;setCanOverrideCorrect(false);setQuestionCounted(false);setPendingWrongCredit(null);setOverrideUsedAox(false);if(oneByOne){setShown(false);tStartRef.current=null;}else{setShown(true);tStartRef.current=performance.now();}}
         else if(isRunning&&!shown){setShown(true);setGuesses([]);setMsg("");tStartRef.current=performance.now();wrongTimeRef.current=null;setCanOverrideCorrect(false);setQuestionCounted(false);setPendingWrongCredit(null);}
       }
       function goBackAox(){if(backDisabled)return;const prevEntry=aoxStack[aoxStack.length-1];
@@ -354,7 +393,7 @@
         setQuestionCounted(false);
         setStreak(newStreak);setBestStreak(newBest);
         if(!completing){
-          setDate(randomDate(minY,maxY));resetAoxPB();setOverrideUsedAox(false);prevBestSnapRef.current=null;
+          setDate(genDate(minY,maxY));resetAoxPB();setOverrideUsedAox(false);prevBestSnapRef.current=null;
           if(oneByOne){setShown(false);tStartRef.current=null;}else tStartRef.current=performance.now();
         }
         if(completing){
@@ -450,7 +489,7 @@
           setAoxStack(s=>s.slice(0,-1));
           setGuesses([]);setCodesOpen(false);wrongTimeRef.current=null;
           if(!mistakesOk){setRunPhase("failed");}
-          else if(wasLastQ){resetAoxPB();setRunPhase("running");setMsg("");setGuesses([]);setCodesOpen(false);setQuestionCounted(false);setOverrideUsedAox(false);setDate(randomDate(minY,maxY));if(oneByOne){setShown(false);tStartRef.current=null;}else tStartRef.current=performance.now();}
+          else if(wasLastQ){resetAoxPB();setRunPhase("running");setMsg("");setGuesses([]);setCodesOpen(false);setQuestionCounted(false);setOverrideUsedAox(false);setDate(genDate(minY,maxY));if(oneByOne){setShown(false);tStartRef.current=null;}else tStartRef.current=performance.now();}
           else{resetAoxPB();setRunPhase("running");setMsg("");tStartRef.current=performance.now();}
           return;
         }
@@ -543,10 +582,10 @@
             <div className="text-center relative">
               {(inBackMode||runPhase==="done"||runPhase==="failed")&&<span className="absolute right-0 top-0 text-[11px] tabular-nums text-purple-300/60">Q{aoxStack.length+1}</span>}
               <div className="text-xs uppercase tracking-widest text-purple-100/80">What Day Is This?</div>
-              <div className="mt-1 text-3xl font-bold">{dateVisible?fmtDate(date.y,date.m,date.d):"—"}</div>
+              <div className="mt-1 text-3xl font-bold">{dateVisible?fmtDate(date.y,date.m,date.d,date._fmt):"—"}</div>
             </div>
             <div className="mt-4 grid grid-cols-2 gap-3">
-              {DAY.map((nm,i)=>{const last=i===DAY.length-1?"col-span-2":"";const ps=aoxPersistBtns[i];let bCls;if(ps==='correct')bCls='btn-correct-persist border-transparent';else if(ps==='wrong-latest')bCls='btn-wrong-persist border-transparent';else if(ps==='wrong-prev')bCls='btn-wrong-dim border-transparent';else if(flash&&flash.idx===i)bCls=(flash.type==="good"?"flash-good":"flash-bad")+' border-transparent';else bCls='surface-button';const perLocked=!!ps;const shouldDim=optionsDisabled&&!ps;return(<button key={nm} type="button" onClick={()=>{if(perLocked)return;submitDoW(i);}} className={`${baseBtn} ${bCls} ${(perLocked||optionsDisabled)?"pointer-events-none":""} ${shouldDim?"opacity-60":""} ${last}`}>{nm}</button>);})}
+              {DAY.map((nm,i)=>{const last=i===DAY.length-1?"col-span-2":"";const ps=aoxPersistBtns[i];let bCls;if(ps==='correct')bCls='btn-correct-persist border-transparent';else if(ps==='wrong-latest')bCls='btn-wrong-persist border-transparent';else if(ps==='wrong-prev')bCls='btn-wrong-dim border-transparent';else if(flash&&flash.idx===i)bCls=(flash.type==="good"?"flash-good":"flash-bad")+' border-transparent';else bCls='surface-button';const perLocked=!!ps;const isFlashing=!!(flash&&flash.idx===i);const shouldDim=optionsDisabled&&!ps&&!isFlashing;return(<button key={nm} type="button" onClick={()=>{if(perLocked)return;submitDoW(i);}} className={`${baseBtn} ${bCls} ${(perLocked||optionsDisabled)?"pointer-events-none":""} ${shouldDim?"opacity-60":""} ${last}`}>{nm}</button>);})}
             </div>
           </div>
           <div className="mt-4 rounded-2xl panel p-3 space-y-3">
@@ -720,7 +759,7 @@
       function resetFlashBar(){if(flashBarRef.current){flashBarRef.current.style.transition="none";flashBarRef.current.style.width="100%";}}
       function startFlashBar(ms){requestAnimationFrame(()=>{if(!flashBarRef.current)return;const s=flashBarRef.current;s.style.transition="none";s.style.width="100%";s.getBoundingClientRect();s.style.transition=`width ${ms}ms linear`;s.style.width="0%";});}
       const refreshForRange=useCallback(()=>{
-        setActive(false);setShowTimerDate(false);setMsg("");setGuesses([]);setFlash(null);setLocked(false);setRevealed(false);setCountedWrong(false);setCanOverrideCorrect(false);setCalcPenalty(false);setCalcOpen(false);setOverrideUsedThisQ(false);setBackDepth(0);resetPB();setStack([]);setDedStack([]);setForwardStack([]);setDedForwardStack([]);setBlitzRemain(blitzSec);setBlitzRunning(false);blitzStartRef.current=null;blitzPausedAtRef.current=null;blitzPausedAccRef.current=0;blitzRemainRef.current=blitzSec;qDeadlineRef.current=null;qPausedAtRef.current=null;qPausedAccRef.current=0;setQRemain(qSec);clearTimeout(flashTimerRef.current);flashTimerRef.current=null;setFlashPhase("dash");flashDeadlineRef.current=null;setFlashRemainMs(flashMs);resetFlashBar();tStartRef.current=null;wrongTimeRef.current=null;prevStatsSnapshotRef.current=null;setDateByMode({classic:randomDate(minY,maxY,useJulian),blitz:randomDate(minY,maxY,useJulian),flash:randomDate(minY,maxY,useJulian)});preservedByModeRef.current={};spawnDedWithRange(minY,maxY);setSavedDedByType(blankDedTypeStore());
+        setActive(false);setShowTimerDate(false);setMsg("");setGuesses([]);setFlash(null);setLocked(false);setRevealed(false);setCountedWrong(false);setCanOverrideCorrect(false);setCalcPenalty(false);setCalcOpen(false);setOverrideUsedThisQ(false);setBackDepth(0);resetPB();setStack([]);setDedStack([]);setForwardStack([]);setDedForwardStack([]);setBlitzRemain(blitzSec);setBlitzRunning(false);blitzStartRef.current=null;blitzPausedAtRef.current=null;blitzPausedAccRef.current=0;blitzRemainRef.current=blitzSec;qDeadlineRef.current=null;qPausedAtRef.current=null;qPausedAccRef.current=0;setQRemain(qSec);clearTimeout(flashTimerRef.current);flashTimerRef.current=null;setFlashPhase("dash");flashDeadlineRef.current=null;setFlashRemainMs(flashMs);resetFlashBar();tStartRef.current=null;wrongTimeRef.current=null;prevStatsSnapshotRef.current=null;setDateByMode({classic:genDate(minY,maxY),blitz:genDate(minY,maxY),flash:genDate(minY,maxY)});preservedByModeRef.current={};spawnDedWithRange(minY,maxY);setSavedDedByType(blankDedTypeStore());
       },[mode,blitzSec,qSec,flashMs,minY,maxY,useJulian]);
       useEffect(()=>{if(!rangeRefreshPendingRef.current)return;rangeRefreshPendingRef.current=false;refreshForRange();},[minY,maxY,refreshForRange]);
       useEffect(()=>{const onVis=()=>{const now=performance.now();if(document.hidden){if(blitzRunning&&blitzPausedAtRef.current==null)blitzPausedAtRef.current=now;if(qDeadlineRef.current&&qPausedAtRef.current==null)qPausedAtRef.current=now;}else{if(blitzPausedAtRef.current!=null){blitzPausedAccRef.current+=now-blitzPausedAtRef.current;blitzPausedAtRef.current=null;}if(qPausedAtRef.current!=null){qPausedAccRef.current+=now-qPausedAtRef.current;qPausedAtRef.current=null;}}};document.addEventListener("visibilitychange",onVis);return()=>document.removeEventListener("visibilitychange",onVis);},[blitzRunning]);
@@ -747,7 +786,7 @@
           const finalBtns=btnsForStack??{...persistBtns};
           const wasAnswered=Object.keys(finalBtns).length>0;
           if(wasAnswered){const capsule={snapshot:prevStatsSnapshotRef.current?{...prevStatsSnapshotRef.current}:null,wrongTime:wrongTimeRef.current};setStack(s=>[...s,{...date,btns:finalBtns,overrideUsed:false,capsule,hasCredit:computeHasCredit(finalBtns)}]);}
-          setForwardStack([]);setDate(randomDate(minY,maxY,useJulian));
+          setForwardStack([]);setDate(genDate(minY,maxY));
           setGuesses([]);setRevealed(false);setLocked(false);setMsg("");setCalcPenalty(false);
           setCalcOpen(false);resetPB();
           setOverrideUsedThisQ(false);setBackDepth(0);
@@ -1017,38 +1056,56 @@
       function spawnDedWithRange(lo,hi){
         setCalcPenalty(false);tStartRef.current=performance.now();
         const pc=hi>=1?hi-Math.max(1,lo)+1:0;
+        // Decide leap preference once per question (not per attempt) so probabilities don't skew.
+        const r=Math.random();
+        let wantLeap=null;
+        if(leapChance==='100')wantLeap=true;
+        else if(leapChance==='75')wantLeap=r<0.75;
+        else if(leapChance==='50')wantLeap=r<0.5;
+        const isLeapForY=yc=>{const jul=useJulian&&isJulianDate(yc,1,1);return jul?isLeapJulian(yc):isLeap(yc);};
+        const pickMonth=isLeapY=>(forceJanFebOnLeap&&isLeapY)?rint(1,2):rint(1,12);
+        const attachFmt=o=>{if(randomFormat)o._fmt=rollFormat();return o;};
         if(dedType==="year"){
           const pt=pc>0?Math.min(YEAR_OPTION_DEFAULT,pc):0;
           const buildOpts=(yc,mc,dc,target)=>{if(target<=0||dc>dimFn(yc,mc))return null;const w=activeWday(yc,mc,dc);const nb=dir=>{const s=dir>0?1:-1;for(let k=1;k<=2000;k++){let yy=yc+k*s;if(yy===0)yy+=s;if(yy<lo||yy>hi)break;if(dc<=dimFn(yy,mc)&&activeWday(yy,mc,dc)===w)return yy;}return null;};const ln=nb(-1),un=nb(1);let lb=ln==null?lo:Math.max(lo,ln+1),ub=un==null?hi:Math.min(hi,un-1);lb=Math.max(lb,1);if(lb>ub||yc<lb||yc>ub)return null;const span=ub-lb+1;if(span<target)return null;const half=Math.floor(target/2);let start=yc-half;if(start<lb)start=lb;let end=start+target-1;if(end>ub){end=ub;start=Math.max(lb,end-target+1);}if(end-start+1!==target||yc<start||yc>end)return null;const opts=[];for(let yy=start;yy<=end;yy++)opts.push(yy);return{w,options:opts};};
-          const tryRandom=()=>{for(let t=0;t<1600;t++){if(pt<=0)break;const yc=rint(Math.max(1,lo),hi);if(yc===0)continue;const m=rint(1,12),D=dimFn(yc,m);if(D<=0)continue;const d=rint(1,D);const built=buildOpts(yc,m,d,pt);if(!built)continue;setDed({type:"year",y:yc,m,d,w:built.w,options:built.options});return true;}return false;};
-          if(tryRandom())return;
-          for(let yy=Math.max(1,lo);yy<=hi;yy++){for(let m=1;m<=12;m++){const D=dimFn(yy,m);for(let d=1;d<=D;d++){const built=buildOpts(yy,m,d,pt);if(!built)continue;setDed({type:"year",y:yy,m,d,w:built.w,options:built.options});return;}}}
-          const fy=lo>0?lo:1;setDed({type:"year",y:fy,m:1,d:1,w:activeWday(fy,1,1),options:[fy]});return;
+          const tryRandom=(applyLeap)=>{for(let t=0;t<1600;t++){if(pt<=0)break;const yc=rint(Math.max(1,lo),hi);if(yc===0)continue;const isLeapY=isLeapForY(yc);if(applyLeap&&wantLeap!==null&&wantLeap!==isLeapY)continue;const m=pickMonth(isLeapY),D=dimFn(yc,m);if(D<=0)continue;const d=rint(1,D);const built=buildOpts(yc,m,d,pt);if(!built)continue;setDed(attachFmt({type:"year",y:yc,m,d,w:built.w,options:built.options}));return true;}return false;};
+          if(tryRandom(true))return;
+          if(tryRandom(false))return;
+          for(let yy=Math.max(1,lo);yy<=hi;yy++){for(let m=1;m<=12;m++){const D=dimFn(yy,m);for(let d=1;d<=D;d++){const built=buildOpts(yy,m,d,pt);if(!built)continue;setDed(attachFmt({type:"year",y:yy,m,d,w:built.w,options:built.options}));return;}}}
+          const fy=lo>0?lo:1;setDed(attachFmt({type:"year",y:fy,m:1,d:1,w:activeWday(fy,1,1),options:[fy]}));return;
         }
         if(dedType==="month"){
-          // Pick a year, pick a box uniformly, pick a month from that box uniformly, pick a day uniformly
-          let yc=null;for(let t=0;t<600;t++){const c=rint(lo,hi);if(c!==0){yc=c;break;}}if(yc==null)yc=lo>0?lo:1;
-          const julYc=useJulian&&isJulianDate(yc,1,1);
-          const isLeapY=julYc?isLeapJulian(yc):isLeap(yc);
+          // Pick a year respecting leap preference; pick a box uniformly from those allowed; pick m and d from the box.
+          let yc=null;
+          for(let t=0;t<2000;t++){const c=rint(lo,hi);if(c===0)continue;const il=isLeapForY(c);if(wantLeap!==null&&wantLeap!==il)continue;yc=c;break;}
+          if(yc==null){for(let t=0;t<600;t++){const c=rint(lo,hi);if(c!==0){yc=c;break;}}if(yc==null)yc=lo>0?lo:1;}
+          const isLeapY=isLeapForY(yc);
           const boxes=isLeapY?MONTH_BOXES_LEAP:MONTH_BOXES_COMMON;
-          const boxIdx=rint(0,boxes.length-1);
-          const box=boxes[boxIdx];
-          const m=box.months[rint(0,box.months.length-1)];
+          let pickFromBoxes=boxes;
+          if(forceJanFebOnLeap&&isLeapY){const filtered=boxes.filter(b=>b.months.includes(1)||b.months.includes(2));if(filtered.length>0)pickFromBoxes=filtered;}
+          const box=pickFromBoxes[rint(0,pickFromBoxes.length-1)];
+          let m;
+          if(forceJanFebOnLeap&&isLeapY){const allowed=box.months.filter(mm=>mm===1||mm===2);m=allowed.length>0?allowed[rint(0,allowed.length-1)]:box.months[rint(0,box.months.length-1)];}
+          else m=box.months[rint(0,box.months.length-1)];
           const D=dimFn(yc,m),d=rint(1,D),w=activeWday(yc,m,d);
-          // Store the boxes array as options so the UI can render box labels
-          setDed({type:"month",y:yc,d,w,m,options:boxes.map(b=>b.label),boxes:boxes.map(b=>({...b,months:[...b.months]}))});
+          // Store ALL boxes (not just pickFromBoxes) so the UI still shows all 7 options for the user to choose from.
+          setDed(attachFmt({type:"month",y:yc,d,w,m,options:boxes.map(b=>b.label),boxes:boxes.map(b=>({...b,months:[...b.months]}))}));
           return;
         }
         if(dedType==="day"){
-          let yc=null;for(let t=0;t<600;t++){const c=rint(lo,hi);if(c!==0){yc=c;break;}}if(yc==null)yc=lo>0?lo:1;
-          const m=rint(1,12),D=dimFn(yc,m);
+          let yc=null;
+          for(let t=0;t<2000;t++){const c=rint(lo,hi);if(c===0)continue;const il=isLeapForY(c);if(wantLeap!==null&&wantLeap!==il)continue;yc=c;break;}
+          if(yc==null){for(let t=0;t<600;t++){const c=rint(lo,hi);if(c!==0){yc=c;break;}}if(yc==null)yc=lo>0?lo:1;}
+          const isLeapY=isLeapForY(yc);
+          const m=pickMonth(isLeapY),D=dimFn(yc,m);
           const span=Math.min(DAY_OPTION_COUNT,D);
-          // Pick correct-answer position P uniformly in [0, span-1], then pick d so window [d-P, d-P+span-1] fits in [1, D]
           const P=rint(0,span-1);
           const dLo=P+1,dHi=D-(span-1)+P;
           const d=rint(dLo,dHi),w=activeWday(yc,m,d);
           const start=d-P,end=start+span-1;
-          const opts=[];for(let v=start;v<=end;v++)opts.push(v);setDed({type:"day",y:yc,m,w,d,options:opts});return;
+          const opts=[];for(let v=start;v<=end;v++)opts.push(v);
+          setDed(attachFmt({type:"day",y:yc,m,w,d,options:opts}));
+          return;
         }
       }
       const captureDedSnap=()=>ded?({ded,guesses:[...guesses],countedWrong,msg,locked,revealed,calcPenaltyActive}):null;
@@ -1186,7 +1243,7 @@
             // No preservation (timing on, or interacted): generate a fresh date/ded.
             // Deduction handles its own spawn via the setDed(null) + savedDedByType clear above.
             if(["classic","flash"].includes(mode)){
-              setDate(randomDate(minY,maxY,useJulian));
+              setDate(genDate(minY,maxY));
               tStartRef.current=performance.now();
             }
             // If codes were showing, close with animation. wasOpenRef freeze keeps old codes visible during the 310ms close.
@@ -1224,7 +1281,7 @@
       const calcTargetKey=calcTarget?`${calcTarget.y}-${calcTarget.m}-${calcTarget.d}`:"none";
       const lookupCalcTargetKey=lookupCalcDate?`${lookupCalcDate.y}-${lookupCalcDate.m}-${lookupCalcDate.d}`:"none";
       useEffect(()=>{const pm=prevModeRef.current;if(pm!==mode){prevModeRef.current=mode;return;}setCalcOpen(false);prevModeRef.current=mode;},[calcTargetKey,mode]);
-      const handleResetStats=()=>{resetStatsCurrent();if(mode==='blitz'){setBlitzBest({});setSuddenBest({});setBlitzBestNew({});setSuddenBestNew({});}setStack([]);setForwardStack([]);setDedStack([]);setDedForwardStack([]);setBackDepth(0);resetPB();setGuesses([]);setMsg("");setLocked(false);setRevealed(false);setCountedWrong(false);setCanOverrideCorrect(false);setPendingWrongOverride(null);setOverrideUsedThisQ(false);setCalcPenalty(false);setCalcOpen(false);wrongTimeRef.current=null;prevStatsSnapshotRef.current=null;preCalcPenaltySnapshotRef.current=null;if(!avgVisOff){setDate(randomDate(minY,maxY,useJulian));if(mode==="deduction")spawnDed();}tStartRef.current=performance.now();};
+      const handleResetStats=()=>{resetStatsCurrent();if(mode==='blitz'){setBlitzBest({});setSuddenBest({});setBlitzBestNew({});setSuddenBestNew({});}setStack([]);setForwardStack([]);setDedStack([]);setDedForwardStack([]);setBackDepth(0);resetPB();setGuesses([]);setMsg("");setLocked(false);setRevealed(false);setCountedWrong(false);setCanOverrideCorrect(false);setPendingWrongOverride(null);setOverrideUsedThisQ(false);setCalcPenalty(false);setCalcOpen(false);wrongTimeRef.current=null;prevStatsSnapshotRef.current=null;preCalcPenaltySnapshotRef.current=null;if(!avgVisOff){setDate(genDate(minY,maxY));if(mode==="deduction")spawnDed();}tStartRef.current=performance.now();};
       const togglePerQBtn=()=>{if(active||timerDone)return;const newPerQ=!perQ;if(newPerQ&&allowMistakes)setAllowMistakes(false);setPerQ(newPerQ);};
       const toggleAllowMistakesBtn=()=>{if(active||timerDone)return;const newAM=!allowMistakes;if(newAM&&perQ)setPerQ(false);setAllowMistakes(newAM);};
       const canHideStats=["classic","deduction","flash"].includes(mode);
@@ -1241,7 +1298,7 @@
           setCountedWrong(false);setCanOverrideCorrect(false);setPendingWrongOverride(null);setOverrideUsedThisQ(false);
           setCalcPenalty(false);setCalcOpen(false);
           wrongTimeRef.current=null;prevStatsSnapshotRef.current=null;preCalcPenaltySnapshotRef.current=null;
-          setDate(randomDate(minY,maxY,useJulian));tStartRef.current=performance.now();
+          setDate(genDate(minY,maxY));tStartRef.current=performance.now();
         }
         blitzConfigPrevRef.current={perQ,allowMistakes};
       },[perQ,allowMistakes,mode,active,timerDone]);
@@ -1280,10 +1337,26 @@
       const handleCalcOpenChange=next=>{if(next&&!(locked&&!revealed&&backDepth>0))applyCalcPenalty();setCalcOpen(next);};
       const showStats=mode!=="lookup"&&mode!=="guide"&&mode!=="aox";
       const sAvg=calcAvg(S.times),sLast=calcLast(S.times),sMed=calcMed(S.times);
-      const [dateOrder,setDateOrder]=useState('month-first');
-      const [dateStyle,setDateStyle]=useState('written');
-      const [yearFirst,setYearFirst]=useState(false);
-      const fmtDate=(y,m,d)=>fmt(y,m,d,dateOrder,dateStyle,yearFirst);
+      // Date format: one of 'written-mdy'|'written-dmy'|'numeric-mdy'|'numeric-dmy'|'numeric-ymd'.
+      // randomFormat overrides the selected format for game-mode dates only (Lookup + DEPLOY_TS ignore it).
+      const [dateFormat,setDateFormat]=useState('written-mdy');
+      const [randomFormat,setRandomFormat]=useState(false);
+      // Leap-year date generation settings (apply to all game modes; Lookup unaffected).
+      const [leapChance,setLeapChance]=useState('random');
+      const [forceJanFebOnLeap,setForceJanFebOnLeap]=useState(false);
+      // The 5 reachable formats. Random rolls one per date in game modes.
+      const FORMAT_IDS=['written-mdy','written-dmy','numeric-mdy','numeric-dmy','numeric-ymd'];
+      const rollFormat=()=>FORMAT_IDS[Math.floor(Math.random()*FORMAT_IDS.length)];
+      // fmtDate: if Random Format is on AND date carries a stored _fmt (from per-date roll), use it; else use selected format.
+      // Toggling Random off makes already-displayed dates immediately fall back to the selected format.
+      const fmtDate=(y,m,d,storedFmt)=>fmt(y,m,d,(randomFormat&&storedFmt)||dateFormat);
+      // Generate a new game-mode date with the current settings baked in.
+      // Attaches _fmt if randomFormat is on so each date keeps its rolled format across re-renders.
+      const genDate=(lo,hi)=>{
+        const dt=randomDate(lo,hi,useJulian,leapChance,forceJanFebOnLeap);
+        if(randomFormat)dt._fmt=rollFormat();
+        return dt;
+      };
       const [settingsOpen,setSettingsOpen]=useState(false);
       const settingsRef=useRef(null);
       const settingsPopoverRef=useRef(null);
@@ -1294,15 +1367,24 @@
       const settingsJsx=settingsOpen&&(<div ref={settingsPopoverRef} className="absolute left-0 right-0 top-full mt-2 z-50 rounded-2xl card p-4 space-y-4 shadow-xl">
         <div className="space-y-2">
           <div className="text-[10px] uppercase tracking-widest text-purple-300/60">Date Format</div>
-          <div className="flex gap-2">
-            <button type="button" onClick={()=>setDateOrder('month-first')} className={`flex-1 px-2 py-1.5 rounded-xl text-xs font-medium border ${dateOrder==='month-first'?"btn-solid border-transparent":"surface-toggle text-purple-100/80"}`}>Month First</button>
-            <button type="button" onClick={()=>setDateOrder('day-first')} className={`flex-1 px-2 py-1.5 rounded-xl text-xs font-medium border ${dateOrder==='day-first'?"btn-solid border-transparent":"surface-toggle text-purple-100/80"}`}>Day First</button>
+          <div className="flex items-center justify-between"><span className="text-xs text-purple-200/80">Random Format</span><button type="button" onClick={()=>setRandomFormat(v=>!v)} className={`px-3 py-1 rounded-xl text-xs font-medium border ${randomFormat?"btn-solid border-transparent":"surface-toggle border-purple-800/60 text-purple-100/80"}`}>{randomFormat?"On":"Off"}</button></div>
+          <div className={`flex gap-2 ${randomFormat?"opacity-60 pointer-events-none":""}`}>
+            <div className="flex-1 panel rounded-xl p-2 space-y-1.5">
+              <div className="text-[10px] uppercase tracking-widest text-purple-300/60 text-center">Written</div>
+              <div className="flex gap-1.5">
+                <button type="button" onClick={()=>setDateFormat('written-mdy')} className={`flex-1 px-2 py-1 rounded-lg text-xs font-medium border ${dateFormat==='written-mdy'?"btn-solid border-transparent":"surface-toggle text-purple-100/80"}`}>MDY</button>
+                <button type="button" onClick={()=>setDateFormat('written-dmy')} className={`flex-1 px-2 py-1 rounded-lg text-xs font-medium border ${dateFormat==='written-dmy'?"btn-solid border-transparent":"surface-toggle text-purple-100/80"}`}>DMY</button>
+              </div>
+            </div>
+            <div className="flex-1 panel rounded-xl p-2 space-y-1.5">
+              <div className="text-[10px] uppercase tracking-widest text-purple-300/60 text-center">Numeric</div>
+              <div className="flex gap-1.5">
+                <button type="button" onClick={()=>setDateFormat('numeric-mdy')} className={`flex-1 px-2 py-1 rounded-lg text-xs font-medium border ${dateFormat==='numeric-mdy'?"btn-solid border-transparent":"surface-toggle text-purple-100/80"}`}>MDY</button>
+                <button type="button" onClick={()=>setDateFormat('numeric-dmy')} className={`flex-1 px-2 py-1 rounded-lg text-xs font-medium border ${dateFormat==='numeric-dmy'?"btn-solid border-transparent":"surface-toggle text-purple-100/80"}`}>DMY</button>
+                <button type="button" onClick={()=>setDateFormat('numeric-ymd')} className={`flex-1 px-2 py-1 rounded-lg text-xs font-medium border ${dateFormat==='numeric-ymd'?"btn-solid border-transparent":"surface-toggle text-purple-100/80"}`}>YMD</button>
+              </div>
+            </div>
           </div>
-          <div className="flex gap-2">
-            <button type="button" onClick={()=>setDateStyle('written')} className={`flex-1 px-2 py-1.5 rounded-xl text-xs font-medium border ${dateStyle==='written'?"btn-solid border-transparent":"surface-toggle text-purple-100/80"}`}>Written</button>
-            <button type="button" onClick={()=>setDateStyle('numeric')} className={`flex-1 px-2 py-1.5 rounded-xl text-xs font-medium border ${dateStyle==='numeric'?"btn-solid border-transparent":"surface-toggle text-purple-100/80"}`}>Numeric</button>
-          </div>
-          <div className="flex items-center justify-between"><span className="text-xs text-purple-200/80">Year First</span><button type="button" onClick={()=>setYearFirst(v=>!v)} className={`px-3 py-1 rounded-xl text-xs font-medium border ${yearFirst?"btn-solid border-transparent":"surface-toggle border-purple-800/60 text-purple-100/80"}`}>{yearFirst?"On":"Off"}</button></div>
         </div>
         <div className="space-y-2">
           <div className="text-[10px] uppercase tracking-widest text-purple-300/60">Calendar System</div>
@@ -1319,11 +1401,19 @@
           <p className="text-[11px] text-purple-300/60">AD dates only, 1–10000</p>
         </div>
         <div className="space-y-2">
+          <div className="text-[10px] uppercase tracking-widest text-purple-300/60">Leap Year Chance</div>
+          <div className="flex gap-1.5">
+            {['random','50','75','100'].map(v=>(<button key={v} type="button" onClick={()=>setLeapChance(v)} className={`flex-1 px-2 py-1.5 rounded-xl text-xs font-medium border ${leapChance===v?"btn-solid border-transparent":"surface-toggle text-purple-100/80"}`}>{v==='random'?'Random':v+'%'}</button>))}
+          </div>
+          <div className="flex items-center justify-between"><span className="text-xs text-purple-200/80">Force Jan/Feb on Leap Years</span><button type="button" onClick={()=>setForceJanFebOnLeap(v=>!v)} className={`px-3 py-1 rounded-xl text-xs font-medium border ${forceJanFebOnLeap?"btn-solid border-transparent":"surface-toggle border-purple-800/60 text-purple-100/80"}`}>{forceJanFebOnLeap?"On":"Off"}</button></div>
+          <p className="text-[11px] text-purple-300/60">If the year range has no leap years, the chance setting is silently ignored per date.</p>
+        </div>
+        <div className="space-y-2">
           <div className="text-[10px] uppercase tracking-widest text-purple-300/60">Theme</div>
           <div className="flex items-center justify-between"><span className="text-xs text-purple-200/80">Use System Settings</span><button type="button" onClick={()=>setUseSystem(v=>!v)} className={`px-3 py-1 rounded-xl text-xs font-medium border ${useSystem?"btn-solid border-transparent":"surface-toggle border-purple-800/60 text-purple-100/80"}`}>{useSystem?"On":"Off"}</button></div>
           {useSystem?(<><div className="flex items-center gap-3"><span className="text-xs text-purple-200/80 w-10 shrink-0">Dark:</span><select value={darkTheme} onChange={e=>setDarkTheme(e.target.value)} className="panel rounded-xl px-2 py-1 text-sm flex-1 focus:outline-none focus:ring-2 focus:ring-purple-400 appearance-none">{DARK_THEMES.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></div><div className="flex items-center gap-3"><span className="text-xs text-purple-200/80 w-10 shrink-0">Light:</span><select value={lightTheme} onChange={e=>setLightTheme(e.target.value)} className="panel rounded-xl px-2 py-1 text-sm flex-1 focus:outline-none focus:ring-2 focus:ring-purple-400 appearance-none">{LIGHT_THEMES.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></div></>):(<div className="flex items-center gap-3"><span className="text-xs text-purple-200/80 w-10 shrink-0">Theme:</span><select value={manualTheme} onChange={e=>setManualTheme(e.target.value)} className="panel rounded-xl px-2 py-1 text-sm flex-1 focus:outline-none focus:ring-2 focus:ring-purple-400 appearance-none">{ALL_THEMES_LABELED.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></div>)}
         </div>
-        <div className="pt-2 border-t border-purple-500/20 text-[11px] text-purple-300/60">Last Updated: {(()=>{const d=DEPLOY_TS;const y=String(d.getFullYear()).slice(-2);const m=d.getMonth()+1;const day=d.getDate();const df=dateOrder==='day-first';const datePart=yearFirst?(df?`${y}/${day}/${m}`:`${y}/${m}/${day}`):(df?`${day}/${m}/${y}`:`${m}/${day}/${y}`);const timePart=d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',hour12:false});return`${datePart} ${timePart}`;})()}</div>
+        <div className="pt-2 border-t border-purple-500/20 text-[11px] text-purple-300/60">Last Updated: {(()=>{const d=DEPLOY_TS;const yy=d.getFullYear();const mo=d.getMonth()+1;const da=d.getDate();const numFmt=numericFormatOf(dateFormat);const datePart=fmt(yy,mo,da,numFmt);const timePart=d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',hour12:false});return`${datePart} ${timePart}`;})()}</div>
       </div>);
       return(
         <div className="mx-auto px-4 py-5 w-full max-w-[480px]">
@@ -1369,8 +1459,8 @@
               <div className="mt-3">{timerSettingControl}</div>
             </>)}
           </>)}
-          <AoxMode minY={minY} maxY={maxY} visible={mode==="aox"} fmtDate={fmtDate} useJulian={useJulian}/>
-          {mode==="lookup"&&(<div className="mt-5"><LookupCard history={lookupHistory} onAddHistory={pushLookupHistory} onMoveHistory={moveHistoryEntryToTop} onClearHistory={clearLookupHistory} inputValue={lookupInput} onInputChange={setLookupInput} outputValue={lookupOutput} onOutputChange={setLookupOutput} calcDate={lookupCalcDate} onCalcDateChange={setLookupCalcDate} selectedHistoryId={lookupSelectedHistoryId} onSelectedHistoryIdChange={setLookupSelectedHistoryId} calcOpen={lookupCalcOpen} onCalcOpenChange={setLookupCalcOpen} fmtDate={fmtDate} dateOrder={dateOrder} yearFirst={yearFirst} useJulian={useJulian}/></div>)}
+          <AoxMode minY={minY} maxY={maxY} visible={mode==="aox"} fmtDate={fmtDate} useJulian={useJulian} genDate={genDate}/>
+          {mode==="lookup"&&(<div className="mt-5"><LookupCard history={lookupHistory} onAddHistory={pushLookupHistory} onMoveHistory={moveHistoryEntryToTop} onClearHistory={clearLookupHistory} inputValue={lookupInput} onInputChange={setLookupInput} outputValue={lookupOutput} onOutputChange={setLookupOutput} calcDate={lookupCalcDate} onCalcDateChange={setLookupCalcDate} selectedHistoryId={lookupSelectedHistoryId} onSelectedHistoryIdChange={setLookupSelectedHistoryId} calcOpen={lookupCalcOpen} onCalcOpenChange={setLookupCalcOpen} fmtDate={fmtDate} dateFormat={dateFormat} useJulian={useJulian}/></div>)}
           {mode==="guide"&&(<div className="mt-5"><GuidePage/></div>)}
           {["classic","blitz","flash"].includes(mode)&&(
             <div className="mt-5">
@@ -1381,10 +1471,10 @@
                 <div className="text-center relative">
                   {backDepth>0&&<span className="absolute right-0 top-0 text-[11px] tabular-nums text-purple-300/60">Q{stack.length+1}</span>}
                   <div className="text-xs uppercase tracking-widest text-purple-100/80">What Day Is This?</div>
-                  <div className="mt-1 text-3xl font-bold">{shouldShowTimerDate?((mode==="flash"&&active&&flashPhase==="hide")?"…":fmtDate(date.y,date.m,date.d)):"—"}</div>
+                  <div className="mt-1 text-3xl font-bold">{shouldShowTimerDate?((mode==="flash"&&active&&flashPhase==="hide")?"…":fmtDate(date.y,date.m,date.d,date._fmt)):"—"}</div>
                 </div>
                 <div className="mt-4 grid grid-cols-2 gap-3">
-                  {DAY.map((n,i)=>{const last=i===DAY.length-1?"col-span-2":"";const ps=persistBtns[i];let bCls;if(ps==='correct')bCls='btn-correct-persist border-transparent';else if(ps==='wrong-latest')bCls='btn-wrong-persist border-transparent';else if(ps==='wrong-prev')bCls='btn-wrong-dim border-transparent';else if(flash&&flash.idx===i)bCls=(flash.type==="good"?"flash-good":"flash-bad")+' border-transparent';else bCls=idleBtn;const perLocked=!!ps;const shouldDim=optionsDisabled&&!ps;return(<button key={n} type="button" onClick={()=>{if(perLocked)return;submitDoW(i);if(isTouch)document.activeElement?.blur();}} className={`${baseBtn} ${bCls} ${(perLocked||optionsDisabled)?"pointer-events-none":""} ${shouldDim?"opacity-60":""} ${last}`}>{n}</button>);})}
+                  {DAY.map((n,i)=>{const last=i===DAY.length-1?"col-span-2":"";const ps=persistBtns[i];let bCls;if(ps==='correct')bCls='btn-correct-persist border-transparent';else if(ps==='wrong-latest')bCls='btn-wrong-persist border-transparent';else if(ps==='wrong-prev')bCls='btn-wrong-dim border-transparent';else if(flash&&flash.idx===i)bCls=(flash.type==="good"?"flash-good":"flash-bad")+' border-transparent';else bCls=idleBtn;const perLocked=!!ps;const isFlashing=!!(flash&&flash.idx===i);const shouldDim=optionsDisabled&&!ps&&!isFlashing;return(<button key={n} type="button" onClick={()=>{if(perLocked)return;submitDoW(i);if(isTouch)document.activeElement?.blur();}} className={`${baseBtn} ${bCls} ${(perLocked||optionsDisabled)?"pointer-events-none":""} ${shouldDim?"opacity-60":""} ${last}`}>{n}</button>);})}
                 </div>
               </div>
               <div className="mt-4 rounded-2xl panel p-3 space-y-3">
@@ -1414,9 +1504,9 @@
                   {ded&&<div className="mt-1 text-lg text-purple-100">Weekday: <span className="font-semibold">{DAY[ded.w]}</span></div>}
                 </div>
                 <div className="mt-4">
-                  {ded&&ded.type==="year"&&(<div className="grid grid-cols-3 gap-2">{ded.options.map((y,idx)=>{const ps=persistBtns[idx];let bCls;if(ps==='correct')bCls='btn-correct-persist border-transparent';else if(ps==='wrong-latest')bCls='btn-wrong-persist border-transparent';else if(ps==='wrong-prev')bCls='btn-wrong-dim border-transparent';else if(dedFlash&&dedFlash.kind==="year"&&dedFlash.index===idx)bCls=(dedFlash.ok?"flash-good":"flash-bad")+' border-transparent';else bCls=idleBtn;const perLocked=!!ps;const shouldDim=(locked||calcOpen||calcPenaltyActive)&&!ps;return(<button key={idx} type="button" onClick={()=>submitDedAnswer(y,idx)} className={`${baseBtn} py-2 text-sm ${bCls} ${(perLocked||(locked||calcOpen||calcPenaltyActive))?"pointer-events-none":""} ${shouldDim?"opacity-60":""} ${centerLastOpt(idx,ded.options.length)}`}>{fmtYear(y)}</button>);})}</div>)}
-                  {ded&&ded.type==="month"&&(<div className="grid grid-cols-2 gap-3">{ded.options.map((mv,idx)=>{const last=idx===ded.options.length-1?"col-span-2":"";const ps=persistBtns[idx];let bCls;if(ps==='correct')bCls='btn-correct-persist border-transparent';else if(ps==='wrong-latest')bCls='btn-wrong-persist border-transparent';else if(ps==='wrong-prev')bCls='btn-wrong-dim border-transparent';else if(dedFlash&&dedFlash.kind==="month"&&dedFlash.index===idx)bCls=(dedFlash.ok?"flash-good":"flash-bad")+' border-transparent';else bCls=idleBtn;const perLocked=!!ps;const shouldDim=(locked||calcOpen||calcPenaltyActive)&&!ps;return(<button key={idx} type="button" onClick={()=>submitDedAnswer(mv,idx)} className={`${baseBtn} ${bCls} ${(perLocked||(locked||calcOpen||calcPenaltyActive))?"pointer-events-none":""} ${shouldDim?"opacity-60":""} ${last}`}>{mv}</button>);})}</div>)}
-                  {ded&&ded.type==="day"&&(<div className="grid grid-cols-3 gap-2">{ded.options.map((dv,idx)=>{const ps=persistBtns[idx];let bCls;if(ps==='correct')bCls='btn-correct-persist border-transparent';else if(ps==='wrong-latest')bCls='btn-wrong-persist border-transparent';else if(ps==='wrong-prev')bCls='btn-wrong-dim border-transparent';else if(dedFlash&&dedFlash.kind==="day"&&dedFlash.index===idx)bCls=(dedFlash.ok?"flash-good":"flash-bad")+' border-transparent';else bCls=idleBtn;const perLocked=!!ps;const shouldDim=(locked||calcOpen||calcPenaltyActive)&&!ps;return(<button key={idx} type="button" onClick={()=>submitDedAnswer(dv,idx)} className={`${baseBtn} py-2 text-sm ${bCls} ${(perLocked||(locked||calcOpen||calcPenaltyActive))?"pointer-events-none":""} ${shouldDim?"opacity-60":""} ${centerLastOpt(idx,ded.options.length)}`}>{dv}</button>);})}</div>)}
+                  {ded&&ded.type==="year"&&(<div className="grid grid-cols-3 gap-2">{ded.options.map((y,idx)=>{const ps=persistBtns[idx];let bCls;if(ps==='correct')bCls='btn-correct-persist border-transparent';else if(ps==='wrong-latest')bCls='btn-wrong-persist border-transparent';else if(ps==='wrong-prev')bCls='btn-wrong-dim border-transparent';else if(dedFlash&&dedFlash.kind==="year"&&dedFlash.index===idx)bCls=(dedFlash.ok?"flash-good":"flash-bad")+' border-transparent';else bCls=idleBtn;const perLocked=!!ps;const isFlashing=!!(dedFlash&&dedFlash.kind==="year"&&dedFlash.index===idx);const shouldDim=(locked||calcOpen||calcPenaltyActive)&&!ps&&!isFlashing;return(<button key={idx} type="button" onClick={()=>submitDedAnswer(y,idx)} className={`${baseBtn} py-2 text-sm ${bCls} ${(perLocked||(locked||calcOpen||calcPenaltyActive))?"pointer-events-none":""} ${shouldDim?"opacity-60":""} ${centerLastOpt(idx,ded.options.length)}`}>{fmtYear(y)}</button>);})}</div>)}
+                  {ded&&ded.type==="month"&&(<div className="grid grid-cols-2 gap-3">{ded.options.map((mv,idx)=>{const last=idx===ded.options.length-1?"col-span-2":"";const ps=persistBtns[idx];let bCls;if(ps==='correct')bCls='btn-correct-persist border-transparent';else if(ps==='wrong-latest')bCls='btn-wrong-persist border-transparent';else if(ps==='wrong-prev')bCls='btn-wrong-dim border-transparent';else if(dedFlash&&dedFlash.kind==="month"&&dedFlash.index===idx)bCls=(dedFlash.ok?"flash-good":"flash-bad")+' border-transparent';else bCls=idleBtn;const perLocked=!!ps;const isFlashing=!!(dedFlash&&dedFlash.kind==="month"&&dedFlash.index===idx);const shouldDim=(locked||calcOpen||calcPenaltyActive)&&!ps&&!isFlashing;return(<button key={idx} type="button" onClick={()=>submitDedAnswer(mv,idx)} className={`${baseBtn} ${bCls} ${(perLocked||(locked||calcOpen||calcPenaltyActive))?"pointer-events-none":""} ${shouldDim?"opacity-60":""} ${last}`}>{mv}</button>);})}</div>)}
+                  {ded&&ded.type==="day"&&(<div className="grid grid-cols-3 gap-2">{ded.options.map((dv,idx)=>{const ps=persistBtns[idx];let bCls;if(ps==='correct')bCls='btn-correct-persist border-transparent';else if(ps==='wrong-latest')bCls='btn-wrong-persist border-transparent';else if(ps==='wrong-prev')bCls='btn-wrong-dim border-transparent';else if(dedFlash&&dedFlash.kind==="day"&&dedFlash.index===idx)bCls=(dedFlash.ok?"flash-good":"flash-bad")+' border-transparent';else bCls=idleBtn;const perLocked=!!ps;const isFlashing=!!(dedFlash&&dedFlash.kind==="day"&&dedFlash.index===idx);const shouldDim=(locked||calcOpen||calcPenaltyActive)&&!ps&&!isFlashing;return(<button key={idx} type="button" onClick={()=>submitDedAnswer(dv,idx)} className={`${baseBtn} py-2 text-sm ${bCls} ${(perLocked||(locked||calcOpen||calcPenaltyActive))?"pointer-events-none":""} ${shouldDim?"opacity-60":""} ${centerLastOpt(idx,ded.options.length)}`}>{dv}</button>);})}</div>)}
                 </div>
               </div>
               <div className="mt-4 rounded-2xl panel p-3 space-y-3">
@@ -1465,8 +1555,9 @@
             <p className="text-purple-300/70 text-[12px]">In modes designed for casual practice (Classic, Deduction, Flash), you can tap any stat to hide it. Tapping Score, Accuracy, or Streak hides all three; tapping any timing stat hides all three. Stats always track in the background regardless of visibility. Enabling timing stats resets all stats so the score and timing always reflect the same set of questions. When timing stats are off, leaving and returning to a mode preserves the current question exactly as you left it — same date, same answers, codes panel in the same state. In all other modes, stats are always visible.</p>
           </GuideSection>
           <GuideSection id="range" title="Year Range" openId={open} onToggle={toggle}><p>Set via the ⚙ settings menu. Controls which years dates are drawn from. Defaults to 1–10000 AD. Changing the range resets the current round.</p></GuideSection>
+          <GuideSection id="leap" title="Leap Year Settings" openId={open} onToggle={toggle}><p>Two settings in the ⚙ menu control how often leap years appear and what months they're paired with. <b>Leap Year Chance</b> sets how often a generated date lands on a leap year — Random uses the natural rate (~24%); 50%, 75%, and 100% force higher rates. <b>Force Jan/Feb on Leap Years</b>, when on, restricts the month to January or February whenever a leap year is generated. These settings apply to all game modes' date generation; Lookup is unaffected. If your year range happens to contain no leap years and the chance is set to 50/75/100%, the chance is silently ignored per date — the setting itself is preserved.</p></GuideSection>
           <GuideSection id="theme" title="Theme" openId={open} onToggle={toggle}><p>Five themes: Dusk (default dark navy), Midnight (true black with purple), Nebula (deep purple), Light (clean white), and Parchment (warm cream). Accessible from the ⚙ settings menu in any tab. Enable Use System Settings to match your device's light/dark mode automatically, with separate theme choices for each. Disable to pick one manually.</p></GuideSection>
-          <GuideSection id="dateformat" title="Date Format" openId={open} onToggle={toggle}><p>Set via the ⚙ settings menu. The Month First / Day First, Written / Numeric, and Year First settings apply site-wide — to all game modes, lookup results, and the Last Updated timestamp. Year First is an additional toggle: when on, the year moves to the front and the remaining order still follows Month First / Day First. The lookup input also follows these settings (e.g. month/day/year, day/month/year, year/month/day, or year/day/month). The time in Last Updated is in 24-hour format.</p></GuideSection>
+          <GuideSection id="dateformat" title="Date Format" openId={open} onToggle={toggle}><p>Set via the ⚙ settings menu. Choose one of five real-world formats: <b>Written MDY</b> (April 27, 1828), <b>Written DMY</b> (27 April 1828), <b>Numeric MDY</b> (4/27/1828), <b>Numeric DMY</b> (27.4.1828), or <b>Numeric YMD</b> (1828-4-27). Numeric formats use a fixed separator convention: MDY uses /, DMY uses ., YMD uses -. Years always show in full, never abbreviated.</p><p>Only DMY, MDY, and YMD orderings are offered because those are the only orderings actually used in real life — orderings like YDM aren't standard anywhere, so including them would train you on a non-real-world skill.</p><p><b>Random Format</b>, when on, rolls one of the five formats per date in game modes only — your selected format is preserved underneath (the panels just lock visually). Lookup and the Last Updated timestamp ignore Random and always use the selected format. The Last Updated timestamp uses the numeric version of whichever format you've selected.</p></GuideSection>
           <GuideSection id="julian" title="Julian Calendar" openId={open} onToggle={toggle}><p>Toggle via the ⚙ settings menu under Calendar System. Off by default. When on, dates on or before October 4, 1582 are treated as Julian calendar dates, which have different leap year rules — every year divisible by 4 is a leap year, with no century exception. This affects weekday calculation and the codes shown in Show Codes. October 5–14, 1582 are always excluded since those dates never existed; the Gregorian calendar skipped them to correct accumulated calendar drift.</p></GuideSection>
           <Divider label="Modes"/>
           <GuideSection id="classic" title="Classic" openId={open} onToggle={toggle}><p>The main practice mode with no time pressure. Answer at your own pace. Override works after both wrong and correct answers. Reset Stats clears your stats and question history.</p></GuideSection>
@@ -1489,7 +1580,7 @@
             <p>Best scores are tracked per exact configuration (duration + Allow Mistakes + Per Round/Per Question). Best score and best streak are tracked independently in Per Round — they can come from different rounds. When both came from the same round, a · Same Round tag appears on the right of the Best row. If you leave Blitz after a round ends without pressing Reset, the round state (bests, history, final date) is preserved when you return. Press Reset to clear your current round, unlock the settings, and start fresh. Changing settings while idle resets the current round.</p>
           </GuideSection>
           <GuideSection id="flash" title="Flash" openId={open} onToggle={toggle}><p>The date is briefly revealed (0.1s–3.0s, default 0.5s, adjustable via the slider) then hidden. Answer from memory. Reset Stats clears your stats and question history.</p></GuideSection>
-          <GuideSection id="lookup" title="Lookup" openId={open} onToggle={toggle}><p>Enter any AD date to instantly see its weekday. The input format follows your Date Format settings — month/day/year, day/month/year, year/month/day, or year/day/month. Supports years 1–10000. Show Codes is available for all results and stays open as you browse your history. The history panel shows up to 10 entries before scrolling. October 5–14, 1582 never existed and will appear in history as "Does Not Exist" with Show Codes unavailable.</p></GuideSection>
+          <GuideSection id="lookup" title="Lookup" openId={open} onToggle={toggle}><p>Enter any AD date to instantly see its weekday. Lookup input is always numeric and follows your selected Date Format (m/d/yyyy, d.m.yyyy, or yyyy-m-d). Lookup ignores Random Format and always uses the selected format directly. Changing the Date Format clears the input box. Supports years 1–10000. Show Codes is available for all results and stays open as you browse your history. The history panel shows up to 10 entries before scrolling and re-renders live when you change the Date Format. October 5–14, 1582 never existed and will appear in history as "Does Not Exist" with Show Codes unavailable.</p></GuideSection>
         </div>
       );
     }
@@ -1534,7 +1625,7 @@
       return(<div className={className??"mt-5"}><button type="button" onClick={toggle} className={`w-full px-4 py-2 rounded-xl btn-solid text-sm font-medium${!hasDate?" opacity-60 cursor-not-allowed pointer-events-none":""}`} aria-disabled={!hasDate}>{open?"Hide Codes":"Show Codes"}</button><Expander open={open&&hasDate}><div className={contentClassName??"mt-3 rounded-2xl panel p-4 pb-1"}><MethodExplanation date={frozenDate} useJulian={useJulian}/></div></Expander></div>);
     }
 
-    function LookupCard({history=[],onAddHistory,onMoveHistory,onClearHistory,inputValue="",onInputChange,outputValue="",onOutputChange,calcDate,onCalcDateChange,selectedHistoryId,onSelectedHistoryIdChange,calcOpen=false,onCalcOpenChange,fmtDate,dateOrder='month-first',yearFirst=false,useJulian=false}){
+    function LookupCard({history=[],onAddHistory,onMoveHistory,onClearHistory,inputValue="",onInputChange,outputValue="",onOutputChange,calcDate,onCalcDateChange,selectedHistoryId,onSelectedHistoryIdChange,calcOpen=false,onCalcOpenChange,fmtDate,dateFormat='written-mdy',useJulian=false}){
       const li=typeof inputValue==="string"?inputValue:String(inputValue??"");
       const sli=typeof onInputChange==="function"?onInputChange:()=>{};
       const lo=typeof outputValue==="string"?outputValue:String(outputValue??"");
@@ -1549,25 +1640,41 @@
       function isLeapL(y){y=y>0?y:1-Math.abs(y);return y%400===0||(y%4===0&&y%100!==0);}
       function dimL(y,m,julian=false){const leap=julian?(y%4===0):isLeapL(y);return m===2?(leap?29:28):[4,6,9,11].includes(m)?30:31;}
       function wdayL(y,m,d){function jdn(y,m,d){const a=Math.floor((14-m)/12),y2=y+4800-a,m2=m-3+12*a;return d+Math.floor((153*m2+2)/5)+365*y2+Math.floor(y2/4)-Math.floor(y2/100)+Math.floor(y2/400)-32045;}return((jdn(y>0?y:1-Math.abs(y),m,d)+1)%7+7)%7;}
+      // Map any selected dateFormat to its corresponding Numeric format for input parsing.
+      const numericFmtForInput=(()=>{
+        if(dateFormat==='written-mdy'||dateFormat==='numeric-mdy')return'numeric-mdy';
+        if(dateFormat==='written-dmy'||dateFormat==='numeric-dmy')return'numeric-dmy';
+        return'numeric-ymd';
+      })();
+      // Pattern + example based on which numeric format applies.
+      const inputMeta=(()=>{
+        if(numericFmtForInput==='numeric-mdy')return{label:'m/d/yyyy',example:'7/4/1776',sep:'/',orderType:'mdy'};
+        if(numericFmtForInput==='numeric-dmy')return{label:'d.m.yyyy',example:'4.7.1776',sep:'.',orderType:'dmy'};
+        return{label:'yyyy-m-d',example:'1776-7-4',sep:'-',orderType:'ymd'};
+      })();
+      // Clear the input when the format changes (silently keeping it would be confusing since it might no longer parse).
+      // Use a ref to skip the initial mount so navigating to Lookup doesn't wipe the user's existing input.
+      const prevFormatRef=React.useRef(dateFormat);
+      React.useEffect(()=>{
+        if(prevFormatRef.current!==dateFormat){
+          sli("");slo("");ssid(null);scd(null);sco(false);lastLookupRef.current=null;
+          prevFormatRef.current=dateFormat;
+        }
+      },[dateFormat]);
       function runLookup(){
         const s=li.trim();
-        const dayFirst=dateOrder==='day-first';
-        // Build format hint strings for error messages / placeholder
-        const orderLabel=yearFirst?(dayFirst?'year/day/month':'year/month/day'):(dayFirst?'day/month/year':'month/day/year');
-        const exampleLabel=yearFirst?(dayFirst?'1776/4/7':'1776/7/4'):(dayFirst?'4/7/1776':'7/4/1776');
-        // Year field accepts 1–5 digits; other two fields 1–2 digits
-        const match=yearFirst?/^(\d{1,5})\/(\d{1,2})\/(\d{1,2})$/.exec(s):/^(\d{1,2})\/(\d{1,2})\/(\d{1,5})$/.exec(s);
-        if(!match){ssid(null);slo(`Enter date as ${orderLabel}, e.g. ${exampleLabel}.`);lookupInputRef.current?.focus();return;}
+        // Build regex based on the input format. Year accepts 1–5 digits, month/day 1–2 digits.
+        const sepEsc=inputMeta.sep==='.'?'\\.':inputMeta.sep==='-'?'-':'/';
+        let match;
+        if(inputMeta.orderType==='ymd')match=new RegExp(`^(\\d{1,5})${sepEsc}(\\d{1,2})${sepEsc}(\\d{1,2})$`).exec(s);
+        else match=new RegExp(`^(\\d{1,2})${sepEsc}(\\d{1,2})${sepEsc}(\\d{1,5})$`).exec(s);
+        if(!match){ssid(null);slo(`Enter date as ${inputMeta.label}, e.g. ${inputMeta.example}`);lookupInputRef.current?.focus();return;}
         let mm,dd,yy;
-        if(yearFirst){
-          yy=+match[1];
-          if(dayFirst){dd=+match[2];mm=+match[3];}else{mm=+match[2];dd=+match[3];}
-        }else{
-          if(dayFirst){dd=+match[1];mm=+match[2];}else{mm=+match[1];dd=+match[2];}
-          yy=+match[3];
-        }
-        if(yy<1||yy>10000){ssid(null);slo("Year must be between 1 and 10000.");lookupInputRef.current?.focus();return;}
-        if(mm<1||mm>12){ssid(null);slo("Month must be 1–12.");lookupInputRef.current?.focus();return;}
+        if(inputMeta.orderType==='ymd'){yy=+match[1];mm=+match[2];dd=+match[3];}
+        else if(inputMeta.orderType==='mdy'){mm=+match[1];dd=+match[2];yy=+match[3];}
+        else{dd=+match[1];mm=+match[2];yy=+match[3];}
+        if(yy<1||yy>10000){ssid(null);slo("Year must be between 1 and 10000");lookupInputRef.current?.focus();return;}
+        if(mm<1||mm>12){ssid(null);slo("Month must be 1–12");lookupInputRef.current?.focus();return;}
         const existing=entries.find(e=>e.y===yy&&e.m===mm&&e.d===dd);
         if(existing){
           if(onMoveHistory)onMoveHistory(existing.id);
@@ -1583,7 +1690,7 @@
         }
         const julian=useJulian&&isJulianDate(yy,mm,dd);
         const maxd=dimL(yy,mm,julian);
-        if(dd<1||dd>maxd){ssid(null);slo(`Day must be 1–${maxd} for ${MONTH[mm-1]}.`);lookupInputRef.current?.focus();return;}
+        if(dd<1||dd>maxd){ssid(null);slo(`Day must be 1–${maxd} for ${MONTH[mm-1]}`);lookupInputRef.current?.focus();return;}
         const wd=julian?wdayJulian(yy,mm,dd):wdayL(yy,mm,dd);
         const d=DAY[wd];
         const displayDate=fmtDate?fmtDate(yy,mm,dd):`${MONTH[mm-1]} ${dd}, ${yy}`;
@@ -1596,23 +1703,24 @@
       React.useEffect(()=>{if(!sid)return;if(!entries.some(e=>e.id===sid)){ssid(null);scd(null);slo("");sco(false);}},[entries,sid]);
       const selEntry=entry=>{if(!entry)return;ssid(entry.id);slo(entry?.result||"");const storedOpen=entry.isGap?false:(calcOpenByEntry[entry.id]??false);if(entry.isGap){scd(null);if(typeof onCalcOpenChange==="function")onCalcOpenChange(false);lastLookupRef.current=null;}else{if(typeof entry.y==="number")scd({y:entry.y,m:entry.m,d:entry.d});if(typeof onCalcOpenChange==="function")onCalcOpenChange(storedOpen);}if(document.activeElement)document.activeElement.blur();};
       const clearHist=()=>{if(onClearHistory)onClearHistory();ssid(null);scd(null);slo("");sco(false);lastLookupRef.current=null;};
-      const dayFirst=dateOrder==='day-first';
       const displayNote=React.useMemo(()=>{const selectedEntry=entries.find(e=>e.id===sid);if(selectedEntry&&!selectedEntry.isGap&&typeof selectedEntry.y==='number'&&isJulianDate(selectedEntry.y,selectedEntry.m,selectedEntry.d)){const isJul=useJulian;const wd=isJul?wdayJulian(selectedEntry.y,selectedEntry.m,selectedEntry.d):wdayL(selectedEntry.y,selectedEntry.m,selectedEntry.d);const displayDate=fmtDate?fmtDate(selectedEntry.y,selectedEntry.m,selectedEntry.d):`${MONTH[selectedEntry.m-1]} ${selectedEntry.d}, ${selectedEntry.y}`;return`${displayDate} is a ${DAY[wd]} (${isJul?"Julian":"Gregorian"}).`;}return lo;},[sid,entries,useJulian,fmtDate,lo]);
       const getEntryWeekday=e=>{if(e.isGap)return"Does Not Exist";if(typeof e.y==='number'&&isJulianDate(e.y,e.m,e.d)){const wd=useJulian?wdayJulian(e.y,e.m,e.d):wdayL(e.y,e.m,e.d);return DAY[wd];}return e.weekday;};
+      // History entries are stored as {y,m,d} so changing dateFormat re-renders labels live.
+      const renderedEntries=React.useMemo(()=>entries.map(e=>{if(e.isGap||typeof e.y!=='number')return e;return{...e,label:fmtDate?fmtDate(e.y,e.m,e.d):e.label};}),[entries,fmtDate,dateFormat]);
       return(
         <div className="mt-1 space-y-4">
           <div className="rounded-2xl panel p-4 space-y-4">
             <div className="flex flex-wrap items-stretch gap-2">
-              <input ref={lookupInputRef} value={li} onChange={e=>sli(e.target.value)} placeholder={yearFirst?(dayFirst?"e.g., 1776/4/7":"e.g., 1776/7/4"):(dayFirst?"e.g., 4/7/1776":"e.g., 7/4/1776")} className="panel rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-400 flex-1 min-w-0"/>
+              <input ref={lookupInputRef} value={li} onChange={e=>sli(e.target.value)} placeholder={`e.g., ${inputMeta.example}`} className="panel rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-400 flex-1 min-w-0"/>
               <button type="button" onClick={runLookup} onMouseDown={e=>e.preventDefault()} className="px-4 py-2 rounded-xl btn-solid text-sm font-medium">Lookup</button>
               <button type="button" onClick={clearLookup} onMouseDown={e=>e.preventDefault()} className="px-4 py-2 rounded-xl bg-zinc-700 text-white text-sm font-medium">Clear</button>
             </div>
             {displayNote&&<div className="text-sm text-purple-100/90">{displayNote}</div>}
-            <p className="text-xs text-purple-100/90">Format: <b>{yearFirst?(dayFirst?"year/day/month":"year/month/day"):(dayFirst?"day/month/year":"month/day/year")}</b> — e.g. <b>{yearFirst?(dayFirst?"1776/4/7":"1776/7/4"):(dayFirst?"4/7/1776":"7/4/1776")}</b><br/>AD dates only, 1–10000</p>
+            <p className="text-xs text-purple-100/90">Format: <b>{inputMeta.label}</b> — e.g. <b>{inputMeta.example}</b><br/>AD dates only, 1–10000</p>
           </div>
           <div className="rounded-2xl panel p-4 space-y-4">
             <div className="flex items-center justify-between text-[11px] uppercase tracking-wide text-purple-200/70"><span>History</span>{entries.length>0&&(<button type="button" onClick={clearHist} className="text-purple-200/70 font-medium">Clear History</button>)}</div>
-            {entries.length>0?(<ul className="space-y-2 overflow-y-auto max-h-[440px]">{entries.map(e=>(<li key={e.id}><button type="button" onClick={()=>selEntry(e)} className={`w-full text-left px-3 py-2 rounded-xl panel flex items-center justify-between gap-3 text-xs transition ${sid===e.id?"border-l-2 border-l-purple-400 bg-purple-500/35":"hist-unsel hover:bg-purple-500/15"}`}><span className="block text-[13px] font-medium text-purple-100/90">{e.label}</span><span className="text-[12px] font-semibold text-purple-200/80">{getEntryWeekday(e)}</span></button></li>))}</ul>):(<p className="text-sm text-purple-200/70">No lookups yet</p>)}
+            {renderedEntries.length>0?(<ul className="space-y-2 overflow-y-auto max-h-[440px]">{renderedEntries.map(e=>(<li key={e.id}><button type="button" onClick={()=>selEntry(e)} className={`w-full text-left px-3 py-2 rounded-xl panel flex items-center justify-between gap-3 text-xs transition ${sid===e.id?"border-l-2 border-l-purple-400 bg-purple-500/35":"hist-unsel hover:bg-purple-500/15"}`}><span className="block text-[13px] font-medium text-purple-100/90">{e.label}</span><span className="text-[12px] font-semibold text-purple-200/80">{getEntryWeekday(e)}</span></button></li>))}</ul>):(<p className="text-sm text-purple-200/70">No lookups yet</p>)}
             <MethodBreakdownSection date={cdv} className="pt-4 border-t border-purple-500/40" contentClassName="mt-3 rounded-2xl panel px-4 pt-[3px] pb-1.5" open={cov} onOpenChange={sco} useJulian={useJulian}/>
           </div>
         </div>
