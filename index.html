@@ -249,7 +249,7 @@
 
 
 
-    const DEPLOY_TS=new Date('2026-04-29T02:22:00Z');
+    const DEPLOY_TS=new Date('2026-04-29T02:31:00Z');
 
     function StatPanel({stats}){
       return(
@@ -1414,32 +1414,38 @@
         //    any-popover-setting effect below; AoX is owned by AoxMode's internal effect.
         const currentViolated=(mode==='deduction'&&dedViolates)||gmViolations[mode];
         if(currentViolated){
-          if(mode==='classic'||mode==='deduction'||mode==='flash'){
-            // Light per-question cleanup, preserve Stack history
+          if(mode==='classic'||mode==='deduction'||(mode==='flash'&&!active)){
+            // Light per-question cleanup, preserve Stack history.
+            // Flash active mid-dash is handled by Effect 2 below (full per-dash reset).
             resetPB();setMsg("");setGuesses([]);setLocked(false);setRevealed(false);
             setCountedWrong(false);setCanOverrideCorrect(false);setOverrideUsedThisQ(false);
             setBackDepth(0);
-            // Flash mid-dash: also tear down the dash timer so it doesn't keep ticking
-            // against the now-replaced date.
-            if(mode==='flash'&&active){
-              setActive(false);setShowTimerDate(false);
-              clearTimeout(flashTimerRef.current);flashTimerRef.current=null;
-              setFlashPhase("dash");flashDeadlineRef.current=null;
-              setFlashRemainMs(flashMs);resetFlashBar();
-            }
             tStartRef.current=performance.now();
           }
         }
       },[leapChance,forceJanFebOnLeap]);
-      // Effect 2: Round reset on ANY popover setting change for Blitz active rounds.
-      // Theme settings are intentionally excluded (cosmetic — don't affect dates or math).
+      // Effect 2: Round/dash reset on ANY popover setting change for Blitz active rounds
+      // and Flash active dashes (no penalty — settings would otherwise mismatch the date
+      // being answered for). Theme settings are intentionally excluded (cosmetic).
       // AoX is handled by AoxMode's own internal effect with the same deps.
-      // Flash and Classic/Deduction don't reset on non-leap setting changes (Effect 1 above
-      // handles their leap-violation cases).
+      // Classic/Deduction (and idle Flash) don't reset on non-leap setting changes —
+      // Effect 1 above handles their leap-violation cases.
       useEffect(()=>{
         if(mode==='blitz'&&active){
           arm();
           setDateByMode(prev=>({...prev,blitz:genDate(minY,maxY)}));
+        }else if(mode==='flash'&&active){
+          // Tear down the dash timer + per-question state, then regen the flash date.
+          // Stack and cumulative Flash stats are preserved (no penalty).
+          setActive(false);setShowTimerDate(false);
+          clearTimeout(flashTimerRef.current);flashTimerRef.current=null;
+          setFlashPhase("dash");flashDeadlineRef.current=null;
+          setFlashRemainMs(flashMs);resetFlashBar();
+          resetPB();setMsg("");setGuesses([]);setLocked(false);setRevealed(false);
+          setCountedWrong(false);setCanOverrideCorrect(false);setOverrideUsedThisQ(false);
+          setBackDepth(0);
+          setDateByMode(prev=>({...prev,flash:genDate(minY,maxY)}));
+          tStartRef.current=null;
         }
       },[randomFormat,dateFormat,useJulian,minY,maxY,leapChance,forceJanFebOnLeap]);
       const [settingsOpen,setSettingsOpen]=useState(false);
