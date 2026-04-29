@@ -249,7 +249,7 @@
 
 
 
-    const DEPLOY_TS=new Date('2026-04-29T01:46:00Z');
+    const DEPLOY_TS=new Date('2026-04-29T02:22:00Z');
 
     function StatPanel({stats}){
       return(
@@ -259,7 +259,7 @@
       );
     }
 
-    function AoxMode({minY,maxY,visible,fmtDate,useJulian=false,genDate=randomDate,leapChance='random',forceJanFebOnLeap=false}){
+    function AoxMode({minY,maxY,visible,fmtDate,useJulian=false,genDate=randomDate,leapChance='random',forceJanFebOnLeap=false,randomFormat=false,dateFormat='written-mdy'}){
       const [aoxN,setAoxN]=useState("10");
       const [mistakesOk,setMistakesOk]=useState(false);
       const [oneByOne,setOneByOne]=useState(false);
@@ -320,15 +320,17 @@
 
       function reset(){setRunPhase("idle");setDisplayN(n);setShown(false);setInBackMode(false);setAoxStack([]);setAoxForwardStack([]);setTimes([]);setStreak(0);setBestStreak(0);setAttempts(0);setGuesses([]);setMsg("");setFlash(null);resetAoxPB();setCodesOpen(false);setCanOverrideCorrect(false);setQuestionCounted(false);setPendingWrongCredit(null);setOverrideUsedAox(false);setBestNew({});setDate(genDate(minY,maxY));tStartRef.current=null;wrongTimeRef.current=null;prevTimesSnapRef.current=null;prevStreakSnapRef.current=null;prevBestSnapRef.current=null;}
       useEffect(()=>{if(!visible&&runPhase==="running")reset();},[visible]);
-      // Auto-regen if current AoX date violates new leap settings.
-      // Mid-run (any non-idle phase): full reset to idle via reset(). Idle: just regen the date.
+      // Auto-reset/regen on popover setting change.
+      // Running: any setting change resets the round. Done/failed: preserve historical state
+      // (the displayed date is the run's last question — don't auto-replace it).
+      // Idle: regen the displayed date only if it violates new leap settings.
       useEffect(()=>{
+        if(runPhase==='running'){reset();return;}
+        if(runPhase!=='idle')return;
         const isLeapY=(useJulian&&isJulianDate(date.y,date.m,date.d))?isLeapJulian(date.y):isLeap(date.y);
         const violates=(leapChance==='100'&&!isLeapY)||(forceJanFebOnLeap&&isLeapY&&date.m!==1&&date.m!==2);
-        if(!violates)return;
-        if(runPhase==='idle')setDate(genDate(minY,maxY));
-        else reset();
-      },[leapChance,forceJanFebOnLeap]);
+        if(violates)setDate(genDate(minY,maxY));
+      },[randomFormat,dateFormat,useJulian,minY,maxY,leapChance,forceJanFebOnLeap]);
       // Frozen date for codes panel: during close animation, keep showing old codes; update new codes only after close finishes
       latestAoxDateRef.current=date;
       useEffect(()=>{
@@ -1408,21 +1410,38 @@
         });
         // 4. Respawn current ded if violating (silent for non-deduction modes)
         if(dedViolates)spawnDed();
-        // 5. Per-current-mode cleanup
+        // 5. Per-current-mode cleanup. Blitz active-round resets are owned by the
+        //    any-popover-setting effect below; AoX is owned by AoxMode's internal effect.
         const currentViolated=(mode==='deduction'&&dedViolates)||gmViolations[mode];
         if(currentViolated){
-          if(mode==='flash'||mode==='blitz'){
-            // Mid-run or idle: full reset to idle via arm() (clears timers + per-round state)
-            arm();
-          }else{
-            // Classic / Deduction: light per-question cleanup, preserve Stack history
+          if(mode==='classic'||mode==='deduction'||mode==='flash'){
+            // Light per-question cleanup, preserve Stack history
             resetPB();setMsg("");setGuesses([]);setLocked(false);setRevealed(false);
             setCountedWrong(false);setCanOverrideCorrect(false);setOverrideUsedThisQ(false);
             setBackDepth(0);
+            // Flash mid-dash: also tear down the dash timer so it doesn't keep ticking
+            // against the now-replaced date.
+            if(mode==='flash'&&active){
+              setActive(false);setShowTimerDate(false);
+              clearTimeout(flashTimerRef.current);flashTimerRef.current=null;
+              setFlashPhase("dash");flashDeadlineRef.current=null;
+              setFlashRemainMs(flashMs);resetFlashBar();
+            }
             tStartRef.current=performance.now();
           }
         }
       },[leapChance,forceJanFebOnLeap]);
+      // Effect 2: Round reset on ANY popover setting change for Blitz active rounds.
+      // Theme settings are intentionally excluded (cosmetic — don't affect dates or math).
+      // AoX is handled by AoxMode's own internal effect with the same deps.
+      // Flash and Classic/Deduction don't reset on non-leap setting changes (Effect 1 above
+      // handles their leap-violation cases).
+      useEffect(()=>{
+        if(mode==='blitz'&&active){
+          arm();
+          setDateByMode(prev=>({...prev,blitz:genDate(minY,maxY)}));
+        }
+      },[randomFormat,dateFormat,useJulian,minY,maxY,leapChance,forceJanFebOnLeap]);
       const [settingsOpen,setSettingsOpen]=useState(false);
       const settingsRef=useRef(null);
       const settingsPopoverRef=useRef(null);
@@ -1525,7 +1544,7 @@
               <div className="mt-3">{timerSettingControl}</div>
             </>)}
           </>)}
-          <AoxMode minY={minY} maxY={maxY} visible={mode==="aox"} fmtDate={fmtDate} useJulian={useJulian} genDate={genDate} leapChance={leapChance} forceJanFebOnLeap={forceJanFebOnLeap}/>
+          <AoxMode minY={minY} maxY={maxY} visible={mode==="aox"} fmtDate={fmtDate} useJulian={useJulian} genDate={genDate} leapChance={leapChance} forceJanFebOnLeap={forceJanFebOnLeap} randomFormat={randomFormat} dateFormat={dateFormat}/>
           {mode==="lookup"&&(<div className="mt-5"><LookupCard history={lookupHistory} onAddHistory={pushLookupHistory} onMoveHistory={moveHistoryEntryToTop} onClearHistory={clearLookupHistory} inputValue={lookupInput} onInputChange={setLookupInput} outputValue={lookupOutput} onOutputChange={setLookupOutput} calcDate={lookupCalcDate} onCalcDateChange={setLookupCalcDate} selectedHistoryId={lookupSelectedHistoryId} onSelectedHistoryIdChange={setLookupSelectedHistoryId} calcOpen={lookupCalcOpen} onCalcOpenChange={setLookupCalcOpen} fmtDate={fmtDate} dateFormat={dateFormat} useJulian={useJulian}/></div>)}
           {mode==="guide"&&(<div className="mt-5"><GuidePage/></div>)}
           {["classic","blitz","flash"].includes(mode)&&(
