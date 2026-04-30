@@ -127,6 +127,25 @@
         default:return`${MONTH[m-1]} ${d}, ${yr}`;
       }
     };
+    // Partial-date display for Deduction. `missing` is one of 'day' | 'month'
+    // | 'year' and substitutes a fixed-width underscore placeholder for that
+    // piece while honoring the active formatId for the rest. Placeholder
+    // widths: day __, month name (Written) ____, month number (Numeric) __,
+    // year ____.
+    const fmtPartial=(y,m,d,formatId,missing)=>{
+      const dPart=missing==='day'?'__':String(d);
+      const mNamePart=missing==='month'?'____':MONTH[m-1];
+      const mNumPart=missing==='month'?'__':String(m);
+      const yPart=missing==='year'?'____':fmtYear(y);
+      switch(formatId){
+        case'written-dmy':return`${dPart} ${mNamePart} ${yPart}`;
+        case'numeric-mdy':return`${mNumPart}/${dPart}/${yPart}`;
+        case'numeric-dmy':return`${dPart}.${mNumPart}.${yPart}`;
+        case'numeric-ymd':return`${yPart}-${mNumPart}-${dPart}`;
+        case'written-mdy':
+        default:return`${mNamePart} ${dPart}, ${yPart}`;
+      }
+    };
     // Helper: maps any format ID to its corresponding numeric format ID.
     // Used by Lookup input parsing and DEPLOY_TS (which always render numeric).
     const numericFormatOf=fid=>{
@@ -192,7 +211,9 @@
     const JULIAN_AB_MAP=new Map([[0,-2],[1,-3],[2,3],[3,2],[4,1],[5,0],[6,-1],[7,-2],[8,-3],[9,3],[10,2],[11,1],[12,0],[13,-1],[14,-2],[15,-3]]);
 
     // Returns an entry's btns augmented with a synthesized green on the correct
-    // answer when the entry has a wrong but no correct. The synthesized green
+    // answer when the entry has a wrong but no correct. Also downgrades any
+    // 'wrong-latest' to 'wrong-prev' so the dim-when-green-present rendering
+    // applies to all reds in the augmented entry. The synthesized green
     // honors the entry's _jul snapshot (calendar system at generation), with
     // fallbackJulian used when the snapshot is missing.
     // For deduction entries (entry.type set), the correct index is derived per
@@ -220,7 +241,10 @@
         correctIdx=useJul?wdayJulian(entry.y,entry.m,entry.d):wday(entry.y,entry.m,entry.d);
       }
       if(correctIdx<0)return entry;
-      return{...entry,btns:{...btns,[correctIdx]:'correct'}};
+      const newBtns={...btns};
+      for(const k in newBtns){if(newBtns[k]==='wrong-latest')newBtns[k]='wrong-prev';}
+      newBtns[correctIdx]='correct';
+      return{...entry,btns:newBtns};
     };
 
     // Timing constants (keep in sync with CSS .expander transition)
@@ -281,7 +305,7 @@
 
 
 
-    const DEPLOY_TS=new Date('2026-04-30T20:37:00Z');
+    const DEPLOY_TS=new Date('2026-04-30T23:07:00Z');
 
     function StatPanel({stats}){
       // For fractional values (Score, Streak as "X/Y"), shrink the value font
@@ -1460,7 +1484,7 @@
           });
         }
       },[mode,timerDone,perQ,allowMistakes,blitzSec,qSec]);
-      const applyCalcPenalty=()=>{setCalcPenalty(true);const roundOver=(mode==="blitz")&&!active;const fp=!countedWrong&&!revealed;if(fp&&!roundOver){wrongTimeRef.current=tStartRef.current?(performance.now()-tStartRef.current)/1000:null;prevStatsSnapshotRef.current=null;preCalcPenaltySnapshotRef.current={played:S.played,good:S.good,streak:S.streak,best:S.best,timesLen:S.times.length,blitzPlayed:blitzRoundStats.played,blitzGood:blitzRoundStats.good};updateStats(c=>{c.played+=1;c.streak=0;});if(mode==="blitz"&&!perQ)setBlitzRoundStats(p=>({...p,played:p.played+1,streak:0}));}if(mode==="deduction"&&ded){markCorrect(getDedCorrectIdx());}else if(mode!=="deduction")markCorrect(correct);if(isTimer(mode)&&active){setActive(false);setShowTimerDate(true);if(mode==="blitz"&&!perQ){setBlitzRunning(false);blitzStartRef.current=null;blitzPausedAtRef.current=null;blitzPausedAccRef.current=0;setTimerDone(true);}if(mode==="blitz"&&perQ){qDeadlineRef.current=null;qPausedAtRef.current=null;qPausedAccRef.current=0;setTimerDone(true);}if(mode==="flash"){clearTimeout(flashTimerRef.current);flashTimerRef.current=null;setFlashPhase("dash");flashDeadlineRef.current=null;}}if(!revealed)setRevealed(true);if(!countedWrong){setCountedWrong(true);setCanOverrideCorrect(false);}};
+      const applyCalcPenalty=()=>{setCalcPenalty(true);const roundOver=(mode==="blitz")&&!active;const fp=!countedWrong&&!revealed;if(fp&&!roundOver){wrongTimeRef.current=tStartRef.current?(performance.now()-tStartRef.current)/1000:null;prevStatsSnapshotRef.current=null;preCalcPenaltySnapshotRef.current={played:S.played,good:S.good,streak:S.streak,best:S.best,timesLen:S.times.length,blitzPlayed:blitzRoundStats.played,blitzGood:blitzRoundStats.good};updateStats(c=>{c.played+=1;c.streak=0;});if(mode==="blitz"&&!perQ)setBlitzRoundStats(p=>({...p,played:p.played+1,streak:0}));}/* When back-browsing, skip markCorrect: history entries already have the correct day stamped via entryWithGreen using the date's original _jul snapshot. Re-stamping with live `correct` (which uses live useJulian) would add a second green if the live calendar setting differs from the snapshot. */if(backDepth===0){if(mode==="deduction"&&ded){markCorrect(getDedCorrectIdx());}else if(mode!=="deduction")markCorrect(correct);}if(isTimer(mode)&&active){setActive(false);setShowTimerDate(true);if(mode==="blitz"&&!perQ){setBlitzRunning(false);blitzStartRef.current=null;blitzPausedAtRef.current=null;blitzPausedAccRef.current=0;setTimerDone(true);}if(mode==="blitz"&&perQ){qDeadlineRef.current=null;qPausedAtRef.current=null;qPausedAccRef.current=0;setTimerDone(true);}if(mode==="flash"){clearTimeout(flashTimerRef.current);flashTimerRef.current=null;setFlashPhase("dash");flashDeadlineRef.current=null;}}if(!revealed)setRevealed(true);if(!countedWrong){setCountedWrong(true);setCanOverrideCorrect(false);}};
       const handleCalcOpenChange=next=>{if(next&&!(locked&&!revealed&&backDepth>0))applyCalcPenalty();setCalcOpen(next);};
       const showStats=mode!=="lookup"&&mode!=="guide"&&mode!=="aox";
       const sAvg=calcAvg(S.times),sLast=calcLast(S.times),sMed=calcMed(S.times);
@@ -1477,6 +1501,7 @@
       // fmtDate: if Random Format is on AND date carries a stored _fmt (from per-date roll), use it; else use selected format.
       // Toggling Random off makes already-displayed dates immediately fall back to the selected format.
       const fmtDate=(y,m,d,storedFmt)=>fmt(y,m,d,(randomFormat&&storedFmt)||dateFormat);
+      const fmtDatePartial=(y,m,d,storedFmt,missing)=>fmtPartial(y,m,d,(randomFormat&&storedFmt)||dateFormat,missing);
       // Generate a new game-mode date with the current settings baked in.
       // Stamps _fmt (if Random Format on) and _jul (calendar system snapshot) at generation.
       // _jul is the calendar system in effect when the date was generated; used by stack
@@ -1648,7 +1673,11 @@
             // is missing (older state from before _jul tracking).
             const origJul=(liveDt._jul!=null?liveDt._jul:prev.useJulian)&&isJulianDate(liveDt.y,liveDt.m,liveDt.d);
             const correctIdx=origJul?wdayJulian(liveDt.y,liveDt.m,liveDt.d):wday(liveDt.y,liveDt.m,liveDt.d);
-            const synthBtns={...liveBtns,[correctIdx]:'correct'};
+            // Downgrade any 'wrong-latest' to 'wrong-prev' so the dim-with-green
+            // rendering applies to all reds in the synthesized history entry.
+            const synthBtns={...liveBtns};
+            for(const k in synthBtns){if(synthBtns[k]==='wrong-latest')synthBtns[k]='wrong-prev';}
+            synthBtns[correctIdx]='correct';
             const cap=isBackBrowsing
               ?(liveEntry.capsule||{snapshot:null,wrongTime:null})
               :{snapshot:prevStatsSnapshotRef.current?{...prevStatsSnapshotRef.current}:null,wrongTime:wrongTimeRef.current};
@@ -1840,7 +1869,7 @@
                 <div className="text-center relative">
                   {backDepth>0&&<span className="absolute right-0 top-0 text-[11px] tabular-nums text-purple-300/60">Q{dedStack.length+1}</span>}
                   <div className="text-xs uppercase tracking-widest text-purple-100/80">{dedType==="year"?"What Year Is This?":dedType==="month"?"What Month Is This?":"What Day Is This?"}</div>
-                  <div className="mt-1 text-3xl font-bold">{ded?(ded.type==="year"?`${MONTH[ded.m-1]} ${ded.d}`:ded.type==="month"?`${ded.d}, ${fmtYear(ded.y)}`:`${MONTH[ded.m-1]}, ${fmtYear(ded.y)}`):"—"}</div>
+                  <div className="mt-1 text-3xl font-bold">{ded?fmtDatePartial(ded.y,ded.m,ded.d,ded._fmt,ded.type):"—"}</div>
                   {ded&&<div className="mt-1 text-lg text-purple-100">Weekday: <span className="font-semibold">{DAY[ded.w]}</span></div>}
                 </div>
                 <div className="mt-4">
@@ -1894,12 +1923,13 @@
             <p><b>Last / Avg / Med</b> — timing stats, calculated using correct answers only. Last is your most recent correct time; Avg is the average across all correct answers; Med is the median, which is less skewed by outliers. Any time of 60 seconds or more — whether an individual solve, a computed average or median, or any Best — displays as "—". Times are still tracked internally and contribute to averages, medians, and best-tracking; only the display is capped.</p>
             <p className="text-purple-300/70 text-[12px]">In modes designed for casual practice (Classic, Deduction, Flash), you can tap any stat to hide it. Tapping Score, Accuracy, or Streak hides all three; tapping any timing stat hides all three. Stats always track in the background regardless of visibility. Enabling timing stats resets all stats so the score and timing always reflect the same set of questions. When timing stats are off, leaving and returning to a mode preserves the current question exactly as you left it — same date, same answers, codes panel in the same state. In all other modes, stats are always visible.</p>
           </GuideSection>
-          <GuideSection id="range" title="Year Range" openId={open} onToggle={toggle}><p>Set via the ⚙ settings menu. Controls which years dates are drawn from. Defaults to 1–10000 AD. Changing the range regenerates the current date only if it falls outside the new range — and even then, if you've already made a wrong guess on the current date, the change is deferred so the wrong-state is preserved; the new range applies to the next date. While browsing back, settings-driven regen always preserves your history: the date you were viewing and any forward entries are pushed back to history before the live slot is regenerated. In active Blitz rounds and AoX runs, any range change ends the round.</p></GuideSection>
-          <GuideSection id="leap" title="Leap Year Settings" openId={open} onToggle={toggle}><p>Two settings in the ⚙ menu control how often leap years appear and what months they're paired with. <b>Leap Year Chance</b> sets how often a generated date lands on a leap year — Random uses the natural rate (~24%); 50%, 75%, and 100% force higher rates. <b>Force Jan/Feb on Leap Years</b>, when on, restricts the month to January or February whenever a leap year is generated. These settings apply to all game modes' date generation; Lookup is unaffected. If your year range happens to contain no leap years and the chance is set to 50/75/100%, the chance is silently ignored per date — the setting itself is preserved. Changing <b>Leap Year Chance</b> always regenerates the displayed date. Toggling <b>Force Jan/Feb on Leap Years</b> regenerates only if the current date is a leap year with a month other than January or February. If you've already made a wrong guess on the current date, either change is deferred so the wrong-state is preserved; the new setting applies to the next date. In active Blitz rounds and AoX runs, any leap setting change ends the round.</p></GuideSection>
-          <GuideSection id="theme" title="Theme" openId={open} onToggle={toggle}><p>Five themes: Dusk (default dark navy), Midnight (true black with purple), Nebula (deep purple), Light (clean white), and Parchment (warm cream). Accessible from the ⚙ settings menu in any tab. Enable Use System Settings to match your device's light/dark mode automatically, with separate theme choices for each. Disable to pick one manually.</p></GuideSection>
+          <Divider label="Settings"/>
           <GuideSection id="dateformat" title="Date Format" openId={open} onToggle={toggle}><p>Set via the ⚙ settings menu. Choose one of five real-world formats: <b>Written MDY</b> (April 27, 1828), <b>Written DMY</b> (27 April 1828), <b>Numeric MDY</b> (4/27/1828), <b>Numeric DMY</b> (27.4.1828), or <b>Numeric YMD</b> (1828-4-27). Numeric formats use a fixed separator convention: MDY uses '/', DMY uses '.', YMD uses '-'. Years always show in full, never abbreviated.</p><p>Only DMY, MDY, and YMD orderings are offered because those are the only orderings actually used in real life — orderings like YDM aren't standard anywhere.</p><p><b>Random Format</b>, when on, rolls one of the five formats per date in game modes only — your selected format is preserved underneath (the panels just lock visually). Lookup and the Last Updated timestamp ignore Random and always use the selected format. The Last Updated timestamp uses the numeric version of whichever format you've selected. In Classic, Deduction, and Flash, changing the format or toggling Random Format regenerates the displayed date — unless you've already made a wrong guess, in which case the change is deferred so the wrong-state is preserved; the new format applies to the next date. In active Blitz rounds and AoX runs, either change ends the round.</p></GuideSection>
           <GuideSection id="julian" title="Julian Calendar" openId={open} onToggle={toggle}><p>Toggle via the ⚙ settings menu under Calendar System. Off by default. When on, dates on or before October 4, 1582 are treated as Julian calendar dates, which have different leap year rules — every year divisible by 4 is a leap year, with no century exception. This affects weekday calculation and the codes shown in Show Codes. October 5–14, 1582 are always excluded since those dates never existed; the Gregorian calendar skipped them to correct accumulated calendar drift.</p><p>Toggling Julian doesn't necessarily regenerate the current date. For dates after October 4, 1582, Julian has no effect. For Julian-eligible dates (October 4, 1582 or earlier), the date stays if you haven't made a wrong guess yet — the answer and codes simply update. If you've already wrong-guessed, the date regenerates and is added to your history with both your red guess and a green for the day that was correct under the calendar system in effect when the date was first generated. Each date snapshots its calendar system at generation, so revisiting an earlier question via Back shows the highlights and codes that were correct under the system in effect when that date was generated. In active Blitz rounds and AoX runs, any Julian toggle ends the round.</p></GuideSection>
+          <GuideSection id="range" title="Year Range" openId={open} onToggle={toggle}><p>Set via the ⚙ settings menu. Controls which years dates are drawn from. Defaults to 1–10000 AD. Changing the range regenerates the current date only if it falls outside the new range — and even then, if you've already made a wrong guess on the current date, the change is deferred so the wrong-state is preserved; the new range applies to the next date. While browsing back, settings-driven regen always preserves your history: the date you were viewing and any forward entries are pushed back to history before the live slot is regenerated. In active Blitz rounds and AoX runs, any range change ends the round.</p></GuideSection>
+          <GuideSection id="leap" title="Leap Year Settings" openId={open} onToggle={toggle}><p>Two settings in the ⚙ menu control how often leap years appear and what months they're paired with. <b>Leap Year Chance</b> sets how often a generated date lands on a leap year — Random uses the natural rate (~24%); 50%, 75%, and 100% force higher rates. <b>Force Jan/Feb on Leap Years</b>, when on, restricts the month to January or February whenever a leap year is generated. These settings apply to all game modes' date generation; Lookup is unaffected. If your year range happens to contain no leap years and the chance is set to 50/75/100%, the chance is silently ignored per date — the setting itself is preserved. Changing <b>Leap Year Chance</b> always regenerates the displayed date. Toggling <b>Force Jan/Feb on Leap Years</b> regenerates only if the current date is a leap year with a month other than January or February. If you've already made a wrong guess on the current date, either change is deferred so the wrong-state is preserved; the new setting applies to the next date. In active Blitz rounds and AoX runs, any leap setting change ends the round.</p></GuideSection>
           <GuideSection id="savestats" title="Save Stats" openId={open} onToggle={toggle}><p>Toggle via the ⚙ settings menu under Stats. On by default. When off, your answers don't update stats or saved bests. The stats panel dims to indicate the off state. The toggle works differently per mode:</p><p className="mt-2"><b>Classic, Deduction, Flash</b> — per-question. The toggle's value is locked in at the moment of your first stat-affecting action (your first wrong guess on the question, or your correct answer if you got it right on the first try). Toggling afterward doesn't change that question's outcome, but does apply to the next question. If you've already made a wrong guess on the current question, toggling Save Stats does not regenerate the date — the toggle's frozen value sticks for the question. When off, the question doesn't update stats and isn't pushed to history (Back can't browse to it).</p><p className="mt-2"><b>Blitz</b> — round-level. In-round score, accuracy, streak, and Back/Forward navigation through round questions all work normally regardless of the toggle. Whatever the toggle is set to when the round ends determines whether the round's Best Score and Best Streak update.</p><p className="mt-2"><b>AoX</b> — run-level. In-run score, streak, times, and Back/Forward navigation all work normally regardless of the toggle. Whatever the toggle is set to when the run ends determines whether Best Average, Best Median, and Best Streak update. If a run finishes with Save Stats off, overriding entries after the run is a no-op on persistent bests; round-level stats still adjust.</p></GuideSection>
+          <GuideSection id="theme" title="Theme" openId={open} onToggle={toggle}><p>Five themes: Dusk (default dark navy), Midnight (true black with purple), Nebula (deep purple), Light (clean white), and Parchment (warm cream). Accessible from the ⚙ settings menu in any tab. Enable Use System Settings to match your device's light/dark mode automatically, with separate theme choices for each. Disable to pick one manually.</p></GuideSection>
           <Divider label="Modes"/>
           <GuideSection id="classic" title="Classic" openId={open} onToggle={toggle}><p>The main practice mode with no time pressure. Answer at your own pace. Override works after both wrong and correct answers. Reset Stats clears your stats and question history.</p></GuideSection>
           <GuideSection id="aox" title="AoX" openId={open} onToggle={toggle}>
@@ -1911,7 +1941,8 @@
             <p><b>Override</b> — after wrong: gives credit with time recorded, preserves streak. After correct: undoes the credit, resets streak, and either ends the run (Allow Mistakes off) or advances to a new date (Allow Mistakes on). You can also override past dates while browsing back with Back/Forward. If overriding on the last question with Allow Mistakes on, a new date is generated to complete the average. One override per question.</p>
             <p>Stats in AoX are always visible and always track. Best average and best median are tracked independently per n and Allow Mistakes combination — they can come from different runs. Beneath each best, the companion metric from the run that set it is also shown (e.g. the median from the run that set your best average). When both bests come from the same run, a · Same Round tag appears on the right. If you override a correct answer that set a new best, the best is also restored. The score display freezes when a run ends and only resets after pressing Reset.</p>
           </GuideSection>
-          <GuideSection id="deduction" title="Deduction" openId={open} onToggle={toggle}><p>Identify the missing piece of a date given the rest plus the weekday. Choose Day, Month, or Year mode.</p><p className="mt-2"><b>Day</b> — seven consecutive days are shown. The correct day can appear in any position.</p><p className="mt-2"><b>Month</b> — seven fixed boxes group months that share the same month code, so tapping any month within a box gives the same weekday for that date. Tap the box containing the correct month. The boxes are always in the same position. In leap years, January shifts into the Apr/Jul box (becoming Jan/Apr/Jul) and February shifts into the Aug box (becoming Feb/Aug); the other boxes are unchanged.</p><p className="mt-2"><b>Year</b> — nine year options centered on the correct year, all landing on the same weekday for the given month and day.</p><p className="mt-2">Switch subtypes anytime — progress in each is preserved. Stats are tracked separately for each subtype. Reset Stats only resets the current subtype and clears its question history.</p></GuideSection>
+          <GuideSection id="deduction" title="Deduction" openId={open} onToggle={toggle}><p>Identify the missing piece of a date given the rest plus the weekday. Choose Day, Month, or Year mode. The displayed date follows your selected Date Format (or random format snapshot, if Random Format is on), with a fixed-width underscore placeholder where the missing piece would normally appear.</p><p className="mt-2"><b>Day</b> — seven consecutive days are shown. The correct day can appear in any position.</p><p className="mt-2"><b>Month</b> — seven fixed boxes group months that share the same month code, so tapping any month within a box gives the same weekday for that date. Tap the box containing the correct month. The boxes are always in the same position. In leap years, January shifts into the Apr/Jul box (becoming Jan/Apr/Jul) and February shifts into the Aug box (becoming Feb/Aug); the other boxes are unchanged.</p><p className="mt-2"><b>Year</b> — nine year options centered on the correct year, all landing on the same weekday for the given month and day.</p><p className="mt-2">Switch subtypes anytime — progress in each is preserved. Stats are tracked separately for each subtype. Reset Stats only resets the current subtype and clears its question history.</p></GuideSection>
+          <GuideSection id="flash" title="Flash" openId={open} onToggle={toggle}><p>The date is briefly revealed (0.1s–3.0s, default 0.5s, adjustable via the slider) then hidden. Answer from memory. Reset Stats clears your stats and question history.</p></GuideSection>
           <GuideSection id="blitz" title="Blitz" openId={open} onToggle={toggle}>
             <p>Answer as many dates as possible before time runs out. Score shows correct answers for the current round only.</p>
             <p><b>Allow Mistakes</b> — when on, wrong answers count against accuracy but don't end the round. When off, a wrong answer ends the round immediately.</p>
@@ -1920,7 +1951,6 @@
             <p>Streak is hidden in Per Question since any wrong answer ends the round, making streak equal to score.</p>
             <p>Best scores are tracked per exact configuration (duration + Allow Mistakes + Per Round/Per Question). Best score and best streak are tracked independently in Per Round — they can come from different rounds. When both came from the same round, a · Same Round tag appears on the right of the Best row. If you leave Blitz after a round ends without pressing Reset, the round state (bests, history, final date) is preserved when you return. Press Reset to clear your current round, unlock the settings, and start fresh. Changing settings while idle resets the current round.</p>
           </GuideSection>
-          <GuideSection id="flash" title="Flash" openId={open} onToggle={toggle}><p>The date is briefly revealed (0.1s–3.0s, default 0.5s, adjustable via the slider) then hidden. Answer from memory. Reset Stats clears your stats and question history.</p></GuideSection>
           <GuideSection id="lookup" title="Lookup" openId={open} onToggle={toggle}><p>Enter any AD date to instantly see its weekday. Lookup input is always numeric and follows your selected Date Format (m/d/y, d.m.y, or y-m-d). Lookup ignores Random Format and always uses the selected format directly. Changing the Date Format clears the input box. Supports years 1–10000. Show Codes is available for all results and stays open as you browse your history. The history panel shows up to 10 entries before scrolling and re-renders live when you change the Date Format. October 5–14, 1582 never existed and will appear in history as "Does Not Exist" with Show Codes unavailable.</p></GuideSection>
         </div>
       );
