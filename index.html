@@ -261,7 +261,7 @@
 
     function AoxMode({minY,maxY,visible,fmtDate,useJulian=false,genDate=randomDate,leapChance='random',forceJanFebOnLeap=false,randomFormat=false,dateFormat='written-mdy'}){
       const [aoxN,setAoxN]=useState("10");
-      const [mistakesOk,setMistakesOk]=useState(false);
+      const [allowMistakes,setAllowMistakes]=useState(false);
       const [oneByOne,setOneByOne]=useState(false);
       const [date,setDate]=useState(()=>genDate(minY,maxY));
       const [runPhase,setRunPhase]=useState("idle");
@@ -301,7 +301,7 @@
       const [questionCounted,setQuestionCounted]=useState(false);
       const correct=useMemo(()=>(useJulian&&isJulianDate(date.y,date.m,date.d))?wdayJulian(date.y,date.m,date.d):wday(date.y,date.m,date.d),[date,useJulian]);
       const n=Math.max(2,Math.min(1000,parseInt(aoxN)||10));
-      const bestKey=`${n}|${mistakesOk}`;
+      const bestKey=`${n}|${allowMistakes}`;
       const bestData=bestRef.current[bestKey]||{avg:null,avgMed:null,avgRoundId:null,med:null,medAvg:null,medRoundId:null};
       const aoLabel=`Ao${n}`;
       const doneCount=times.length;
@@ -368,7 +368,30 @@
       },[codesOpen,date.y,date.m,date.d]);
       function startOrContinue(){
         if(runPhase==="idle"){setRunPhase("running");setDisplayN(n);setShown(true);tStartRef.current=performance.now();}
-        else if(inBackMode){setInBackMode(false);setAoxForwardStack([]);const nd=genDate(minY,maxY);setDate(nd);setMsg("");setGuesses([]);resetAoxPB();setCodesOpen(false);wrongTimeRef.current=null;setCanOverrideCorrect(false);setQuestionCounted(false);setPendingWrongCredit(null);setOverrideUsedAox(false);if(oneByOne){setShown(false);tStartRef.current=null;}else{setShown(true);tStartRef.current=performance.now();}}
+        else if(inBackMode){
+          // Reconstruct history: push the displayed (back-browsed) entry and every
+          // non-live forward entry to aoxStack, in chronological order, so the run
+          // history isn't lost when continuing from back mode. The live forward entry
+          // (forwardStack[0], with isLive:true) is discarded because its slot is being
+          // regenerated.
+          const dispCapsule={snapshot:prevTimesSnapRef.current?[...prevTimesSnapRef.current]:null,streakSnap:prevStreakSnapRef.current?{...prevStreakSnapRef.current}:null,wrongTime:wrongTimeRef.current};
+          const dispEntry={...date,btns:{...aoxPersistBtns},overrideUsed:overrideUsedAox,capsule:dispCapsule,hasCredit:aoxBrowseHasCredit};
+          const insertions=[dispEntry];
+          for(let i=aoxForwardStack.length-1;i>=1;i--){
+            const e=aoxForwardStack[i];
+            const{isLive:_il,...rest}=e;
+            insertions.push(rest);
+          }
+          setAoxStack(s=>[...s,...insertions]);
+          setInBackMode(false);setAoxForwardStack([]);
+          const nd=genDate(minY,maxY);setDate(nd);
+          setMsg("");setGuesses([]);resetAoxPB();setCodesOpen(false);
+          wrongTimeRef.current=null;
+          setCanOverrideCorrect(false);setQuestionCounted(false);setPendingWrongCredit(null);
+          setOverrideUsedAox(false);
+          if(oneByOne){setShown(false);tStartRef.current=null;}
+          else{setShown(true);tStartRef.current=performance.now();}
+        }
         else if(isRunning&&!shown){setShown(true);setGuesses([]);setMsg("");tStartRef.current=performance.now();wrongTimeRef.current=null;setCanOverrideCorrect(false);setQuestionCounted(false);setPendingWrongCredit(null);}
       }
       function goBackAox(){if(backDisabled)return;const prevEntry=aoxStack[aoxStack.length-1];
@@ -395,7 +418,7 @@
         const capsule={snapshot:prevTimesSnapRef.current?[...prevTimesSnapRef.current]:null,streakSnap:prevStreakSnapRef.current?{...prevStreakSnapRef.current}:null,wrongTime:wrongTimeRef.current};
         setAoxStack(s=>[...s,{...date,btns:{...aoxPersistBtns},overrideUsed:overrideUsedAox,capsule,hasCredit:aoxBrowseHasCredit}]);
         if(fwd.isLive){
-          setDate({y:fwd.y,m:fwd.m,d:fwd.d});
+          setDate({y:fwd.y,m:fwd.m,d:fwd.d,_fmt:fwd._fmt,_jul:fwd._jul});
           setAoxPersistBtns(fwd.btns||{});setOverrideUsedAox(fwd.overrideUsed||false);
           setCanOverrideCorrect(!!fwd.capsule?.canOverrideCorrect);
           setQuestionCounted(!!fwd.capsule?.questionCounted);
@@ -405,7 +428,7 @@
           prevTimesSnapRef.current=fc.snapshot||null;prevStreakSnapRef.current=fc.streakSnap||null;wrongTimeRef.current=fc.wrongTime??null;
           setInBackMode(false);setAoxBrowseHasCredit(fwd.hasCredit??false);
         }else{
-          setDate({y:fwd.y,m:fwd.m,d:fwd.d});setAoxPersistBtns(fwd.btns||{});
+          setDate({y:fwd.y,m:fwd.m,d:fwd.d,_fmt:fwd._fmt,_jul:fwd._jul});setAoxPersistBtns(fwd.btns||{});
           setGuesses([]);setCodesOpen(false);setPendingWrongCredit(null);setQuestionCounted(false);
           const cap=fwd.capsule||{};
           prevTimesSnapRef.current=cap.snapshot||null;prevStreakSnapRef.current=cap.streakSnap||null;wrongTimeRef.current=cap.wrongTime??null;
@@ -477,14 +500,14 @@
         setStreak(0);setCanOverrideCorrect(false);
         prevTimesSnapRef.current=null;setPendingWrongCredit(null);
         markAoxWrong(idx);
-        if(!mistakesOk){markAoxCorrect(correct);setRunPhase("failed");}
+        if(!allowMistakes){markAoxCorrect(correct);setRunPhase("failed");}
         else setGuesses(g=>g.includes(DAY[idx])?g:[...g,DAY[idx]]);
       }
       function submitDoW(idx){if(!isRunning||isLocked||codesOpen||inBackMode)return;if(oneByOne&&!shown)return;if(idx===correct)handleCorrect(idx);else handleWrong(idx);}
-      function revealAnswer(){if(revealLocked)return;wrongTimeRef.current=(performance.now()-(tStartRef.current??performance.now()))/1000;markAoxCorrect(correct);setStreak(0);setCanOverrideCorrect(false);prevTimesSnapRef.current=null;prevStreakSnapRef.current=null;setPendingWrongCredit(null);if(!questionCounted)setAttempts(a=>a+1);setQuestionCounted(true);if(!mistakesOk)setRunPhase("failed");}
+      function revealAnswer(){if(revealLocked)return;wrongTimeRef.current=(performance.now()-(tStartRef.current??performance.now()))/1000;markAoxCorrect(correct);setStreak(0);setCanOverrideCorrect(false);prevTimesSnapRef.current=null;prevStreakSnapRef.current=null;setPendingWrongCredit(null);if(!questionCounted)setAttempts(a=>a+1);setQuestionCounted(true);if(!allowMistakes)setRunPhase("failed");}
       function openCodes(){
         if(inBackMode||runPhase==="done"){setCodesOpen(v=>!v);return;}if(codesDisabled)return;
-        if(!codesOpen){wrongTimeRef.current=(performance.now()-(tStartRef.current??performance.now()))/1000;setCanOverrideCorrect(false);prevTimesSnapRef.current=null;prevStreakSnapRef.current=null;setPendingWrongCredit(null);setStreak(0);if(!mistakesOk)setRunPhase("failed");if(!questionCounted)setAttempts(a=>a+1);setQuestionCounted(true);markAoxCorrect(correct);}
+        if(!codesOpen){wrongTimeRef.current=(performance.now()-(tStartRef.current??performance.now()))/1000;setCanOverrideCorrect(false);prevTimesSnapRef.current=null;prevStreakSnapRef.current=null;setPendingWrongCredit(null);setStreak(0);if(!allowMistakes)setRunPhase("failed");if(!questionCounted)setAttempts(a=>a+1);setQuestionCounted(true);markAoxCorrect(correct);}
         setCodesOpen(v=>!v);
       }
 
@@ -507,7 +530,7 @@
         }
         if(inBackMode)return;
         setOverrideUsedAox(true);
-        // Override after first-try correct: undo credit, reset streak, end run if !mistakesOk
+        // Override after first-try correct: undo credit, reset streak, end run if !allowMistakes
         if(canOverrideCorrect&&prevTimesSnapRef.current!=null){
           const prevTimes=prevTimesSnapRef.current;
           const wasLastQ=prevTimes.length>=displayN-1;
@@ -518,7 +541,7 @@
           prevTimesSnapRef.current=null;prevStreakSnapRef.current=null;setCanOverrideCorrect(false);setQuestionCounted(true);setPendingWrongCredit(null);
           setAoxStack(s=>s.slice(0,-1));
           setGuesses([]);setCodesOpen(false);wrongTimeRef.current=null;
-          if(!mistakesOk){setRunPhase("failed");}
+          if(!allowMistakes){setRunPhase("failed");}
           else if(wasLastQ){resetAoxPB();setRunPhase("running");setMsg("");setGuesses([]);setCodesOpen(false);setQuestionCounted(false);setOverrideUsedAox(false);setDate(genDate(minY,maxY));if(oneByOne){setShown(false);tStartRef.current=null;}else tStartRef.current=performance.now();}
           else{resetAoxPB();setRunPhase("running");setMsg("");tStartRef.current=performance.now();}
           return;
@@ -605,7 +628,7 @@
           </div>
           <div className="mt-3 flex items-center gap-2 flex-nowrap">
             <div className="flex items-center shrink-0"><span className={`text-sm leading-none text-purple-200/80${runPhase!=="idle"?" opacity-60":""}`}>Ao</span><input type="text" inputMode="numeric" readOnly={runPhase!=="idle"} value={aoxN} onChange={e=>{if(runPhase==="idle")setAoxN(e.target.value);}} onBlur={()=>setAoxN(String(Math.max(2,Math.min(1000,parseInt(aoxN)||10))))} className={`panel rounded-xl px-2 py-1 w-14 text-center tabular-nums text-sm focus:outline-none shrink-0${runPhase!=="idle"?" opacity-60 pointer-events-none":""}`}/></div>
-            <button type="button" onClick={()=>{if(runPhase==="idle")setMistakesOk(v=>!v);}} className={`flex-1 px-2 py-1 rounded-xl text-xs font-medium border ${mistakesOk?"btn-solid border-transparent":"surface-toggle text-purple-100/80"}${runPhase!=="idle"?" opacity-60 pointer-events-none":""}`}>Allow Mistakes</button>
+            <button type="button" onClick={()=>{if(runPhase==="idle")setAllowMistakes(v=>!v);}} className={`flex-1 px-2 py-1 rounded-xl text-xs font-medium border ${allowMistakes?"btn-solid border-transparent":"surface-toggle text-purple-100/80"}${runPhase!=="idle"?" opacity-60 pointer-events-none":""}`}>Allow Mistakes</button>
             <button type="button" onClick={()=>{if(runPhase==="idle")setOneByOne(v=>!v);}} className={`flex-1 px-2 py-1 rounded-xl text-xs font-medium border ${oneByOne?"btn-solid border-transparent":"surface-toggle text-purple-100/80"}${runPhase!=="idle"?" opacity-60 pointer-events-none":""}`}>One-By-One</button>
           </div>
           <div className="mt-4 rounded-2xl panel p-4">
@@ -919,7 +942,7 @@
         const capsule={snapshot:prevStatsSnapshotRef.current?{...prevStatsSnapshotRef.current}:null,wrongTime:wrongTimeRef.current};
         setStack(s=>[...s,{...date,btns:{...persistBtns},overrideUsed:overrideUsedThisQ,capsule,hasCredit:browseHasCredit}]);
         if(fwd.isLive){
-          setDate({y:fwd.y,m:fwd.m,d:fwd.d});const ls=fwd.liveState||{};
+          setDate({y:fwd.y,m:fwd.m,d:fwd.d,_fmt:fwd._fmt,_jul:fwd._jul});const ls=fwd.liveState||{};
           setPersistBtns(fwd.btns||{});setLocked(!!ls.locked);setRevealed(!!ls.revealed);
           setCountedWrong(!!ls.countedWrong);setCanOverrideCorrect(!!ls.canOverrideCorrect);
           setGuesses(ls.guesses||[]);setMsg(ls.msg||"");
@@ -929,7 +952,7 @@
           const fc=fwd.capsule||{};prevStatsSnapshotRef.current=fc.snapshot||null;wrongTimeRef.current=fc.wrongTime??null;
           setBrowseHasCredit(fwd.hasCredit??false);
         }else{
-          setDate({y:fwd.y,m:fwd.m,d:fwd.d});const fwdAnswered=fwd.btns&&Object.keys(fwd.btns).length>0;
+          setDate({y:fwd.y,m:fwd.m,d:fwd.d,_fmt:fwd._fmt,_jul:fwd._jul});const fwdAnswered=fwd.btns&&Object.keys(fwd.btns).length>0;
           const fwdRevealed=!!(fwd.btns&&Object.values(fwd.btns).includes('correct'));
           setPersistBtns(fwdAnswered?fwd.btns:{});
           setLocked(true);setRevealed(fwdRevealed);setGuesses([]);setMsg("");
@@ -1423,15 +1446,25 @@
         const anyChanged=dateFormatChanged||randomFormatChanged||leapChanceChanged||forceJanFebChanged||yearRangeChanged||julianChanged;
         if(!anyChanged)return;
         const anyAlwaysRegen=dateFormatChanged||randomFormatChanged||leapChanceChanged;
-        // Decide whether the current displayed date needs to regen given the rules.
-        const dateNeedsRegen=(dt,hasWrongGuess)=>{
-          if(!dt)return false;
-          if(anyAlwaysRegen)return true;
+        // regenDecisionFor inspects a candidate live date+wrong-status and returns one of:
+        //   'none'             — no regen (either no rule fired, or defer because a wrong
+        //                        guess was made and the change isn't the Julian carve-out)
+        //   'normal'           — regen with no special handling
+        //   'julianWithGreen'  — regen, and when pushing the previous live to history,
+        //                        synthesize a green entry for the day that was correct
+        //                        under the date's ORIGINAL Julian state, so the history
+        //                        entry shows both the user's red guess and the original
+        //                        green answer. Only fires when a Julian toggle would
+        //                        change the answer on a Julian-eligible wrong-guessed date.
+        const regenDecisionFor=(dt,hasWrong)=>{
+          if(!dt)return'none';
           const isLeapY=(useJulian&&isJulianDate(dt.y,dt.m,dt.d))?isLeapJulian(dt.y):isLeap(dt.y);
-          if(forceJanFebChanged&&forceJanFebOnLeap&&isLeapY&&dt.m!==1&&dt.m!==2)return true;
-          if(yearRangeChanged&&(dt.y<minY||dt.y>maxY))return true;
-          if(julianChanged&&isJulianDate(dt.y,dt.m,dt.d)&&hasWrongGuess)return true;
-          return false;
+          const aReason=anyAlwaysRegen;
+          const bReason=forceJanFebChanged&&forceJanFebOnLeap&&isLeapY&&dt.m!==1&&dt.m!==2;
+          const cReason=yearRangeChanged&&(dt.y<minY||dt.y>maxY);
+          const dReason=julianChanged&&isJulianDate(dt.y,dt.m,dt.d);
+          if(hasWrong)return dReason?'julianWithGreen':'none';
+          return(aReason||bReason||cReason)?'normal':'none';
         };
         // Helper: cleanup permanently-violating non-current-mode storage (always runs).
         const cleanseNonCurrent=(skipCurrentGm,skipCurrentDed)=>{
@@ -1469,43 +1502,106 @@
           if(ded&&isPermanentlyViolating({y:ded.y,m:ded.m,d:ded.d}))spawnDed();
           return;
         }
-        // Cat A: per-setting rules for current mode's displayed date.
-        let currentNeedsRegen=false;
-        if(mode==='classic'||mode==='flash'||mode==='blitz'){
-          currentNeedsRegen=dateNeedsRegen(dateByMode[mode],countedWrong);
-        }else if(mode==='deduction'){
-          currentNeedsRegen=ded?dateNeedsRegen({y:ded.y,m:ded.m,d:ded.d},countedWrong):false;
-        }
-        if(currentNeedsRegen){
-          if(mode==='flash'&&active){
-            // Flash mid-dash regen: tear down the dash + land at idle with the new date.
-            setActive(false);setShowTimerDate(false);
-            clearTimeout(flashTimerRef.current);flashTimerRef.current=null;
-            setFlashPhase("dash");flashDeadlineRef.current=null;
-            setFlashRemainMs(flashMs);resetFlashBar();
-            resetPB();setMsg("");setGuesses([]);setLocked(false);setRevealed(false);
-            setCountedWrong(false);setCanOverrideCorrect(false);setOverrideUsedThisQ(false);
-            setBackDepth(0);
-            setDateByMode(p=>({...p,flash:genDate(minY,maxY)}));
-            tStartRef.current=null;
-          }else if(mode==='deduction'){
-            spawnDed();
-            resetPB();setMsg("");setGuesses([]);setLocked(false);setRevealed(false);
-            setCountedWrong(false);setCanOverrideCorrect(false);setOverrideUsedThisQ(false);
-            setBackDepth(0);
-            tStartRef.current=performance.now();
+        // Cat A: regen logic for Classic, Flash, Deduction, Blitz pre-round.
+        // The "live" date is what gets regenerated. When back-browsing, the live date
+        // is the bottom-of-stack entry of the forward stack (with isLive:true); the
+        // currently-displayed date is a historical entry that survives via
+        // history-reconstruction. When not back-browsing, live == displayed.
+        const isBackBrowsing=backDepth>0;
+        const fwdStack=mode==='deduction'?dedForwardStack:forwardStack;
+        let liveDt=null,liveHasWrong=false,liveEntry=null,liveBtns={};
+        if(isBackBrowsing&&fwdStack[0]&&fwdStack[0].isLive){
+          liveEntry=fwdStack[0];
+          liveDt={y:liveEntry.y,m:liveEntry.m,d:liveEntry.d,_fmt:liveEntry._fmt,_jul:liveEntry._jul};
+          liveHasWrong=!!(liveEntry.liveState&&liveEntry.liveState.countedWrong);
+          liveBtns=liveEntry.btns||{};
+        }else if(!isBackBrowsing){
+          if(mode==='deduction'){
+            liveDt=ded?{y:ded.y,m:ded.m,d:ded.d,_fmt:ded._fmt,_jul:ded._jul}:null;
           }else{
-            // Classic, Flash idle, Blitz pre-round
-            setDateByMode(p=>({...p,[mode]:genDate(minY,maxY)}));
-            resetPB();setMsg("");setGuesses([]);setLocked(false);setRevealed(false);
-            setCountedWrong(false);setCanOverrideCorrect(false);setOverrideUsedThisQ(false);
-            setBackDepth(0);
-            tStartRef.current=performance.now();
+            liveDt=dateByMode[mode]||null;
+          }
+          liveHasWrong=countedWrong;
+          liveBtns=persistBtns;
+        }
+        const decision=regenDecisionFor(liveDt,liveHasWrong);
+        if(decision==='none'){
+          // Defer (or genuinely no-op): keep the current state untouched. Skip current
+          // mode in the cleanse so a deferred wrong-state isn't silently overwritten.
+          cleanseNonCurrent(mode,mode==='deduction');
+          return;
+        }
+        // Build history insertions: when back-browsing, push the displayed entry plus
+        // every non-live forward entry (in correct chronological order). When the
+        // decision is julianWithGreen, also push the live entry with a synthesized
+        // green for the original-Julian correct answer — preserving both red and green
+        // in history. The live forward entry itself is otherwise discarded (its slot
+        // is being regenerated).
+        const insertions=[];
+        if(isBackBrowsing){
+          const dispCapsule={snapshot:prevStatsSnapshotRef.current?{...prevStatsSnapshotRef.current}:null,wrongTime:wrongTimeRef.current};
+          if(mode==='deduction'){
+            insertions.push({...(ded||{}),btns:{...persistBtns},overrideUsed:overrideUsedThisQ,capsule:dispCapsule,hasCredit:browseHasCredit});
+          }else{
+            insertions.push({...date,btns:{...persistBtns},overrideUsed:overrideUsedThisQ,capsule:dispCapsule,hasCredit:browseHasCredit});
+          }
+          for(let i=fwdStack.length-1;i>=1;i--){
+            const e=fwdStack[i];
+            const{isLive:_il,liveState:_ls,...rest}=e;
+            insertions.push(rest);
           }
         }
-        // Always cleanse permanently-violating stored dates in non-current modes.
-        const skipGm=(mode==='classic'||mode==='flash'||mode==='blitz')&&currentNeedsRegen?mode:null;
-        cleanseNonCurrent(skipGm,mode==='deduction'&&currentNeedsRegen);
+        if(decision==='julianWithGreen'&&liveDt){
+          // Use the date's original Julian snapshot to compute the correct day at the
+          // time it was first generated; fall back to prev.useJulian if the snapshot
+          // is missing (older state from before _jul tracking).
+          const origJul=(liveDt._jul!=null?liveDt._jul:prev.useJulian)&&isJulianDate(liveDt.y,liveDt.m,liveDt.d);
+          const correctIdx=origJul?wdayJulian(liveDt.y,liveDt.m,liveDt.d):wday(liveDt.y,liveDt.m,liveDt.d);
+          const synthBtns={...liveBtns,[correctIdx]:'correct'};
+          const cap=isBackBrowsing
+            ?(liveEntry.capsule||{snapshot:null,wrongTime:null})
+            :{snapshot:prevStatsSnapshotRef.current?{...prevStatsSnapshotRef.current}:null,wrongTime:wrongTimeRef.current};
+          insertions.push({
+            y:liveDt.y,m:liveDt.m,d:liveDt.d,_fmt:liveDt._fmt,_jul:liveDt._jul,
+            btns:synthBtns,
+            overrideUsed:isBackBrowsing?(liveEntry.overrideUsed||false):overrideUsedThisQ,
+            capsule:cap,
+            hasCredit:false,
+          });
+        }
+        // Apply stack/forward changes
+        if(mode==='deduction'){
+          if(insertions.length>0)setDedStack(s=>[...s,...insertions]);
+          setDedForwardStack([]);
+        }else{
+          if(insertions.length>0)setStack(s=>[...s,...insertions]);
+          setForwardStack([]);
+        }
+        // Full per-question state reset (matches "New" semantics)
+        resetPB();setMsg("");setGuesses([]);setLocked(false);setRevealed(false);
+        setCountedWrong(false);setCanOverrideCorrect(false);setOverrideUsedThisQ(false);
+        setPendingWrongOverride(null);setCalcPenalty(false);setCalcOpen(false);
+        setBackDepth(0);
+        prevStatsSnapshotRef.current=null;
+        preCalcPenaltySnapshotRef.current=null;
+        wrongTimeRef.current=null;
+        // Branch-specific: generate fresh date / spawn ded / Flash mid-dash teardown.
+        if(mode==='flash'&&active){
+          setActive(false);setShowTimerDate(false);
+          clearTimeout(flashTimerRef.current);flashTimerRef.current=null;
+          setFlashPhase("dash");flashDeadlineRef.current=null;
+          setFlashRemainMs(flashMs);resetFlashBar();
+          setDateByMode(p=>({...p,flash:genDate(minY,maxY)}));
+          tStartRef.current=null;
+        }else if(mode==='deduction'){
+          spawnDed();
+          tStartRef.current=performance.now();
+        }else{
+          // Classic, Flash idle, Blitz pre-round
+          setDateByMode(p=>({...p,[mode]:genDate(minY,maxY)}));
+          tStartRef.current=performance.now();
+        }
+        cleanseNonCurrent(mode,mode==='deduction');
       },[randomFormat,dateFormat,useJulian,minY,maxY,leapChance,forceJanFebOnLeap]);
       const [settingsOpen,setSettingsOpen]=useState(false);
       const settingsRef=useRef(null);
@@ -1691,7 +1787,7 @@
           <GuideSection id="buttons" title="Buttons" openId={open} onToggle={toggle}>
             <p><b>New</b> — load a fresh date. In timer modes, only available after pressing Begin.</p>
             <p><b>Back (&lt;)</b> — return to the previous date. The answer is shown and the card is locked. No stat penalty. You can go back through your entire history in Classic, Flash, and Deduction; in Blitz and AoX, you can browse the current round or run.</p>
-            <p><b>Forward (&gt;)</b> — move forward through dates you've browsed past with Back. The forward history clears whenever you answer a new question, press New/Begin/Reset, or take any action that advances the date. Overriding while browsing back does not clear the forward history.</p>
+            <p><b>Forward (&gt;)</b> — move forward through dates you've browsed past with Back. The forward history clears whenever you answer a new question, press New/Begin/Reset, or take any action that advances the date. Overriding while browsing back does not clear the forward history. Each entry remembers its date format and calendar system, so a back-then-forward round trip never alters how a date was originally shown.</p>
             <p><b>Reveal</b> — show the correct answer without guessing. Counts as a wrong attempt. No penalty on unanswered dates while browsing back.</p>
             <p><b>Override</b> — fix a mistake. You can override any date in your history by browsing to it with Back/Forward. After a wrong answer: gives you credit and adjusts your score. After a correct answer: undoes the credit and adjusts your score. You can only override once per question. Overriding a wrong answer while browsing back clears any wrong highlights; only the correct answer is shown. In Blitz, you can override past dates after the round ends to adjust your score and saved bests. In AoX without Allow Mistakes, overriding a correct answer ends the run.</p>
             <p><b>Show Codes</b> — reveals the calculation codes for the current date. Counts as wrong if you haven't already answered incorrectly. No penalty on unanswered dates while browsing back. In AoX without Allow Mistakes, opening Show Codes ends the run.</p>
@@ -1703,11 +1799,11 @@
             <p><b>Last / Avg / Med</b> — timing stats, calculated using correct answers only. Last is your most recent correct time; Avg is the average across all correct answers; Med is the median, which is less skewed by outliers. Any time of 60 seconds or more — whether an individual solve, a computed average or median, or any Best — displays as "—". Times are still tracked internally and contribute to averages, medians, and best-tracking; only the display is capped.</p>
             <p className="text-purple-300/70 text-[12px]">In modes designed for casual practice (Classic, Deduction, Flash), you can tap any stat to hide it. Tapping Score, Accuracy, or Streak hides all three; tapping any timing stat hides all three. Stats always track in the background regardless of visibility. Enabling timing stats resets all stats so the score and timing always reflect the same set of questions. When timing stats are off, leaving and returning to a mode preserves the current question exactly as you left it — same date, same answers, codes panel in the same state. In all other modes, stats are always visible.</p>
           </GuideSection>
-          <GuideSection id="range" title="Year Range" openId={open} onToggle={toggle}><p>Set via the ⚙ settings menu. Controls which years dates are drawn from. Defaults to 1–10000 AD. Changing the range regenerates the current date only if it falls outside the new range. In active Blitz rounds and AoX runs, any range change ends the round.</p></GuideSection>
-          <GuideSection id="leap" title="Leap Year Settings" openId={open} onToggle={toggle}><p>Two settings in the ⚙ menu control how often leap years appear and what months they're paired with. <b>Leap Year Chance</b> sets how often a generated date lands on a leap year — Random uses the natural rate (~24%); 50%, 75%, and 100% force higher rates. <b>Force Jan/Feb on Leap Years</b>, when on, restricts the month to January or February whenever a leap year is generated. These settings apply to all game modes' date generation; Lookup is unaffected. If your year range happens to contain no leap years and the chance is set to 50/75/100%, the chance is silently ignored per date — the setting itself is preserved. Changing <b>Leap Year Chance</b> always regenerates the displayed date. Toggling <b>Force Jan/Feb on Leap Years</b> regenerates only if the current date is a leap year with a month other than January or February. In active Blitz rounds and AoX runs, any leap setting change ends the round.</p></GuideSection>
+          <GuideSection id="range" title="Year Range" openId={open} onToggle={toggle}><p>Set via the ⚙ settings menu. Controls which years dates are drawn from. Defaults to 1–10000 AD. Changing the range regenerates the current date only if it falls outside the new range — and even then, if you've already made a wrong guess on the current date, the change is deferred so the wrong-state is preserved; the new range applies to the next date. While browsing back, settings-driven regen always preserves your history: the date you were viewing and any forward entries are pushed back to history before the live slot is regenerated. In active Blitz rounds and AoX runs, any range change ends the round.</p></GuideSection>
+          <GuideSection id="leap" title="Leap Year Settings" openId={open} onToggle={toggle}><p>Two settings in the ⚙ menu control how often leap years appear and what months they're paired with. <b>Leap Year Chance</b> sets how often a generated date lands on a leap year — Random uses the natural rate (~24%); 50%, 75%, and 100% force higher rates. <b>Force Jan/Feb on Leap Years</b>, when on, restricts the month to January or February whenever a leap year is generated. These settings apply to all game modes' date generation; Lookup is unaffected. If your year range happens to contain no leap years and the chance is set to 50/75/100%, the chance is silently ignored per date — the setting itself is preserved. Changing <b>Leap Year Chance</b> always regenerates the displayed date. Toggling <b>Force Jan/Feb on Leap Years</b> regenerates only if the current date is a leap year with a month other than January or February. If you've already made a wrong guess on the current date, either change is deferred so the wrong-state is preserved; the new setting applies to the next date. In active Blitz rounds and AoX runs, any leap setting change ends the round.</p></GuideSection>
           <GuideSection id="theme" title="Theme" openId={open} onToggle={toggle}><p>Five themes: Dusk (default dark navy), Midnight (true black with purple), Nebula (deep purple), Light (clean white), and Parchment (warm cream). Accessible from the ⚙ settings menu in any tab. Enable Use System Settings to match your device's light/dark mode automatically, with separate theme choices for each. Disable to pick one manually.</p></GuideSection>
-          <GuideSection id="dateformat" title="Date Format" openId={open} onToggle={toggle}><p>Set via the ⚙ settings menu. Choose one of five real-world formats: <b>Written MDY</b> (April 27, 1828), <b>Written DMY</b> (27 April 1828), <b>Numeric MDY</b> (4/27/1828), <b>Numeric DMY</b> (27.4.1828), or <b>Numeric YMD</b> (1828-4-27). Numeric formats use a fixed separator convention: MDY uses '/', DMY uses '.', YMD uses '-'. Years always show in full, never abbreviated.</p><p>Only DMY, MDY, and YMD orderings are offered because those are the only orderings actually used in real life — orderings like YDM aren't standard anywhere.</p><p><b>Random Format</b>, when on, rolls one of the five formats per date in game modes only — your selected format is preserved underneath (the panels just lock visually). Lookup and the Last Updated timestamp ignore Random and always use the selected format. The Last Updated timestamp uses the numeric version of whichever format you've selected. In Classic, Deduction, and Flash, changing the format or toggling Random Format regenerates the displayed date. In active Blitz rounds and AoX runs, either change ends the round.</p></GuideSection>
-          <GuideSection id="julian" title="Julian Calendar" openId={open} onToggle={toggle}><p>Toggle via the ⚙ settings menu under Calendar System. Off by default. When on, dates on or before October 4, 1582 are treated as Julian calendar dates, which have different leap year rules — every year divisible by 4 is a leap year, with no century exception. This affects weekday calculation and the codes shown in Show Codes. October 5–14, 1582 are always excluded since those dates never existed; the Gregorian calendar skipped them to correct accumulated calendar drift.</p><p>Toggling Julian doesn't necessarily regenerate the current date. For dates after October 4, 1582, Julian has no effect. For Julian-eligible dates (October 4, 1582 or earlier), the date stays if you haven't made a wrong guess yet — the answer and codes simply update. If you've already wrong-guessed, the date regenerates. Each date snapshots its calendar system at generation, so revisiting an earlier question via Back shows the codes that were correct under the system in effect when that date was generated. In active Blitz rounds and AoX runs, any Julian toggle ends the round.</p></GuideSection>
+          <GuideSection id="dateformat" title="Date Format" openId={open} onToggle={toggle}><p>Set via the ⚙ settings menu. Choose one of five real-world formats: <b>Written MDY</b> (April 27, 1828), <b>Written DMY</b> (27 April 1828), <b>Numeric MDY</b> (4/27/1828), <b>Numeric DMY</b> (27.4.1828), or <b>Numeric YMD</b> (1828-4-27). Numeric formats use a fixed separator convention: MDY uses '/', DMY uses '.', YMD uses '-'. Years always show in full, never abbreviated.</p><p>Only DMY, MDY, and YMD orderings are offered because those are the only orderings actually used in real life — orderings like YDM aren't standard anywhere.</p><p><b>Random Format</b>, when on, rolls one of the five formats per date in game modes only — your selected format is preserved underneath (the panels just lock visually). Lookup and the Last Updated timestamp ignore Random and always use the selected format. The Last Updated timestamp uses the numeric version of whichever format you've selected. In Classic, Deduction, and Flash, changing the format or toggling Random Format regenerates the displayed date — unless you've already made a wrong guess, in which case the change is deferred so the wrong-state is preserved; the new format applies to the next date. In active Blitz rounds and AoX runs, either change ends the round.</p></GuideSection>
+          <GuideSection id="julian" title="Julian Calendar" openId={open} onToggle={toggle}><p>Toggle via the ⚙ settings menu under Calendar System. Off by default. When on, dates on or before October 4, 1582 are treated as Julian calendar dates, which have different leap year rules — every year divisible by 4 is a leap year, with no century exception. This affects weekday calculation and the codes shown in Show Codes. October 5–14, 1582 are always excluded since those dates never existed; the Gregorian calendar skipped them to correct accumulated calendar drift.</p><p>Toggling Julian doesn't necessarily regenerate the current date. For dates after October 4, 1582, Julian has no effect. For Julian-eligible dates (October 4, 1582 or earlier), the date stays if you haven't made a wrong guess yet — the answer and codes simply update. If you've already wrong-guessed, the date regenerates and is added to your history with both your red guess and a green for the day that was correct under the calendar system in effect when the date was first generated. Each date snapshots its calendar system at generation, so revisiting an earlier question via Back shows the highlights and codes that were correct under the system in effect when that date was generated. In active Blitz rounds and AoX runs, any Julian toggle ends the round.</p></GuideSection>
           <Divider label="Modes"/>
           <GuideSection id="classic" title="Classic" openId={open} onToggle={toggle}><p>The main practice mode with no time pressure. Answer at your own pace. Override works after both wrong and correct answers. Reset Stats clears your stats and question history.</p></GuideSection>
           <GuideSection id="aox" title="AoX" openId={open} onToggle={toggle}>
@@ -1715,7 +1811,7 @@
             <p><b>Allow Mistakes</b> — wrong answers don't end the run but don't count toward your score.</p>
             <p><b>One-By-One</b> — hides the date between solves. Press Continue to reveal each new date.</p>
             <p><b>Last / Avg / Med</b> — tap any of these to show or hide all three time stats.</p>
-            <p><b>Back/Forward</b> — browse previous dates from the current run without affecting it. Press Continue to resume. After a run completes, Back and Forward let you browse all dates from that run; press Reset to start fresh.</p>
+            <p><b>Back/Forward</b> — browse previous dates from the current run without affecting it. Press Continue to resume; the date you were viewing and any forward entries are pushed back to your run history before a fresh date is generated, so nothing is lost. After a run completes, Back and Forward let you browse all dates from that run; press Reset to start fresh.</p>
             <p><b>Override</b> — after wrong: gives credit with time recorded, preserves streak. After correct: undoes the credit, resets streak, and either ends the run (Allow Mistakes off) or advances to a new date (Allow Mistakes on). You can also override past dates while browsing back with Back/Forward. If overriding on the last question with Allow Mistakes on, a new date is generated to complete the average. One override per question.</p>
             <p>Stats in AoX are always visible and always track. Best average and best median are tracked independently per n and Allow Mistakes combination — they can come from different runs. Beneath each best, the companion metric from the run that set it is also shown (e.g. the median from the run that set your best average). When both bests come from the same run, a · Same Round tag appears on the right. If you override a correct answer that set a new best, the best is also restored. The score display freezes when a run ends and only resets after pressing Reset.</p>
           </GuideSection>
