@@ -128,15 +128,16 @@
       }
     };
     // Partial-date display for Deduction. `missing` is one of 'day' | 'month'
-    // | 'year' and substitutes a fixed-width underscore placeholder for that
-    // piece while honoring the active formatId for the rest. Placeholder
-    // widths: day __, month name (Written) ____, month number (Numeric) __,
-    // year ____.
+    // | 'year' and substitutes a fixed-width 2-underscore placeholder for that
+    // piece while honoring the active formatId for the rest. The placeholder
+    // is uniform across all pieces and formats — the sub-mode label already
+    // tells the user what's missing, so a short uniform marker reads fastest.
     const fmtPartial=(y,m,d,formatId,missing)=>{
-      const dPart=missing==='day'?'__':String(d);
-      const mNamePart=missing==='month'?'____':MONTH[m-1];
-      const mNumPart=missing==='month'?'__':String(m);
-      const yPart=missing==='year'?'____':fmtYear(y);
+      const PH='__';
+      const dPart=missing==='day'?PH:String(d);
+      const mNamePart=missing==='month'?PH:MONTH[m-1];
+      const mNumPart=missing==='month'?PH:String(m);
+      const yPart=missing==='year'?PH:fmtYear(y);
       switch(formatId){
         case'written-dmy':return`${dPart} ${mNamePart} ${yPart}`;
         case'numeric-mdy':return`${mNumPart}/${dPart}/${yPart}`;
@@ -305,7 +306,7 @@
 
 
 
-    const DEPLOY_TS=new Date('2026-04-30T23:07:00Z');
+    const DEPLOY_TS=new Date('2026-05-01T19:28:00Z');
 
     function StatPanel({stats}){
       // For fractional values (Score, Streak as "X/Y"), shrink the value font
@@ -705,8 +706,7 @@
           <div className="mt-4 rounded-2xl panel p-4">
             <div className="text-center relative">
               {(inBackMode||runPhase==="done"||runPhase==="failed")&&<span className="absolute right-0 top-0 text-[11px] tabular-nums text-purple-300/60">Q{aoxStack.length+1}</span>}
-              <div className="text-xs uppercase tracking-widest text-purple-100/80">What Day Is This?</div>
-              <div className="mt-1 text-3xl font-bold">{dateVisible?fmtDate(date.y,date.m,date.d,date._fmt):"—"}</div>
+              <div className="text-3xl font-bold">{dateVisible?fmtDate(date.y,date.m,date.d,date._fmt):"—"}</div>
             </div>
             <div className="mt-4 grid grid-cols-2 gap-3">
               {DAY.map((nm,i)=>{const last=i===DAY.length-1?"col-span-2":"";const ps=aoxPersistBtns[i];let bCls;if(ps==='correct')bCls='btn-correct-persist border-transparent';else if(ps==='wrong-latest')bCls='btn-wrong-persist border-transparent';else if(ps==='wrong-prev')bCls='btn-wrong-dim border-transparent';else if(flash&&flash.idx===i)bCls=(flash.type==="good"?"flash-good":"flash-bad")+' border-transparent';else bCls='surface-button';const perLocked=!!ps;const isFlashing=!!(flash&&flash.idx===i);const shouldDim=optionsDisabled&&!ps&&!isFlashing;return(<button key={nm} type="button" onClick={()=>{if(perLocked)return;submitDoW(i);}} className={`${baseBtn} ${bCls} ${(perLocked||optionsDisabled)?"pointer-events-none":""} ${shouldDim?"opacity-60":""} ${last}`}>{nm}</button>);})}
@@ -926,6 +926,16 @@
           else{setPendingWrongOverride(null);}
           setCountedWrong(false);
           wrongTimeRef.current=null;
+          // Per-Q state must not leak past advance. The snapshot was already
+          // captured into the stack entry's capsule above (line 920); the live
+          // refs and canOverrideCorrect must be reset so the next question
+          // doesn't see stale Override-eligible state. Without this, a Q1
+          // wrong-then-right-then-Q2-Override sequence enters Override Block 1
+          // ("undo a correct answer") using Q1's stale snapshot, rewriting Q2
+          // stats based on Q1 — visible as "score stays 1/1 after next correct."
+          prevStatsSnapshotRef.current=null;
+          preCalcPenaltySnapshotRef.current=null;
+          setCanOverrideCorrect(false);
           saveStatsThisQRef.current=null;
           if(isTimer(mode)&&active)tStartRef.current=performance.now();else if(mode==="classic")tStartRef.current=performance.now();
         }
@@ -1430,7 +1440,7 @@
       const calcTargetKey=calcTarget?`${calcTarget.y}-${calcTarget.m}-${calcTarget.d}`:"none";
       const lookupCalcTargetKey=lookupCalcDate?`${lookupCalcDate.y}-${lookupCalcDate.m}-${lookupCalcDate.d}`:"none";
       useEffect(()=>{const pm=prevModeRef.current;if(pm!==mode){prevModeRef.current=mode;return;}setCalcOpen(false);prevModeRef.current=mode;},[calcTargetKey,mode]);
-      const handleResetStats=()=>{resetStatsCurrent();if(mode==='blitz'){setBlitzBest({});setSuddenBest({});setBlitzBestNew({});setSuddenBestNew({});}setStack([]);setForwardStack([]);setDedStack([]);setDedForwardStack([]);setBackDepth(0);resetPB();setGuesses([]);setMsg("");setLocked(false);setRevealed(false);setCountedWrong(false);setCanOverrideCorrect(false);setPendingWrongOverride(null);setOverrideUsedThisQ(false);setCalcPenalty(false);setCalcOpen(false);wrongTimeRef.current=null;prevStatsSnapshotRef.current=null;preCalcPenaltySnapshotRef.current=null;saveStatsThisQRef.current=null;if(!avgVisOff){setDate(genDate(minY,maxY));if(mode==="deduction")spawnDed();}tStartRef.current=performance.now();};
+      const handleResetStats=()=>{resetStatsCurrent();if(mode==='blitz'){setBlitzBest({});setSuddenBest({});setBlitzBestNew({});setSuddenBestNew({});}setStack([]);setForwardStack([]);setDedStack([]);setDedForwardStack([]);setBackDepth(0);resetPB();setGuesses([]);setMsg("");setLocked(false);setRevealed(false);setCountedWrong(false);setCanOverrideCorrect(false);setPendingWrongOverride(null);setOverrideUsedThisQ(false);setCalcPenalty(false);setCalcOpen(false);wrongTimeRef.current=null;prevStatsSnapshotRef.current=null;preCalcPenaltySnapshotRef.current=null;saveStatsThisQRef.current=null;if(!avgVisOff||backDepth>0){setDate(genDate(minY,maxY));if(mode==="deduction")spawnDed();}tStartRef.current=performance.now();};
       const togglePerQBtn=()=>{if(active||timerDone)return;const newPerQ=!perQ;if(newPerQ&&allowMistakes)setAllowMistakes(false);setPerQ(newPerQ);};
       const toggleAllowMistakesBtn=()=>{if(active||timerDone)return;const newAM=!allowMistakes;if(newAM&&perQ)setPerQ(false);setAllowMistakes(newAM);};
       const canHideStats=["classic","deduction","flash"].includes(mode);
@@ -1491,7 +1501,7 @@
       // Date format: one of 'written-mdy'|'written-dmy'|'numeric-mdy'|'numeric-dmy'|'numeric-ymd'.
       // randomFormat overrides the selected format for game-mode dates only (Lookup + DEPLOY_TS ignore it).
       const [dateFormat,setDateFormat]=useState('written-mdy');
-      const [randomFormat,setRandomFormat]=useState(false);
+      const [randomFormat,setRandomFormat]=useState(true);
       // Leap-year date generation settings (apply to all game modes; Lookup unaffected).
       const [leapChance,setLeapChance]=useState('random');
       const [forceJanFebOnLeap,setForceJanFebOnLeap]=useState(false);
@@ -1839,8 +1849,7 @@
               <div className="mt-4 rounded-2xl panel p-4">
                 <div className="text-center relative">
                   {backDepth>0&&<span className="absolute right-0 top-0 text-[11px] tabular-nums text-purple-300/60">Q{stack.length+1}</span>}
-                  <div className="text-xs uppercase tracking-widest text-purple-100/80">What Day Is This?</div>
-                  <div className="mt-1 text-3xl font-bold">{shouldShowTimerDate?((mode==="flash"&&active&&flashPhase==="hide")?"…":fmtDate(date.y,date.m,date.d,date._fmt)):"—"}</div>
+                  <div className="text-3xl font-bold">{shouldShowTimerDate?((mode==="flash"&&active&&flashPhase==="hide")?"…":fmtDate(date.y,date.m,date.d,date._fmt)):"—"}</div>
                 </div>
                 <div className="mt-4 grid grid-cols-2 gap-3">
                   {DAY.map((n,i)=>{const last=i===DAY.length-1?"col-span-2":"";const ps=persistBtns[i];let bCls;if(ps==='correct')bCls='btn-correct-persist border-transparent';else if(ps==='wrong-latest')bCls='btn-wrong-persist border-transparent';else if(ps==='wrong-prev')bCls='btn-wrong-dim border-transparent';else if(flash&&flash.idx===i)bCls=(flash.type==="good"?"flash-good":"flash-bad")+' border-transparent';else bCls=idleBtn;const perLocked=!!ps;const isFlashing=!!(flash&&flash.idx===i);const shouldDim=optionsDisabled&&!ps&&!isFlashing;return(<button key={n} type="button" onClick={()=>{if(perLocked)return;submitDoW(i);if(isTouch)document.activeElement?.blur();}} className={`${baseBtn} ${bCls} ${(perLocked||optionsDisabled)?"pointer-events-none":""} ${shouldDim?"opacity-60":""} ${last}`}>{n}</button>);})}
@@ -1868,8 +1877,7 @@
               <div className="mt-4 rounded-2xl panel p-4">
                 <div className="text-center relative">
                   {backDepth>0&&<span className="absolute right-0 top-0 text-[11px] tabular-nums text-purple-300/60">Q{dedStack.length+1}</span>}
-                  <div className="text-xs uppercase tracking-widest text-purple-100/80">{dedType==="year"?"What Year Is This?":dedType==="month"?"What Month Is This?":"What Day Is This?"}</div>
-                  <div className="mt-1 text-3xl font-bold">{ded?fmtDatePartial(ded.y,ded.m,ded.d,ded._fmt,ded.type):"—"}</div>
+                  <div className="text-3xl font-bold">{ded?fmtDatePartial(ded.y,ded.m,ded.d,ded._fmt,ded.type):"—"}</div>
                   {ded&&<div className="mt-1 text-lg text-purple-100">Weekday: <span className="font-semibold">{DAY[ded.w]}</span></div>}
                 </div>
                 <div className="mt-4">
