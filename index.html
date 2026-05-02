@@ -343,7 +343,7 @@
 
 
 
-    const DEPLOY_TS=new Date('2026-05-02T07:09:00Z');
+    const DEPLOY_TS=new Date('2026-05-02T07:25:00Z');
 
     function StatPanel({stats}){
       // For fractional values (Score, Streak as "X/Y"), shrink the value font
@@ -2337,14 +2337,17 @@
             <div className="mt-5">
               {/* 3-zone grid keeps Day/Month/Year buttons fixed in the center regardless of which
                   toggles are active. Side zones (1fr each) flex to fill remaining space; toggles
-                  hug the center via justify-end (left zone) and justify-start (right zone).
+                  push to the OUTER edges via justify-start (left zone) and justify-end (right zone),
+                  leaving visible space between each toggle and the centered Day/Month/Year cluster.
                   Toggle styling matches Blitz/AoX Allow Mistakes / One-By-One / Per Round buttons
                   exactly (px-2 py-1 rounded-xl text-xs font-medium border) — minus flex-1, since
                   these buttons size to content + min-width rather than stretching to fill.
                   ab Cross and Jul Cross share min-w-[5rem] so they always have matched width
-                  regardless of which has the longer label; 1582 Only sizes naturally to its text. */}
+                  regardless of which has the longer label; 1582 Only sizes naturally to its text.
+                  Day/Month/Year also share min-w-[5rem] so all three are the same width as each
+                  other (sized to "Month" the widest of the three). */}
               <div className="grid grid-cols-[1fr_auto_1fr] gap-2 items-center">
-                <div className="flex justify-end">
+                <div className="flex justify-start">
                   {dedType==="year"&&(()=>{
                     // ab Cross disabled when year range doesn't span any 100-year boundary
                     const abPossible=Math.floor(Math.max(1,minY)/100)!==Math.floor(maxY/100);
@@ -2358,10 +2361,10 @@
                     // Year sub-type button auto-disables when range can't support a buildable
                     // puzzle (yearSubPossible). Day and Month always available.
                     const disabled=t==="year"&&!yearSubPossible;
-                    return(<button key={t} type="button" onClick={()=>{if(disabled)return;changeDedType(t);}} className={`px-3 py-1.5 rounded-xl text-sm font-medium border ${dedType===t?"btn-solid border-transparent text-white":"surface-toggle border-purple-800/60 text-purple-100/80"}${disabled?" opacity-60 pointer-events-none":""}`}>{t[0].toUpperCase()+t.slice(1)}</button>);
+                    return(<button key={t} type="button" onClick={()=>{if(disabled)return;changeDedType(t);}} className={`px-3 py-1.5 rounded-xl text-sm font-medium border min-w-[5rem] ${dedType===t?"btn-solid border-transparent text-white":"surface-toggle border-purple-800/60 text-purple-100/80"}${disabled?" opacity-60 pointer-events-none":""}`}>{t[0].toUpperCase()+t.slice(1)}</button>);
                   })}
                 </div>
-                <div className="flex justify-start">
+                <div className="flex justify-end">
                   {dedType==="year"&&(()=>{
                     // Jul Cross disabled when useJulian off, or range doesn't contain at least one
                     // boundary pair ({1582, 1583} for Jan-Sep + Oct1-4, OR {1581, 1582} for Oct15+
