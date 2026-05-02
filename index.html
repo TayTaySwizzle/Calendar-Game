@@ -343,7 +343,7 @@
 
 
 
-    const DEPLOY_TS=new Date('2026-05-02T06:18:00Z');
+    const DEPLOY_TS=new Date('2026-05-02T07:09:00Z');
 
     function StatPanel({stats}){
       // For fractional values (Score, Streak as "X/Y"), shrink the value font
@@ -920,11 +920,22 @@
       // when runLookup() fires a new result or the user manually closes it.
       const pendingDedSwitchRef=useRef(null);
       const prevModeRef=useRef(mode);const prevModeForSwitchRef=useRef(mode);const timerDoneSnapRef=useRef(null);const preservedByModeRef=useRef({});const stacksByModeRef=useRef({});
-      useEffect(()=>{const el=document.documentElement;if(mode==='guide'){el.style.overflow='auto';document.body.style.overflow='auto';}else{el.style.overflow='hidden';document.body.style.overflow='hidden';}return()=>{el.style.overflow='';document.body.style.overflow='';};},[mode]);
-      // iOS Safari BFCache: when the user backgrounds the tab and reopens it, the page can be
-      // restored to a non-zero scroll position that gets stuck because of overflow:hidden.
-      // Force scroll back to top on initial mount and on every pageshow (including BFCache restores).
-      useEffect(()=>{const onPageShow=()=>{window.scrollTo(0,0);};window.scrollTo(0,0);window.addEventListener('pageshow',onPageShow);return()=>window.removeEventListener('pageshow',onPageShow);},[]);
+      // Mode-based scroll-lock. For game modes (everything except 'guide'), the body is locked
+      // to the viewport via `position: fixed; inset: 0` plus `overflow: hidden`. This is the
+      // standard scroll-lock pattern — modal libraries use the same trick. Why not just
+      // `overflow: hidden`? On iOS Safari, when you close the app and reopen it, the BFCache
+      // restore can preserve a non-zero document scroll position. `overflow: hidden` alone
+      // prevents NEW scrolling but does NOT reset an existing scroll, so the page renders
+      // shifted up. `position: fixed` anchors the body to the viewport top regardless of any
+      // latent scroll position, fixing the BFCache issue across all browsers (works on Android,
+      // older iOS, etc. — universal CSS, no Safari-specific tricks).
+      // 'guide' mode allows scrolling because the HtP content is long.
+      useEffect(()=>{const el=document.documentElement;const body=document.body;if(mode==='guide'){el.style.overflow='auto';body.style.overflow='auto';body.style.position='';body.style.top='';body.style.left='';body.style.right='';body.style.bottom='';}else{el.style.overflow='hidden';body.style.overflow='hidden';body.style.position='fixed';body.style.top='0';body.style.left='0';body.style.right='0';body.style.bottom='0';window.scrollTo(0,0);}return()=>{el.style.overflow='';body.style.overflow='';body.style.position='';body.style.top='';body.style.left='';body.style.right='';body.style.bottom='';};},[mode]);
+      // BFCache scroll reset (defense-in-depth alongside position:fixed body).
+      // Multiple events + deferred resets cover edge cases where pageshow alone isn't reliable
+      // on iOS Safari. visibilitychange catches tab-foreground transitions; rAF + setTimeout
+      // catch late scroll restorations that happen after the initial event fires.
+      useEffect(()=>{const reset=()=>{window.scrollTo(0,0);if(document.documentElement.scrollTop!==0)document.documentElement.scrollTop=0;if(document.body.scrollTop!==0)document.body.scrollTop=0;};const onPageShow=()=>{reset();requestAnimationFrame(reset);setTimeout(reset,0);};const onVisChange=()=>{if(document.visibilityState==='visible'){reset();requestAnimationFrame(reset);}};reset();window.addEventListener('pageshow',onPageShow);document.addEventListener('visibilitychange',onVisChange);return()=>{window.removeEventListener('pageshow',onPageShow);document.removeEventListener('visibilitychange',onVisChange);};},[]);
       const updateStats=mutator=>{if(isPerQGated()){freezeSaveStatsForQ();if(!saveStatsThisQRef.current)return;}const sk=mode==="deduction"?`deduction-${dedType}`:mode;setStatsByMode(prev=>{const ms={...(prev[sk]||blankStatsByEra())};const es={...(ms.AD||blankStats())};mutator(es);return{...prev,[sk]:{...ms,AD:es}};});};
       const resetStatsCurrent=()=>{const sk=mode==="deduction"?`deduction-${dedType}`:mode;setStatsByMode(prev=>{const ms={...(prev[sk]||blankStatsByEra())};return{...prev,[sk]:{...ms,AD:blankStats()}};});};
       const setCalcPenalty=v=>setCalcPenaltyActive(v);
@@ -1257,6 +1268,17 @@
         }
       }
       function spawnDed(){spawnDedWithRange(minY,maxY);}
+      // Generates a fresh Deduction puzzle for the current dedType and year range.
+      //
+      // Cross-mode summary of Feb 29 handling (since the rules differ subtly per sub-mode):
+      //   Year: window must contain at least one leap year. yc is forced to one of those leap
+      //         years; non-leap years still display as options but are "dead" — they have no
+      //         Feb 29 so they trivially can't be the answer (they don't break weekday
+      //         distinctness either since validateDistinct skips them).
+      //   Day:  no special handling needed. dimFn returns 28 for non-leap years, so d=29 is
+      //         only ever picked when isLeapY is true.
+      //   Month: no special handling needed. isLeapY determines MONTH_BOXES_LEAP vs _COMMON;
+      //         d is picked within dimFn's range (which already accounts for leap year).
       function spawnDedWithRange(lo,hi){
         setCalcPenalty(false);tStartRef.current=performance.now();
         const pc=hi>=1?hi-Math.max(1,lo)+1:0;
@@ -1347,9 +1369,18 @@
           // Decide which crossing to enforce this puzzle (based on toggles).
           // Note: enforcement may fail if the toggle's prerequisites aren't met (e.g. Jul Cross
           // with year range that doesn't include 1582). In that case the toggle silently no-ops.
-          const julCrossPossible=julCrossOnly&&useJulian&&inRange(1581)&&inRange(1582)&&inRange(1583);
+          // Jul Cross is possible when useJulian is on AND the year range contains 1582 plus at
+          // least one of its neighbors (1581 for Oct15+/Nov/Dec dates, 1583 for Jan-Sep/Oct1-4
+          // dates). When only one neighbor is available, trySpawn retries until it picks an (m,d)
+          // matching the available boundary pair.
+          const julCrossPossible=julCrossOnly&&useJulian&&inRange(1582)&&(inRange(1581)||inRange(1583));
           // ab Cross possible: range must span at least one 100-year boundary
           const abCrossPossible=abCrossOnly&&Math.floor(Math.max(1,lo)/100)!==Math.floor(hi/100);
+          // `enforce` is computed ONCE before trySpawn's loop (rather than inside each attempt)
+          // so the 50/50 random choice for "both toggles on" doesn't re-roll on each retry.
+          // Re-rolling per-attempt would skew probabilities away from 50/50 because failed
+          // attempts would re-randomize, causing constraints with lower success rate to be
+          // tried more often than 50% of the time.
           let enforce=null;
           if(abCrossPossible&&julCrossPossible)enforce=Math.random()<0.5?'ab':'jul';
           else if(abCrossPossible)enforce='ab';
@@ -1437,9 +1468,12 @@
             }
             return false;
           };
-          if(trySpawn())return;
-          // Final fallback: minimal degenerate puzzle (single-year window) so the UI doesn't crash
-          const fy=lo>0?lo:1;setDed(attachFmt({type:"year",y:fy,m:1,d:1,w:activeWday(fy,1,1),options:[fy],_abx:abCrossOnly,_julx:julCrossOnly}));
+          // No fallback needed: queue item E ensures spawnDed is never called for Year sub-mode
+          // when the range can't support a buildable puzzle (Year button auto-disables, and the
+          // popover effect auto-switches to Day if the user is mid-session in Year when range
+          // becomes too narrow). If trySpawn somehow fails despite that contract, ded retains
+          // its previous value rather than being replaced with a degenerate 1-button puzzle.
+          trySpawn();
           return;
         }
         if(dedType==="month"){
@@ -1750,13 +1784,11 @@
       const baseBtn="w-full rounded-2xl border px-4 py-3 text-base transition shadow-sm select-none";
       const idleBtn="surface-button";
       const optionsDisabled=(isTimer(mode)&&!active)||locked||calcOpen||calcPenaltyActive;
-      // Layout helper for option grids in 3-col mode. Two cases:
-      //   total%3===1 (e.g. 7, 4): last button is alone on its row → col-span-3 makes it full width.
-      //   total%3===2 (e.g. 5, 2): last 2 buttons would stick to the left → push the 2nd-to-last to
-      //     col-start-2, the last flows to col 3, leaving col 1 empty. Visual: [_, X, Y] in row.
-      // For total%3===0 (3, 6, 9): grid fills perfectly, no adjustment needed.
-      // Returns "" when no adjustment applies. Caller passes (idx, options.length) per button.
-      const centerLastOpt=(index,total)=>{if(total<=0)return"";if(index===total-1&&total%3===1)return"col-span-3";if(index===total-2&&total%3===2&&total>=2)return"col-start-2";return"";};
+      // Layout helper for option grids in 3-col mode. Used by Day sub-mode (N=7 → last button
+      // alone gets col-span-3 → full row; N=4 → same handling). Year sub-mode does NOT use this
+      // helper anymore — it has its own grid-cols-6 layout (queue item D) for N=5 and grid-cols-2
+      // for N=2 Jul Cross.
+      const centerLastOpt=(index,total)=>{if(total<=0)return"";if(index===total-1&&total%3===1)return"col-span-3";return"";};
       const timerSettingControl=(()=>{
         if(mode==="blitz"&&!perQ)return(<div className="flex items-center gap-2"><input type="range" min="10" max="180" step="5" value={blitzSec} onChange={e=>{const v=+e.target.value;setBlitzSec(v);if(!active){setBlitzRemain(v);blitzRemainRef.current=v;if(blitzTimeRef.current)blitzTimeRef.current.textContent=fmtBlitzT(v);if(blitzBarRef.current)blitzBarRef.current.style.width="100%";}}} disabled={active||timerDone} style={{"--rng-fill":Math.round((blitzSec-10)/170*100)+"%"}} className="flex-1 disabled:opacity-40"/><span className="tabular-nums text-xs w-14 shrink-0 text-right">{fmtBlitzT(blitzSec)}</span></div>);
         if(mode==="blitz"&&perQ)return(<div className="flex items-center gap-2"><input type="range" min="1" max="20" step="1" value={qSec} onChange={e=>{const v=+e.target.value;setQSec(v);if(!active){setQRemain(v);if(suddenTimeRef.current)suddenTimeRef.current.textContent=v+"s";if(suddenBarRef.current)suddenBarRef.current.style.width="100%";}}} disabled={active||timerDone} style={{"--rng-fill":Math.round((qSec-1)/19*100)+"%"}} className="flex-1 disabled:opacity-40"/><span className="tabular-nums text-xs w-8 shrink-0 text-right">{qSec}s</span></div>);
@@ -1871,6 +1903,23 @@
         if(dt.y<minY||dt.y>maxY)return true;
         return false;
       };
+      // Year sub-mode playability check (queue item E). Year requires either:
+      //   (a) a year-range size of at least 5 (so a normal N=5 window can be built within
+      //       a single calendar system), OR
+      //   (b) a Jul Cross window (N=2) — Julian on AND the range contains a boundary pair
+      //       {1582, 1583} (for Jan-Sep + Oct1-4 dates) or {1581, 1582} (for Oct15+ + Nov + Dec).
+      // When neither condition holds, Year sub-mode is unbuildable. The Year sub-type button
+      // disables itself, and if the user is currently in Year mode and the range/Julian
+      // changes mid-session to make it unbuildable, the popover effect auto-switches to Day.
+      // Day and Month sub-modes work for any range >= 1 year (no minimum), so they're always
+      // available.
+      const yearSubPossible=(()=>{
+        const lo=Math.max(1,minY),hi=maxY;
+        if(hi-lo+1>=5)return true;
+        if(!useJulian)return false;
+        const has1581=lo<=1581&&hi>=1581,has1582=lo<=1582&&hi>=1582,has1583=lo<=1583&&hi>=1583;
+        return(has1582&&has1583)||(has1581&&has1582);
+      })();
       // Track previous popover values so the unified effect can tell which setting changed.
       const prevPopRef=useRef({randomFormat,dateFormat,useJulian,minY,maxY,leapChance,forceJanFebOnLeap});
       // Unified popover-settings effect. Replaces the old Effect 1/Effect 2/refreshForRange split.
@@ -1894,6 +1943,10 @@
         const yearRangeChanged=prev.minY!==minY||prev.maxY!==maxY;
         const julianChanged=prev.useJulian!==useJulian;
         prevPopRef.current={randomFormat,dateFormat,useJulian,minY,maxY,leapChance,forceJanFebOnLeap};
+        // E: auto-switch out of Year sub-mode if the range/Julian change just made it unbuildable.
+        // We do this BEFORE the rest of the effect so the regen that follows sees the new dedType.
+        // The dedType-watching effect handles spawning a fresh Day puzzle on the next render.
+        if(mode==='deduction'&&dedType==='year'&&!yearSubPossible){changeDedType('day');return;}
         // Auto-clear Deduction toggles when their prerequisites break.
         // (These don't gate the regen decision below — they're a separate concern from
         // the date's per-setting regen rules. The toggle UI also shows them as disabled,
@@ -2092,6 +2145,17 @@
       // Deduction mode with the corresponding sub-mode.
       // Behavior mirrors popover Cat A: if a wrong has been made on the live entry, defer
       // (preserve wrong-state); otherwise regen with full per-question reset.
+      //
+      // Interaction with the popover effect: when the user turns off Julian via the popover
+      // while a Year/Month toggle is active (e.g., julCrossOnly=true), the popover effect
+      // auto-clears the toggle via setJulCrossOnly(false). On the next render, this effect
+      // fires (toggle changed true→false) and regenerates the puzzle a SECOND time. The
+      // popover effect's own regen ran first using the not-yet-cleared toggle value but with
+      // the new useJulian=false, which causes its julCrossPossible check to evaluate false →
+      // enforce=null → normal puzzle. So both regens produce equivalent normal puzzles; the
+      // double-fire is wasted compute but functionally correct (no history corruption,
+      // matching end state). Trying to suppress the second fire risks breaking the toggle's
+      // own user-initiated regens, so we accept the small waste.
       const prevDedTogglesRef=useRef({abCrossOnly,julCrossOnly,monthOnly1582});
       useEffect(()=>{
         const prev=prevDedTogglesRef.current;
@@ -2271,32 +2335,51 @@
           )}
           {mode==="deduction"&&(
             <div className="mt-5">
-              <div className="flex flex-wrap gap-2 justify-center items-center">
-                {/* ab Cross toggle (Year sub-mode only) — LEFT of Day/Month/Year.
-                    Disabled when year range doesn't span any 100-year boundary. */}
-                {dedType==="year"&&(()=>{
-                  const abPossible=Math.floor(Math.max(1,minY)/100)!==Math.floor(maxY/100);
-                  const disabled=!abPossible;
-                  const active=abCrossOnly&&!disabled;
-                  return(<button type="button" onClick={()=>{if(disabled)return;setAbCrossOnly(v=>!v);}} className={`px-3 py-1.5 rounded-xl text-sm font-medium border ${active?"btn-solid border-transparent text-white":"surface-toggle border-purple-800/60 text-purple-100/80"} ${disabled?"opacity-50 pointer-events-none":""}`}><i>ab</i> Cross</button>);
-                })()}
-                {["day","month","year"].map(t=>(<button key={t} type="button" onClick={()=>changeDedType(t)} className={`px-3 py-1.5 rounded-xl text-sm font-medium border ${dedType===t?"btn-solid border-transparent text-white":"surface-toggle border-purple-800/60 text-purple-100/80"}`}>{t[0].toUpperCase()+t.slice(1)}</button>))}
-                {/* Jul Cross toggle (Year sub-mode only) — RIGHT of Day/Month/Year.
-                    Disabled when useJulian is OFF or year range excludes the 1582 boundary pair. */}
-                {dedType==="year"&&(()=>{
-                  const julPossible=useJulian&&1581>=minY&&1583<=maxY;
-                  const disabled=!julPossible;
-                  const active=julCrossOnly&&!disabled;
-                  return(<button type="button" onClick={()=>{if(disabled)return;setJulCrossOnly(v=>!v);}} className={`px-3 py-1.5 rounded-xl text-sm font-medium border ${active?"btn-solid border-transparent text-white":"surface-toggle border-purple-800/60 text-purple-100/80"} ${disabled?"opacity-50 pointer-events-none":""}`}>Jul Cross</button>);
-                })()}
-                {/* 1582 Only toggle (Month sub-mode only) — RIGHT of Day/Month/Year.
-                    Disabled when useJulian is OFF or year range excludes 1582. */}
-                {dedType==="month"&&(()=>{
-                  const possible=useJulian&&1582>=minY&&1582<=maxY;
-                  const disabled=!possible;
-                  const active=monthOnly1582&&!disabled;
-                  return(<button type="button" onClick={()=>{if(disabled)return;setMonthOnly1582(v=>!v);}} className={`px-3 py-1.5 rounded-xl text-sm font-medium border ${active?"btn-solid border-transparent text-white":"surface-toggle border-purple-800/60 text-purple-100/80"} ${disabled?"opacity-50 pointer-events-none":""}`}>1582 Only</button>);
-                })()}
+              {/* 3-zone grid keeps Day/Month/Year buttons fixed in the center regardless of which
+                  toggles are active. Side zones (1fr each) flex to fill remaining space; toggles
+                  hug the center via justify-end (left zone) and justify-start (right zone).
+                  Toggle styling matches Blitz/AoX Allow Mistakes / One-By-One / Per Round buttons
+                  exactly (px-2 py-1 rounded-xl text-xs font-medium border) — minus flex-1, since
+                  these buttons size to content + min-width rather than stretching to fill.
+                  ab Cross and Jul Cross share min-w-[5rem] so they always have matched width
+                  regardless of which has the longer label; 1582 Only sizes naturally to its text. */}
+              <div className="grid grid-cols-[1fr_auto_1fr] gap-2 items-center">
+                <div className="flex justify-end">
+                  {dedType==="year"&&(()=>{
+                    // ab Cross disabled when year range doesn't span any 100-year boundary
+                    const abPossible=Math.floor(Math.max(1,minY)/100)!==Math.floor(maxY/100);
+                    const disabled=!abPossible;
+                    const active=abCrossOnly&&!disabled;
+                    return(<button type="button" onClick={()=>{if(disabled)return;setAbCrossOnly(v=>!v);}} className={`px-2 py-1 rounded-xl text-xs font-medium border min-w-[5rem] ${active?"btn-solid border-transparent":"surface-toggle text-purple-100/80"}${disabled?" opacity-60 pointer-events-none":""}`}><i>ab</i> Cross</button>);
+                  })()}
+                </div>
+                <div className="flex gap-2 items-center">
+                  {["day","month","year"].map(t=>{
+                    // Year sub-type button auto-disables when range can't support a buildable
+                    // puzzle (yearSubPossible). Day and Month always available.
+                    const disabled=t==="year"&&!yearSubPossible;
+                    return(<button key={t} type="button" onClick={()=>{if(disabled)return;changeDedType(t);}} className={`px-3 py-1.5 rounded-xl text-sm font-medium border ${dedType===t?"btn-solid border-transparent text-white":"surface-toggle border-purple-800/60 text-purple-100/80"}${disabled?" opacity-60 pointer-events-none":""}`}>{t[0].toUpperCase()+t.slice(1)}</button>);
+                  })}
+                </div>
+                <div className="flex justify-start">
+                  {dedType==="year"&&(()=>{
+                    // Jul Cross disabled when useJulian off, or range doesn't contain at least one
+                    // boundary pair ({1582, 1583} for Jan-Sep + Oct1-4, OR {1581, 1582} for Oct15+
+                    // + Nov + Dec). Range must contain 1582 plus at least one of its neighbors.
+                    const has1581=1581>=minY&&1581<=maxY,has1582=1582>=minY&&1582<=maxY,has1583=1583>=minY&&1583<=maxY;
+                    const julPossible=useJulian&&has1582&&(has1581||has1583);
+                    const disabled=!julPossible;
+                    const active=julCrossOnly&&!disabled;
+                    return(<button type="button" onClick={()=>{if(disabled)return;setJulCrossOnly(v=>!v);}} className={`px-2 py-1 rounded-xl text-xs font-medium border min-w-[5rem] ${active?"btn-solid border-transparent":"surface-toggle text-purple-100/80"}${disabled?" opacity-60 pointer-events-none":""}`}>Jul Cross</button>);
+                  })()}
+                  {dedType==="month"&&(()=>{
+                    // 1582 Only disabled when useJulian off or year range excludes 1582.
+                    const possible=useJulian&&1582>=minY&&1582<=maxY;
+                    const disabled=!possible;
+                    const active=monthOnly1582&&!disabled;
+                    return(<button type="button" onClick={()=>{if(disabled)return;setMonthOnly1582(v=>!v);}} className={`px-2 py-1 rounded-xl text-xs font-medium border ${active?"btn-solid border-transparent":"surface-toggle text-purple-100/80"}${disabled?" opacity-60 pointer-events-none":""}`}>1582 Only</button>);
+                  })()}
+                </div>
               </div>
               <div className="mt-4 rounded-2xl panel p-4">
                 <div className="text-center relative">
@@ -2305,10 +2388,12 @@
                   {ded&&<div className="mt-1 text-lg text-purple-100">Weekday: <span className="font-semibold">{DAY[ded.w]}</span></div>}
                 </div>
                 <div className="mt-4">
-                  {/* Year mode grid: N=2 (Jul Cross) uses 2 cols for symmetric side-by-side
-                      buttons. N=5 default and other sizes use 3 cols with centerLastOpt
-                      handling the trailing-pair / lone-last layout. */}
-                  {ded&&ded.type==="year"&&(<div className={`grid gap-2 ${ded.options.length===2?"grid-cols-2":"grid-cols-3"}`}>{ded.options.map((y,idx)=>{const ps=persistBtns[idx];let bCls;if(ps==='correct')bCls='btn-correct-persist border-transparent';else if(ps==='wrong-latest')bCls='btn-wrong-persist border-transparent';else if(ps==='wrong-prev')bCls='btn-wrong-dim border-transparent';else if(dedFlash&&dedFlash.kind==="year"&&dedFlash.index===idx)bCls=(dedFlash.ok?"flash-good":"flash-bad")+' border-transparent';else bCls=idleBtn;const perLocked=!!ps;const isFlashing=!!(dedFlash&&dedFlash.kind==="year"&&dedFlash.index===idx);const shouldDim=(locked||calcOpen||calcPenaltyActive)&&!ps&&!isFlashing;return(<button key={idx} type="button" onClick={()=>submitDedAnswer(y,idx)} className={`${baseBtn} py-2 text-sm ${bCls} ${(perLocked||(locked||calcOpen||calcPenaltyActive))?"pointer-events-none":""} ${shouldDim?"opacity-60":""} ${ded.options.length===2?"":centerLastOpt(idx,ded.options.length)}`}>{fmtYear(y)}</button>);})}</div>)}
+                  {/* Year mode grid layouts:
+                        N=2 (Jul Cross) → grid-cols-2: symmetric side-by-side, each takes half row.
+                        N=5 (default)    → grid-cols-6: top row 3 buttons (each col-span-2 = 1/3 width),
+                                           bottom row 2 buttons (each col-span-3 = 1/2 width centered).
+                        Other lengths (defensive fallback) → grid-cols-3 with no col-span. */}
+                  {ded&&ded.type==="year"&&(()=>{const N=ded.options.length;const gridCls=N===2?"grid-cols-2":N===5?"grid-cols-6":"grid-cols-3";const colSpanFor=idx=>N===5?(idx<3?"col-span-2":"col-span-3"):"";return(<div className={`grid gap-2 ${gridCls}`}>{ded.options.map((y,idx)=>{const ps=persistBtns[idx];let bCls;if(ps==='correct')bCls='btn-correct-persist border-transparent';else if(ps==='wrong-latest')bCls='btn-wrong-persist border-transparent';else if(ps==='wrong-prev')bCls='btn-wrong-dim border-transparent';else if(dedFlash&&dedFlash.kind==="year"&&dedFlash.index===idx)bCls=(dedFlash.ok?"flash-good":"flash-bad")+' border-transparent';else bCls=idleBtn;const perLocked=!!ps;const isFlashing=!!(dedFlash&&dedFlash.kind==="year"&&dedFlash.index===idx);const shouldDim=(locked||calcOpen||calcPenaltyActive)&&!ps&&!isFlashing;return(<button key={idx} type="button" onClick={()=>submitDedAnswer(y,idx)} className={`${baseBtn} py-2 text-sm ${bCls} ${(perLocked||(locked||calcOpen||calcPenaltyActive))?"pointer-events-none":""} ${shouldDim?"opacity-60":""} ${colSpanFor(idx)}`}>{fmtYear(y)}</button>);})}</div>);})()}
                   {ded&&ded.type==="month"&&(<div className="grid grid-cols-2 gap-3">{ded.options.map((mv,idx)=>{const last=idx===ded.options.length-1?"col-span-2":"";const ps=persistBtns[idx];let bCls;if(ps==='correct')bCls='btn-correct-persist border-transparent';else if(ps==='wrong-latest')bCls='btn-wrong-persist border-transparent';else if(ps==='wrong-prev')bCls='btn-wrong-dim border-transparent';else if(dedFlash&&dedFlash.kind==="month"&&dedFlash.index===idx)bCls=(dedFlash.ok?"flash-good":"flash-bad")+' border-transparent';else bCls=idleBtn;const perLocked=!!ps;const isFlashing=!!(dedFlash&&dedFlash.kind==="month"&&dedFlash.index===idx);const shouldDim=(locked||calcOpen||calcPenaltyActive)&&!ps&&!isFlashing;return(<button key={idx} type="button" onClick={()=>submitDedAnswer(mv,idx)} className={`${baseBtn} ${bCls} ${(perLocked||(locked||calcOpen||calcPenaltyActive))?"pointer-events-none":""} ${shouldDim?"opacity-60":""} ${last}`}>{mv}</button>);})}</div>)}
                   {ded&&ded.type==="day"&&(<div className="grid grid-cols-3 gap-2">{ded.options.map((dv,idx)=>{const ps=persistBtns[idx];let bCls;if(ps==='correct')bCls='btn-correct-persist border-transparent';else if(ps==='wrong-latest')bCls='btn-wrong-persist border-transparent';else if(ps==='wrong-prev')bCls='btn-wrong-dim border-transparent';else if(dedFlash&&dedFlash.kind==="day"&&dedFlash.index===idx)bCls=(dedFlash.ok?"flash-good":"flash-bad")+' border-transparent';else bCls=idleBtn;const perLocked=!!ps;const isFlashing=!!(dedFlash&&dedFlash.kind==="day"&&dedFlash.index===idx);const shouldDim=(locked||calcOpen||calcPenaltyActive)&&!ps&&!isFlashing;return(<button key={idx} type="button" onClick={()=>submitDedAnswer(dv,idx)} className={`${baseBtn} py-2 text-sm ${bCls} ${(perLocked||(locked||calcOpen||calcPenaltyActive))?"pointer-events-none":""} ${shouldDim?"opacity-60":""} ${centerLastOpt(idx,ded.options.length)}`}>{dv}</button>);})}</div>)}
                 </div>
@@ -2341,11 +2426,14 @@
       const Divider=({label})=>(<div className="flex items-center gap-2 px-1 pt-1"><div className="flex-1 h-px bg-purple-500/20"></div><span className="text-[10px] uppercase tracking-widest text-purple-300/60">{label}</span><div className="flex-1 h-px bg-purple-500/20"></div></div>);
       return(
         <div className="space-y-2">
-          <GuideSection id="overview" title="What Is Calendar Game?" openId={open} onToggle={toggle}><p>Calendar Game is a training tool for mental calculation of the day of the week. You're given a date and must identify which weekday it falls on — as quickly and accurately as possible. All dates use the proleptic Gregorian calendar.</p></GuideSection>
+          <GuideSection id="overview" title="What Is Calendar Game?" openId={open} onToggle={toggle}><p>Calendar Game is a training tool for mental calculation of the day of the week. You're given a date and must identify which weekday it falls on — as quickly and accurately as possible. Dates use the proleptic Gregorian calendar by default. The Julian calendar is supported as an opt-in setting for dates on or before October 4, 1582 (the day before the Gregorian reform took effect).</p></GuideSection>
           <Divider label="Interface"/>
           <GuideSection id="buttons" title="Buttons" openId={open} onToggle={toggle}>
             <p><b>New</b> — load a fresh date. In timer modes, only available after pressing Begin.</p>
-            <p><b>Back (&lt;)</b> — return to the previous date. The answer is shown and the card is locked. No stat penalty. You can go back through your entire history in Classic, Flash, and Deduction; in Blitz and AoX, you can browse the current round or run. Every entry in your history shows the correct answer in green; if you got it wrong, your wrong guess(es) appear as dimmed red alongside the green.</p>
+            <p><b>Begin</b> — timer modes only (Blitz, Flash, AoX). Starts a round or run. After pressing Begin, the timer starts and the date is shown (Flash hides it after the configured duration; AoX hides it between solves only when One-By-One is on).</p>
+            <p><b>Reset</b> — timer modes only. In Blitz, ends the current round and unlocks settings; saved bests for the round are preserved. In AoX, ends the current run; saved bests are preserved. Press Reset and then Begin to start a fresh round/run.</p>
+            <p><b>Reset Stats</b> — casual modes only (Classic, Flash, Deduction). Clears your stats and question history for the current mode (Deduction only resets the current sub-type's stats). Does not affect timer-mode bests.</p>
+            <p><b>Back (&lt;)</b> — return to the previous date. The answer is shown and the card is locked. No stat penalty. You can go back through your entire history in Classic, Flash, and Deduction; in Blitz and AoX, you can browse the current round or run. Every entry in your history shows the correct answer in green; if you got it wrong, your wrong guess(es) appear as dimmed red alongside the green. While browsing back, a small <b>Q#</b> label appears at the top-right of the date card showing your position in history (e.g. Q3 means you're on the third question viewed).</p>
             <p><b>Forward (&gt;)</b> — move forward through dates you've browsed past with Back. The forward history clears whenever you answer a new question, press New/Begin/Reset, or take any action that advances the date. Overriding while browsing back does not clear the forward history. Each entry remembers its date format and calendar system, so a back-then-forward round trip never alters how a date was originally shown.</p>
             <p><b>Reveal</b> — show the correct answer without guessing. Counts as a wrong attempt. No penalty on unanswered dates while browsing back.</p>
             <p><b>Override</b> — fix a mistake. You can override any date in your history by browsing to it with Back/Forward. After a wrong answer: gives you credit and adjusts your score. After a correct answer: undoes the credit and adjusts your score. You can only override once per question. Overriding a wrong answer while browsing back clears any wrong highlights; only the correct answer is shown. In Blitz, you can override past dates after the round ends to adjust your score and saved bests. In AoX without Allow Mistakes, overriding a correct answer ends the run.</p>
@@ -2361,7 +2449,7 @@
           <Divider label="Settings"/>
           <GuideSection id="dateformat" title="Date Format" openId={open} onToggle={toggle}><p>Set via the ⚙ settings menu. Choose one of five real-world formats: <b>Written MDY</b> (April 27, 1828), <b>Written DMY</b> (27 April 1828), <b>Numeric MDY</b> (4/27/1828), <b>Numeric DMY</b> (27.4.1828), or <b>Numeric YMD</b> (1828-4-27). Numeric formats use a fixed separator convention: MDY uses '/', DMY uses '.', YMD uses '-'. Years always show in full, never abbreviated.</p><p>Only DMY, MDY, and YMD orderings are offered because those are the only orderings actually used in real life — orderings like YDM aren't standard anywhere.</p><p><b>Random Format</b>, when on, rolls one of the five formats per date in game modes only — your selected format is preserved underneath (the panels just lock visually). Lookup and the Last Updated timestamp ignore Random and always use the selected format. The Last Updated timestamp uses the numeric version of whichever format you've selected. In Classic, Deduction, and Flash, changing the format or toggling Random Format regenerates the displayed date — unless you've already made a wrong guess, in which case the change is deferred so the wrong-state is preserved; the new format applies to the next date. In active Blitz rounds and AoX runs, either change ends the round.</p></GuideSection>
           <GuideSection id="julian" title="Julian Calendar" openId={open} onToggle={toggle}><p>Toggle via the ⚙ settings menu under Calendar System. Off by default. When on, dates on or before October 4, 1582 are treated as Julian calendar dates, which have different leap year rules — every year divisible by 4 is a leap year, with no century exception. This affects weekday calculation and the codes shown in Show Codes. October 5–14, 1582 are always excluded since those dates never existed; the Gregorian calendar skipped them to correct accumulated calendar drift.</p><p>Toggling Julian doesn't necessarily regenerate the current date. For dates after October 4, 1582, Julian has no effect. For Julian-eligible dates (October 4, 1582 or earlier), the date stays if you haven't made a wrong guess yet — the answer and codes simply update. If you've already wrong-guessed, the date regenerates and is added to your history with both your red guess and a green for the day that was correct under the calendar system in effect when the date was first generated. Each date snapshots its calendar system at generation, so revisiting an earlier question via Back shows the highlights and codes that were correct under the system in effect when that date was generated. In active Blitz rounds and AoX runs, any Julian toggle ends the round.</p></GuideSection>
-          <GuideSection id="range" title="Year Range" openId={open} onToggle={toggle}><p>Set via the ⚙ settings menu. Controls which years dates are drawn from. Defaults to 1–10000 AD. Changing the range regenerates the current date only if it falls outside the new range — and even then, if you've already made a wrong guess on the current date, the change is deferred so the wrong-state is preserved; the new range applies to the next date. While browsing back, settings-driven regen always preserves your history: the date you were viewing and any forward entries are pushed back to history before the live slot is regenerated. In active Blitz rounds and AoX runs, any range change ends the round.</p></GuideSection>
+          <GuideSection id="range" title="Year Range" openId={open} onToggle={toggle}><p>Set via the ⚙ settings menu. Controls which years dates are drawn from. Defaults to 1–10000 AD. Changing the range regenerates the current date only if it falls outside the new range — and even then, if you've already made a wrong guess on the current date, the change is deferred so the wrong-state is preserved; the new range applies to the next date. While browsing back, settings-driven regen always preserves your history: the date you were viewing and any forward entries are pushed back to history before the live slot is regenerated. In active Blitz rounds and AoX runs, any range change ends the round.</p><p><b>Year sub-mode auto-disable:</b> Deduction's Year sub-mode requires either a year range of at least 5 years (so a 5-year window can be built) or, with Julian on, a range that contains October 15, 1582 (so a 2-year Jul Cross window can be built). When neither condition holds, the Year sub-type button greys out, and if you were already in Year mode when the range changed, you're auto-switched to Day mode. Day and Month sub-modes work for any valid range.</p></GuideSection>
           <GuideSection id="leap" title="Leap Year Settings" openId={open} onToggle={toggle}><p>Two settings in the ⚙ menu control how often leap years appear and what months they're paired with. <b>Leap Year Chance</b> sets how often a generated date lands on a leap year — Random uses the natural rate (~24%); 50%, 75%, and 100% force higher rates. <b>Force Jan/Feb on Leap Years</b>, when on, restricts the month to January or February whenever a leap year is generated. These settings apply to all game modes' date generation; Lookup is unaffected. If your year range happens to contain no leap years and the chance is set to 50/75/100%, the chance is silently ignored per date — the setting itself is preserved. Changing <b>Leap Year Chance</b> always regenerates the displayed date. Toggling <b>Force Jan/Feb on Leap Years</b> regenerates only if the current date is a leap year with a month other than January or February. If you've already made a wrong guess on the current date, either change is deferred so the wrong-state is preserved; the new setting applies to the next date. In active Blitz rounds and AoX runs, any leap setting change ends the round.</p></GuideSection>
           <GuideSection id="savestats" title="Save Stats" openId={open} onToggle={toggle}><p>Toggle via the ⚙ settings menu under Stats. On by default. When off, your answers don't update stats or saved bests. The stats panel dims to indicate the off state. The toggle works differently per mode:</p><p className="mt-2"><b>Classic, Deduction, Flash</b> — per-question. The toggle's value is locked in at the moment of your first stat-affecting action (your first wrong guess on the question, or your correct answer if you got it right on the first try). Toggling afterward doesn't change that question's outcome, but does apply to the next question. If you've already made a wrong guess on the current question, toggling Save Stats does not regenerate the date — the toggle's frozen value sticks for the question. When off, the question doesn't update stats and isn't pushed to history (Back can't browse to it).</p><p className="mt-2"><b>Blitz</b> — round-level. In-round score, accuracy, streak, and Back/Forward navigation through round questions all work normally regardless of the toggle. Whatever the toggle is set to when the round ends determines whether the round's Best Score and Best Streak update.</p><p className="mt-2"><b>AoX</b> — run-level. In-run score, streak, times, and Back/Forward navigation all work normally regardless of the toggle. Whatever the toggle is set to when the run ends determines whether Best Average, Best Median, and Best Streak update. If a run finishes with Save Stats off, overriding entries after the run is a no-op on persistent bests; round-level stats still adjust.</p></GuideSection>
           <GuideSection id="theme" title="Theme" openId={open} onToggle={toggle}><p>Five themes: Dusk (default dark navy), Midnight (true black with purple), Nebula (deep purple), Light (clean white), and Parchment (warm cream). Accessible from the ⚙ settings menu in any tab. Enable Use System Settings to match your device's light/dark mode automatically, with separate theme choices for each. Disable to pick one manually.</p></GuideSection>
@@ -2376,7 +2464,7 @@
             <p><b>Override</b> — after wrong: gives credit with time recorded, preserves streak. After correct: undoes the credit, resets streak, and either ends the run (Allow Mistakes off) or advances to a new date (Allow Mistakes on). You can also override past dates while browsing back with Back/Forward. If overriding on the last question with Allow Mistakes on, a new date is generated to complete the average. One override per question.</p>
             <p>Stats in AoX are always visible and always track. Best average and best median are tracked independently per n and Allow Mistakes combination — they can come from different runs. Beneath each best, the companion metric from the run that set it is also shown (e.g. the median from the run that set your best average). When both bests come from the same run, a · Same Round tag appears on the right. If you override a correct answer that set a new best, the best is also restored. The score display freezes when a run ends and only resets after pressing Reset.</p>
           </GuideSection>
-          <GuideSection id="deduction" title="Deduction" openId={open} onToggle={toggle}><p>Identify the missing piece of a date given the rest plus the weekday. Choose Day, Month, or Year mode. The displayed date follows your selected Date Format (or random format snapshot, if Random Format is on), with a fixed-width underscore placeholder where the missing piece would normally appear.</p><p className="mt-2"><b>Day</b> — seven consecutive days are shown, each with a unique day code. The correct day can appear in any position. <i>October 1582 with Julian on:</i> days 5–14 don't exist (the Gregorian transition skipped them), so the valid days are 1–4 and 15–31. When the window can't fit seven days on one side of the gap, it shrinks to four — codes 1, 2, 3, 4 repeat at days 15, 16, 17, 18, so a five-day window crossing the gap would have a duplicate code.</p><p className="mt-2"><b>Month</b> — seven fixed boxes group months that share the same month code, so tapping any month within a box gives the same weekday for that date. Tap the box containing the correct month. The boxes are always in the same position. In leap years, January shifts into the Apr/Jul box (becoming Jan/Apr/Jul) and February shifts into the Aug box (becoming Feb/Aug); the other boxes are unchanged. <i>Year 1582 with Julian on:</i> a special layout applies because the Julian/Gregorian transition splits the year — January through September and October 1–4 use Julian (year code +1), while October 15+ and November/December use Gregorian (year code −2). October's box position depends on the day: for days 1–4 it joins Jan and Nov ("Jan/Oct/Nov"); for days 15–31 it joins Jun ("Jun/Oct"); for days 5–14 it's excluded since those dates don't exist. The other six boxes are arranged differently from the standard layout — practice carefully.</p><p className="mt-2"><b>Year</b> — five consecutive year options. Each option has a unique year code, so only the correct year matches the displayed weekday. The correct year can appear in any position. <i>With Julian on:</i> when the five-year window would cross October 15, 1582 (the Julian/Gregorian boundary), it shrinks to two years — the calendar's 10-day jump produces a +5 weekday shift across that boundary that breaks distinctness for any longer window. <i>February 29:</i> only allowed when the window contains at least one leap year (Gregorian or Julian as appropriate). Non-leap years still appear as options but trivially can't be the answer, since Feb 29 doesn't exist in those years.</p><p className="mt-2"><b>Per-mode toggles</b> — Year mode adds <i>ab</i> Cross (left of Day/Month/Year) and Jul Cross (right of Day/Month/Year). Month mode adds 1582 Only (right of Day/Month/Year). These are mode-specific, not in the ⚙ Settings menu, since they only apply to one Deduction sub-mode.</p><p className="mt-2"><b><i>ab</i> Cross</b> (Year mode) — when on, the five-year window must cross a year ending in 00 (any 100-year boundary, both leap and non-leap centuries). Practice the <i>ab</i> code change mid-window. Disabled when your year range doesn't span any 100-year boundary.</p><p className="mt-2"><b>Jul Cross</b> (Year mode) — when on, the two-year window must cross October 15, 1582 (the Julian/Gregorian transition). N=2 always. Disabled when the Julian setting is off or your year range excludes the boundary years (1581–1583).</p><p className="mt-2"><b>Both Year toggles on</b> — each puzzle randomly picks (50/50) which constraint to enforce. The two can't both be true for the same window.</p><p className="mt-2"><b>1582 Only</b> (Month mode) — when on, every puzzle uses year 1582, forcing the special split layout described above. Disabled when the Julian setting is off or your year range excludes 1582.</p><p className="mt-2">Switch subtypes anytime — progress in each is preserved. Stats are tracked separately for each subtype. Reset Stats only resets the current subtype and clears its question history.</p></GuideSection>
+          <GuideSection id="deduction" title="Deduction" openId={open} onToggle={toggle}><p>Identify the missing piece of a date given the rest plus the weekday. Choose Day, Month, or Year mode. The displayed date follows your selected Date Format (or random format snapshot, if Random Format is on), with a fixed-width underscore placeholder where the missing piece would normally appear.</p><p className="mt-2"><b>Day</b> — seven consecutive days are shown, each with a unique day code. The correct day can appear in any position. <i>October 1582 with Julian on:</i> days 5–14 don't exist (the Gregorian transition skipped them), so the valid days are 1–4 and 15–31. When the window can't fit seven days on one side of the gap, it shrinks to four — codes 1, 2, 3, 4 repeat at days 15, 16, 17, 18, so a five-day window crossing the gap would have a duplicate code.</p><p className="mt-2"><b>Month</b> — seven fixed boxes group months that share the same month code, so tapping any month within a box gives the same weekday for that date. Tap the box containing the correct month. The boxes are always in the same position. In leap years, January shifts into the Apr/Jul box (becoming Jan/Apr/Jul) and February shifts into the Aug box (becoming Feb/Aug); the other boxes are unchanged. <i>Year 1582 with Julian on:</i> a special layout applies because the Julian/Gregorian transition splits the year — January through September and October 1–4 use Julian (year code +1), while October 15+ and November/December use Gregorian (year code −2). October's box position depends on the day: for days 1–4 it joins Jan and Nov ("Jan/Oct/Nov"); for days 15–31 it joins Jun ("Jun/Oct"); for days 5–14 it's excluded since those dates don't exist. The other six boxes are arranged differently from the standard layout — practice carefully.</p><p className="mt-2"><b>Year</b> — five consecutive year options. Each option has a unique year code, so only the correct year matches the displayed weekday. The correct year can appear in any position. <i>With Julian on:</i> when the five-year window would cross October 15, 1582 (the Julian/Gregorian boundary), it shrinks to two years — the calendar's 10-day jump produces a +5 weekday shift across that boundary that breaks distinctness for any longer window. <i>February 29:</i> only allowed when the window contains at least one leap year (Gregorian or Julian as appropriate). Non-leap years still appear as options but trivially can't be the answer, since Feb 29 doesn't exist in those years.</p><p className="mt-2"><b>Per-mode toggles</b> — Year mode adds <i>ab</i> Cross (left of Day/Month/Year) and Jul Cross (right of Day/Month/Year). Month mode adds 1582 Only (right of Day/Month/Year). These are mode-specific, not in the ⚙ Settings menu, since they only apply to one Deduction sub-mode.</p><p className="mt-2"><b><i>ab</i> Cross</b> (Year mode) — when on, the five-year window must cross a year ending in 00 (any 100-year boundary, both leap and non-leap centuries). Practice the <i>ab</i> code change mid-window. Disabled when your year range doesn't span any 100-year boundary.</p><p className="mt-2"><b>Jul Cross</b> (Year mode) — when on, the two-year window must cross October 15, 1582 (the Julian/Gregorian transition). N=2 always. Disabled when the Julian setting is off, or when your year range doesn't contain 1582 plus at least one of its neighbors (1581 or 1583).</p><p className="mt-2"><b>Both Year toggles on</b> — each puzzle randomly picks (50/50) which constraint to enforce. The two can't both be true for the same window.</p><p className="mt-2"><b>1582 Only</b> (Month mode) — when on, every puzzle uses year 1582, forcing the special split layout described above. Disabled when the Julian setting is off or your year range excludes 1582.</p><p className="mt-2">Switch subtypes anytime — progress in each is preserved. Stats are tracked separately for each subtype. Reset Stats only resets the current subtype and clears its question history.</p></GuideSection>
           <GuideSection id="flash" title="Flash" openId={open} onToggle={toggle}><p>The date is briefly revealed (0.1s–3.0s, default 0.5s, adjustable via the slider) then hidden. Answer from memory. Reset Stats clears your stats and question history.</p></GuideSection>
           <GuideSection id="blitz" title="Blitz" openId={open} onToggle={toggle}>
             <p>Answer as many dates as possible before time runs out. Score shows correct answers for the current round only.</p>
