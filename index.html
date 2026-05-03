@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"/>
   <meta name="theme-color" content="#0d1117">
   <title>Calendar Game</title>
   <meta name="application-name" content="Calendar Game">
@@ -19,7 +19,7 @@
     html,body{overflow:hidden}
     html{touch-action:manipulation}
     html,body{background:var(--bg1)}
-    body{color:var(--body-color)}
+    body{color:var(--body-color);padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
     .card{background:var(--card-bg);border:1px solid var(--card-bd)}
     .panel{background:var(--panel-bg);border:1px solid var(--panel-bd)}
     .thin{border:1px solid var(--thin-bd)}
@@ -344,7 +344,7 @@
 
 
 
-    const DEPLOY_TS=new Date('2026-05-03T03:38:00Z');
+    const DEPLOY_TS=new Date('2026-05-03T03:44:00Z');
 
     function StatPanel({stats}){
       // For fractional values (Score, Streak as "X/Y"), shrink the value font
@@ -789,17 +789,8 @@
       useEffect(()=>{
         document.documentElement.setAttribute("data-theme",activeTheme);
         const tc=getComputedStyle(document.documentElement).getPropertyValue("--tc").trim();
-        if(tc){
-          // Force iOS Safari to re-read theme-color by replacing the meta element entirely.
-          // Updating .content on the existing tag isn't picked up live by iOS for safe-area
-          // bar repaints; removing and re-creating the element forces a fresh read.
-          const old=document.querySelector("meta[name='theme-color']");
-          if(old)old.remove();
-          const m=document.createElement('meta');
-          m.name='theme-color';
-          m.content=tc;
-          document.head.appendChild(m);
-        }
+        const meta=document.querySelector("meta[name='theme-color']");
+        if(meta&&tc)meta.content=tc;
       },[activeTheme]);
       const [statsOffByMode,setStatsOffByMode]=useState({});
       const [avgVisOffByMode,setAvgVisOffByMode]=useState({classic:true,deduction:true});
