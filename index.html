@@ -344,7 +344,7 @@
 
 
 
-    const DEPLOY_TS=new Date('2026-05-03T03:28:00Z');
+    const DEPLOY_TS=new Date('2026-05-03T03:38:00Z');
 
     function StatPanel({stats}){
       // For fractional values (Score, Streak as "X/Y"), shrink the value font
@@ -789,12 +789,17 @@
       useEffect(()=>{
         document.documentElement.setAttribute("data-theme",activeTheme);
         const tc=getComputedStyle(document.documentElement).getPropertyValue("--tc").trim();
-        const meta=document.querySelector("meta[name='theme-color']");
-        if(meta&&tc)meta.content=tc;
-        // Force iOS Safari to repaint safe-area regions (status bar / home indicator bars) live
-        // on theme change. CSS variable updates alone don't reliably trigger a repaint of those
-        // regions on iOS — setting an inline style on <html> forces the recompute.
-        if(tc)document.documentElement.style.backgroundColor=tc;
+        if(tc){
+          // Force iOS Safari to re-read theme-color by replacing the meta element entirely.
+          // Updating .content on the existing tag isn't picked up live by iOS for safe-area
+          // bar repaints; removing and re-creating the element forces a fresh read.
+          const old=document.querySelector("meta[name='theme-color']");
+          if(old)old.remove();
+          const m=document.createElement('meta');
+          m.name='theme-color';
+          m.content=tc;
+          document.head.appendChild(m);
+        }
       },[activeTheme]);
       const [statsOffByMode,setStatsOffByMode]=useState({});
       const [avgVisOffByMode,setAvgVisOffByMode]=useState({classic:true,deduction:true});
