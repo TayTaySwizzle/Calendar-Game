@@ -381,7 +381,7 @@
 
 
 
-    const DEPLOY_TS=new Date('2026-05-03T20:54:00Z');
+    const DEPLOY_TS=new Date('2026-05-03T23:22:00Z');
 
     function StatPanel({stats}){
       // For fractional values (Score, Streak as "X/Y"), shrink the value font
@@ -1041,7 +1041,10 @@
       const begin=()=>{
         setActive(true);setShowTimerDate(false);setMsg("");setLocked(false);setRevealed(false);setCountedWrong(false);setCanOverrideCorrect(false);if(mode==="blitz")resetStatsCurrent();if(mode==="blitz"&&!perQ){blitzStartRef.current=performance.now();blitzPausedAccRef.current=0;blitzPausedAtRef.current=null;setBlitzRunning(true);setBlitzRemain(blitzSec);blitzRemainRef.current=blitzSec;setBlitzRoundStats(blankStats());}if(mode==="blitz"&&perQ){const now=performance.now();qDeadlineRef.current=now+qSec*1000;qPausedAccRef.current=0;qPausedAtRef.current=null;setQRemain(qSec);}if(mode==="flash"){setFlashPhase("show");clearTimeout(flashTimerRef.current);const now=performance.now();flashDeadlineRef.current=now+flashMs;setFlashRemainMs(flashMs);flashTimerRef.current=setTimeout(endFlashPhase,Math.max(50,flashMs));startFlashBar(flashMs);}tStartRef.current=performance.now();pushAndNext();
       };
-      function runDeductionRound(btnsForStack){const finalBtns=btnsForStack??{...persistBtns};const wasAnswered=Object.keys(finalBtns).length>0;const wasSaved=effectiveSaveStats();if(wasAnswered&&wasSaved){const capsule={snapshot:prevStatsSnapshotRef.current?{...prevStatsSnapshotRef.current}:null,wrongTime:wrongTimeRef.current};setDedStack(s=>ded?[...s,entryWithGreen({...ded,btns:finalBtns,overrideUsed:false,capsule,hasCredit:computeHasCredit(finalBtns)},useJulian)]:s);}setDedForwardStack([]);spawnDed();setMsg("");setRevealed(false);setLocked(false);setGuesses([]);setCountedWrong(false);setCanOverrideCorrect(false);setOverrideUsedThisQ(false);setBackDepth(0);setCalcPenalty(false);wrongTimeRef.current=null;prevStatsSnapshotRef.current=null;saveStatsThisQRef.current=null;resetPB();}
+      // setCalcOpen(false) is included in the batch so the date change (via spawnDed) lands
+      // in the same React update as the panel close — required by the freeze contract in
+      // MethodBreakdownSection. Mirrors pushAndNext's pattern for Classic/Flash/Blitz.
+      function runDeductionRound(btnsForStack){const finalBtns=btnsForStack??{...persistBtns};const wasAnswered=Object.keys(finalBtns).length>0;const wasSaved=effectiveSaveStats();if(wasAnswered&&wasSaved){const capsule={snapshot:prevStatsSnapshotRef.current?{...prevStatsSnapshotRef.current}:null,wrongTime:wrongTimeRef.current};setDedStack(s=>ded?[...s,entryWithGreen({...ded,btns:finalBtns,overrideUsed:false,capsule,hasCredit:computeHasCredit(finalBtns)},useJulian)]:s);}setDedForwardStack([]);spawnDed();setMsg("");setRevealed(false);setLocked(false);setGuesses([]);setCountedWrong(false);setCanOverrideCorrect(false);setOverrideUsedThisQ(false);setBackDepth(0);setCalcPenalty(false);setCalcOpen(false);wrongTimeRef.current=null;prevStatsSnapshotRef.current=null;saveStatsThisQRef.current=null;resetPB();}
       function pushAndNext(btnsForStack){
         if(["classic","flash","blitz"].includes(mode)){
           const finalBtns=btnsForStack??{...persistBtns};
@@ -1719,7 +1722,9 @@
       function flashDed(kind,index,ok){setDedFlash({kind,index,ok});setTimeout(()=>setDedFlash(null),FLASH_MS);}
       function submitDedAnswer(val,index){
         if(!ded||locked)return;
-        const sctn=()=>{const ci=getDedCorrectIdx();const dedBtns=mkBtnsWithCorrect(persistBtns,ci);const capsule={snapshot:prevStatsSnapshotRef.current?{...prevStatsSnapshotRef.current}:null,wrongTime:wrongTimeRef.current};setDedStack(s=>ded?[...s,{...ded,btns:dedBtns,overrideUsed:false,capsule,hasCredit:computeHasCredit(dedBtns)}]:s);setDedForwardStack([]);spawnDed();setMsg("");setGuesses([]);setCountedWrong(false);setCanOverrideCorrect(false);setLocked(false);setRevealed(false);setOverrideUsedThisQ(false);setBackDepth(0);wrongTimeRef.current=null;prevStatsSnapshotRef.current=null;resetPB();};
+        // sctn auto-advances after a correct Deduction answer. setCalcOpen(false) is in the
+        // batch so the ded change (via spawnDed) lands with the panel close — freeze contract.
+        const sctn=()=>{const ci=getDedCorrectIdx();const dedBtns=mkBtnsWithCorrect(persistBtns,ci);const capsule={snapshot:prevStatsSnapshotRef.current?{...prevStatsSnapshotRef.current}:null,wrongTime:wrongTimeRef.current};setDedStack(s=>ded?[...s,{...ded,btns:dedBtns,overrideUsed:false,capsule,hasCredit:computeHasCredit(dedBtns)}]:s);setDedForwardStack([]);spawnDed();setMsg("");setGuesses([]);setCountedWrong(false);setCanOverrideCorrect(false);setLocked(false);setRevealed(false);setOverrideUsedThisQ(false);setBackDepth(0);setCalcOpen(false);wrongTimeRef.current=null;prevStatsSnapshotRef.current=null;resetPB();};
         const sw=(label,idx)=>{if(!countedWrong){wrongTimeRef.current=tStartRef.current?(performance.now()-tStartRef.current)/1000:null;prevStatsSnapshotRef.current={played:S.played,good:S.good,streak:S.streak,best:S.best,timesLen:S.times.length,blitzPlayed:blitzRoundStats.played,blitzGood:blitzRoundStats.good,wasWrong:true};}markWrong(idx);setGuesses(g=>g.includes(label)?g:[...g,label]);setCountedWrong(true);setCanOverrideCorrect(false);};
         if(ded.type==="year"){const ok=(+val)===ded.y;flashDed("year",index,ok);if(ok){if(!countedWrong){prevStatsSnapshotRef.current={played:S.played,good:S.good,streak:S.streak,best:S.best,timesLen:S.times.length,blitzPlayed:blitzRoundStats.played,blitzGood:blitzRoundStats.good,wasWrong:false};setCanOverrideCorrect(true);if(tStartRef.current){const dt=(performance.now()-tStartRef.current)/1000;updateStats(c=>{c.times=[...c.times,dt];});}}else if(countedWrong&&prevStatsSnapshotRef.current){setCanOverrideCorrect(true);}if(!countedWrong)updateStats(c=>{c.played+=1;c.good+=1;c.streak+=1;if(c.streak>c.best)c.best=c.streak;});sctn();}else{if(!countedWrong)updateStats(c=>{c.played+=1;c.streak=0;});sw(fmtYear(+val),index);}}
         if(ded.type==="month"){const ok=ded.boxes?ded.boxes[index]?.months.includes(ded.m):((+val)===ded.m);flashDed("month",index,ok);if(ok){if(!countedWrong){prevStatsSnapshotRef.current={played:S.played,good:S.good,streak:S.streak,best:S.best,timesLen:S.times.length,blitzPlayed:blitzRoundStats.played,blitzGood:blitzRoundStats.good,wasWrong:false};setCanOverrideCorrect(true);if(tStartRef.current){const dt=(performance.now()-tStartRef.current)/1000;updateStats(c=>{c.times=[...c.times,dt];});}}else if(countedWrong&&prevStatsSnapshotRef.current){setCanOverrideCorrect(true);}if(!countedWrong)updateStats(c=>{c.played+=1;c.good+=1;c.streak+=1;if(c.streak>c.best)c.best=c.streak;});sctn();}else{if(!countedWrong)updateStats(c=>{c.played+=1;c.streak=0;});sw(String(val),index);}}
@@ -1857,12 +1862,14 @@
           }
         }
       },[mode]);
+      // setCalcOpen(false) is added to BOTH branches (snapshot-restore and spawn-fresh) so the
+      // ded change lands with the panel close — freeze contract in MethodBreakdownSection.
       useEffect(()=>{
         if(mode!=="deduction")return;setDedFlash(null);
         const pending=pendingDedSwitchRef.current;pendingDedSwitchRef.current=null;
         const snap=pending?.snap||savedDedByType[dedType]||null;
-        if(snap&&snap.ded){setDed(snap.ded);setGuesses(snap.guesses||[]);setCountedWrong(!!snap.countedWrong);setMsg(snap.msg||"");setLocked(!!snap.locked);setRevealed(!!snap.revealed);setCalcPenalty(!!snap.calcPenaltyActive);return;}
-        setMsg("");setGuesses([]);setLocked(false);setRevealed(false);setCountedWrong(false);spawnDed();
+        if(snap&&snap.ded){setDed(snap.ded);setGuesses(snap.guesses||[]);setCountedWrong(!!snap.countedWrong);setMsg(snap.msg||"");setLocked(!!snap.locked);setRevealed(!!snap.revealed);setCalcPenalty(!!snap.calcPenaltyActive);setCalcOpen(false);return;}
+        setMsg("");setGuesses([]);setLocked(false);setRevealed(false);setCountedWrong(false);setCalcOpen(false);spawnDed();
       },[dedType,mode,savedDedByType]);
       // Tailwind's `transition` utility intentionally omitted — it would re-introduce
       // a 150ms multi-property fade on persist (red on wrong) and on flash border-color.
@@ -2344,6 +2351,36 @@
         </div>
         <div className="pt-2 border-t border-purple-500/20 text-[11px] text-purple-300/60">Last Updated: {(()=>{const d=DEPLOY_TS;const yy=d.getFullYear();const mo=d.getMonth()+1;const da=d.getDate();const numFmt=numericFormatOf(dateFormat);const datePart=fmt(yy,mo,da,numFmt);const timePart=d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',hour12:false});return`${datePart} ${timePart}`;})()}</div>
       </div>);
+      // === DIAGNOSIS: temporary debug overlay for backlog item 1 (picker auto-close) ===
+      // Captures visibility/pageshow/focus/blur events with timestamps relative to the
+      // most recent mode change. Renders as a fixed top overlay (see JSX below the
+      // outermost return-div). Remove this entire block AND the matching JSX overlay
+      // once the picker auto-close cause is identified.
+      const [debugLog,setDebugLog]=useState([]);
+      const debugStartRef=useRef(performance.now());
+      useEffect(()=>{
+        const fmtMs=(t)=>{const d=Math.round(t-debugStartRef.current);return(d>=0?"+":"")+d+"ms";};
+        const pushLog=(line)=>setDebugLog(prev=>[...prev.slice(-19),`[${fmtMs(performance.now())}] ${line}`]);
+        const onVis=()=>pushLog(`vis: ${document.visibilityState}`);
+        const onPage=()=>pushLog("pageshow");
+        const onFocusE=(e)=>{const t=e.target;const tag=t&&t.tagName?t.tagName.toLowerCase():"?";const isSel=t===modeSelectRef.current;pushLog(`focus: ${tag}${isSel?" (mode-select)":""}`);};
+        const onBlurE=(e)=>{const t=e.target;const tag=t&&t.tagName?t.tagName.toLowerCase():"?";const isSel=t===modeSelectRef.current;pushLog(`blur: ${tag}${isSel?" (mode-select)":""}`);};
+        document.addEventListener('visibilitychange',onVis);
+        window.addEventListener('pageshow',onPage);
+        document.addEventListener('focus',onFocusE,true);
+        document.addEventListener('blur',onBlurE,true);
+        return()=>{
+          document.removeEventListener('visibilitychange',onVis);
+          window.removeEventListener('pageshow',onPage);
+          document.removeEventListener('focus',onFocusE,true);
+          document.removeEventListener('blur',onBlurE,true);
+        };
+      },[]);
+      useEffect(()=>{
+        debugStartRef.current=performance.now();
+        setDebugLog(prev=>[...prev.slice(-19),`--- mode -> ${mode} ---`]);
+      },[mode]);
+      // === END DIAGNOSIS ===
       return(
         <div className="mx-auto px-4 py-5 w-full max-w-[480px]">
         <div className="flex items-center justify-between gap-2 relative">
@@ -2522,6 +2559,10 @@
               </div>
             </div>
           )}
+          {/* DIAGNOSIS: temporary debug overlay for backlog item 1. Remove together with the
+              matching === DIAGNOSIS === code block above the return. Fixed at top of viewport
+              with pointer-events:none so it doesn't intercept taps on the underlying header. */}
+          <div style={{position:'fixed',top:0,left:0,right:0,maxHeight:'30vh',overflowY:'auto',background:'rgba(0,0,0,0.85)',color:'#0f0',fontSize:'10px',fontFamily:'monospace',padding:'4px 8px',zIndex:99999,lineHeight:'1.3',pointerEvents:'none'}}>{debugLog.map((line,i)=>(<div key={i}>{line}</div>))}</div>
         </div>
       );
     }
@@ -2637,9 +2678,23 @@
     function MethodBreakdownSection({date,open:controlledOpen,onOpenChange,className,contentClassName,useJulian=false,displayedFormat='written-mdy',cellDates=null}){
       const isControlled=typeof controlledOpen==="boolean"&&typeof onOpenChange==="function";
       const [internalOpen,setInternalOpen]=React.useState(false);
+      // Frozen values for the codes panel — kept in lockstep so MethodExplanation sees a
+      // self-consistent snapshot during the close animation (no prop leaks during the 310ms
+      // CODES_CLOSE_MS window).
       const [frozenDate,setFrozenDate]=React.useState(date);
+      const [frozenDisplayedFormat,setFrozenDisplayedFormat]=React.useState(displayedFormat);
+      const [frozenCellDates,setFrozenCellDates]=React.useState(cellDates);
+      const [frozenUseJulian,setFrozenUseJulian]=React.useState(useJulian);
+      // Latest-value refs (updated every render) so the close-timeout reads the freshest
+      // values when it fires after CODES_CLOSE_MS.
       const latestDateRef=React.useRef(date);
+      const latestDisplayedFormatRef=React.useRef(displayedFormat);
+      const latestCellDatesRef=React.useRef(cellDates);
+      const latestUseJulianRef=React.useRef(useJulian);
       latestDateRef.current=date;
+      latestDisplayedFormatRef.current=displayedFormat;
+      latestCellDatesRef.current=cellDates;
+      latestUseJulianRef.current=useJulian;
       const wasOpenRef=React.useRef(isControlled?!!controlledOpen:false);
       const key=date?`${date.y}-${date.m}-${date.d}`:"";
       React.useEffect(()=>{if(!isControlled)setInternalOpen(false);},[key,isControlled]);
@@ -2647,24 +2702,48 @@
       React.useEffect(()=>{if(hasDate)return;if(isControlled){if(controlledOpen)onOpenChange(false);}else setInternalOpen(false);},[hasDate,isControlled,controlledOpen,onOpenChange]);
       const open=hasDate?(isControlled?controlledOpen:internalOpen):false;
       const toggle=()=>{if(!hasDate)return;if(isControlled)onOpenChange(!open);else setInternalOpen(v=>!v);};
+      // Content-derived key for cellDates so identity-unstable inline-built arrays in the
+      // Deduction parent don't fire this effect on every parent render.
+      const cellDatesKey=cellDates?cellDates.map(c=>`${c.y}-${c.m}-${c.d}`).join('|'):'';
+      // === Freeze contract ===
+      // While the codes panel is open, all four inputs to MethodExplanation (date,
+      // displayedFormat, cellDates, useJulian) track their live values. When the panel
+      // transitions from open→closed, all four are HELD at their current values for
+      // CODES_CLOSE_MS (matches the Expander's 280ms close animation + buffer), then
+      // released to the latest values after the close completes.
+      // Callers that mutate any of the four inputs MUST batch setCalcOpen(false) into
+      // the same React update; otherwise this effect fires once with (open=true,
+      // newInputs) and updates the frozen values immediately, defeating the freeze.
+      // Mutators that honor this contract: pushAndNext, goBack, goForward,
+      // runDeductionRound, sctn, the dedType useEffect, handleResetStats, the blitz
+      // config-change effect.
       React.useEffect(()=>{
         if(!date)return;
         if(open){
           wasOpenRef.current=true;
-          // #6 — update frozenDate immediately when panel is open and date changes
-          // (safe for game modes because calcOpen is set false before date changes there)
           setFrozenDate(date);
+          setFrozenDisplayedFormat(displayedFormat);
+          setFrozenCellDates(cellDates);
+          setFrozenUseJulian(useJulian);
           return;
         }
         if(wasOpenRef.current){
           wasOpenRef.current=false;
-          const t=setTimeout(()=>setFrozenDate(latestDateRef.current),CODES_CLOSE_MS);
+          const t=setTimeout(()=>{
+            setFrozenDate(latestDateRef.current);
+            setFrozenDisplayedFormat(latestDisplayedFormatRef.current);
+            setFrozenCellDates(latestCellDatesRef.current);
+            setFrozenUseJulian(latestUseJulianRef.current);
+          },CODES_CLOSE_MS);
           return()=>clearTimeout(t);
         }else{
           setFrozenDate(date);
+          setFrozenDisplayedFormat(displayedFormat);
+          setFrozenCellDates(cellDates);
+          setFrozenUseJulian(useJulian);
         }
-      },[open,date]);
-      return(<div className={className??"mt-5"}><button type="button" onClick={toggle} className={`w-full px-4 py-2 rounded-xl btn-solid text-sm font-medium${!hasDate?" opacity-60 cursor-not-allowed pointer-events-none":""}`} aria-disabled={!hasDate}>{open?"Hide Codes":"Show Codes"}</button><Expander open={open&&hasDate}><div className={contentClassName??"mt-3 rounded-2xl panel p-4 pb-1"}><MethodExplanation date={frozenDate} useJulian={useJulian} displayedFormat={displayedFormat} cellDates={cellDates}/></div></Expander></div>);
+      },[open,date,displayedFormat,useJulian,cellDatesKey]);
+      return(<div className={className??"mt-5"}><button type="button" onClick={toggle} className={`w-full px-4 py-2 rounded-xl btn-solid text-sm font-medium${!hasDate?" opacity-60 cursor-not-allowed pointer-events-none":""}`} aria-disabled={!hasDate}>{open?"Hide Codes":"Show Codes"}</button><Expander open={open&&hasDate}><div className={contentClassName??"mt-3 rounded-2xl panel p-4 pb-1"}><MethodExplanation date={frozenDate} useJulian={frozenUseJulian} displayedFormat={frozenDisplayedFormat} cellDates={frozenCellDates}/></div></Expander></div>);
     }
 
     function LookupCard({history=[],onAddHistory,onMoveHistory,onClearHistory,inputValue="",onInputChange,outputValue="",onOutputChange,calcDate,onCalcDateChange,selectedHistoryId,onSelectedHistoryIdChange,calcOpen=false,onCalcOpenChange,fmtDate,dateFormat='written-mdy',useJulian=false}){
