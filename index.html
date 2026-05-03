@@ -23,50 +23,30 @@
     .panel{background:var(--panel-bg);border:1px solid var(--panel-bd)}
     .thin{border:1px solid var(--thin-bd)}
     .surface-button{background:var(--sbtn-bg);border-color:var(--sbtn-bd);transition:background-color .2s}
+    .surface-button:hover{background:var(--sbtn-hov)}
     .surface-toggle{background:var(--stgl-bg);border-color:var(--sbtn-bd);transition:background-color .2s}
+    .surface-toggle:hover{background:var(--stgl-hov)}
     .btn-solid{background:#7c3aed;color:#fff;transition:background-color .2s}
-    /* Hover styles guarded by hover-capable media query so touch devices (iOS, Android)
-       don't get sticky-hover residual highlights after a tap. Tailwind's own hover:
-       utilities already do this guard automatically; these custom rules now match. */
-    @media (hover: hover){
-      .surface-button:hover{background:var(--sbtn-hov)}
-      .surface-toggle:hover{background:var(--stgl-hov)}
-      .btn-solid:hover{background:#6d28d9}
-    }
+    .btn-solid:hover{background:#6d28d9}
     .btn-solid[aria-disabled="true"],.btn-solid:disabled{opacity:.6;cursor:not-allowed}
     button,input,select{-webkit-tap-highlight-color:transparent}
     button{touch-action:manipulation}
     button:focus,select:focus{outline:none}
-    /* Flash keyframes drive the visual layers that change during a flash:
-       background and border-color. If any layer is omitted, the button's other
-       CSS transitions will leak in and cause a 150ms fade on that property —
-       visible as flicker or a lingering border at flash start.
-       Endpoints (100%) match surface-button's resting state so the flash
-       resolves cleanly into idle without a second-stage transition.
-       Box-shadow halo intentionally absent for cleaner flat-design appearance;
-       persist classes match (no halo on correct/wrong persistent states). */
-    @keyframes flashGood{0%,60%{background:rgba(21,128,61,.95);border-color:transparent}100%{background:var(--sbtn-bg);border-color:var(--sbtn-bd)}}
-    @keyframes flashBad{0%,60%{background:rgba(185,28,28,.95);border-color:transparent}100%{background:var(--sbtn-bg);border-color:var(--sbtn-bd)}}
-    @keyframes flashGoodLight{0%,60%{background:rgba(22,163,74,.82);border-color:transparent}100%{background:var(--sbtn-bg);border-color:var(--sbtn-bd)}}
-    @keyframes flashBadLight{0%,60%{background:rgba(220,38,38,.82);border-color:transparent}100%{background:var(--sbtn-bg);border-color:var(--sbtn-bd)}}
+    /* #7 — darker flash colors for dark themes */
+    @keyframes flashGood{0%,60%{background:rgba(21,128,61,.95);box-shadow:0 0 0 2px rgba(20,83,45,1)}100%{background:transparent;box-shadow:none}}
+    @keyframes flashBad{0%,60%{background:rgba(185,28,28,.95);box-shadow:0 0 0 2px rgba(127,29,29,1)}100%{background:transparent;box-shadow:none}}
+    @keyframes flashGoodLight{0%,60%{background:rgba(22,163,74,.82);box-shadow:0 0 0 2px rgba(21,128,61,.7)}100%{background:transparent;box-shadow:none}}
+    @keyframes flashBadLight{0%,60%{background:rgba(220,38,38,.82);box-shadow:0 0 0 2px rgba(185,28,28,.7)}100%{background:transparent;box-shadow:none}}
     .flash-good{animation:flashGood .55s ease-out forwards}
     .flash-bad{animation:flashBad .55s ease-out forwards}
     [data-theme="light"] .flash-good,[data-theme="parchment"] .flash-good{animation-name:flashGoodLight}
     [data-theme="light"] .flash-bad,[data-theme="parchment"] .flash-bad{animation-name:flashBadLight}
-    .btn-wrong-persist{background:rgba(185,28,28,.95)}
+    .btn-wrong-persist{background:rgba(185,28,28,.95);box-shadow:0 0 0 2px rgba(127,29,29,1)}
     .btn-wrong-dim{background:rgba(185,28,28,.32)}
-    .btn-correct-persist{background:rgba(21,128,61,.95)}
-    [data-theme="light"] .btn-wrong-persist,[data-theme="parchment"] .btn-wrong-persist{background:rgba(220,38,38,.82)}
+    .btn-correct-persist{background:rgba(21,128,61,.95);box-shadow:0 0 0 2px rgba(20,83,45,1)}
+    [data-theme="light"] .btn-wrong-persist,[data-theme="parchment"] .btn-wrong-persist{background:rgba(220,38,38,.82);box-shadow:0 0 0 2px rgba(185,28,28,.7)}
     [data-theme="light"] .btn-wrong-dim,[data-theme="parchment"] .btn-wrong-dim{background:rgba(220,38,38,.28)}
-    [data-theme="light"] .btn-correct-persist,[data-theme="parchment"] .btn-correct-persist{background:rgba(22,163,74,.82)}
-    /* Focus ring for keyboard navigation. Scoped to (pointer: fine) so touch-only
-       devices never see it. iOS Safari fires :focus-visible on <select> taps even
-       on touch (Safari treats picker activation as keyboard-equivalent), which
-       would otherwise display a lingering purple ring on every tap. The native
-       picker / on-screen keyboard already serves as the focus indicator on touch. */
-    @media (pointer: fine){
-      .focus-ring:focus-visible{box-shadow:0 0 0 2px rgb(192 132 252)}
-    }
+    [data-theme="light"] .btn-correct-persist,[data-theme="parchment"] .btn-correct-persist{background:rgba(22,163,74,.82);box-shadow:0 0 0 2px rgba(21,128,61,.7)}
     .hist-unsel{border-left-color:var(--panel-bd)}
     .bar{height:6px;border-radius:6px;overflow:hidden;background:var(--bar-bg);border:1px solid var(--bar-bd)}
     .bar>span{display:block;height:100%;background:linear-gradient(90deg,#a855f7,#7c3aed)}
@@ -97,11 +77,7 @@
     const {useEffect,useMemo,useRef,useState,useCallback,useLayoutEffect} = React;
     const MONTH=["January","February","March","April","May","June","July","August","September","October","November","December"];
     const DAY=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
-    // Month codes use canonical (-3 to 3) representation matching ab/cd convention.
-    // Values >3 are written as their negative equivalent (mod 7): 4→-3, 5→-2, 6→-1.
-    // Calculation is unaffected since results mod 7 at the end. Display values match
-    // what users learn from the book.
-    const METHOD_MONTH_CODES={1:-1,2:2,3:2,4:-2,5:0,6:3,7:-2,8:1,9:-3,10:-1,11:2,12:-3};
+    const METHOD_MONTH_CODES={1:6,2:2,3:2,4:5,5:0,6:3,7:5,8:1,9:4,10:6,11:2,12:4};
     const METHOD_AB_ADVANCED_MAP={even:new Map([[0,0],[1,-2],[2,3],[3,1],[4,0],[5,-2],[6,3],[7,1],[8,0],[9,-2]]),odd:new Map([[0,3],[1,1],[2,0],[3,-2],[4,3],[5,1],[6,0],[7,-2],[8,3],[9,1]])};
     const METHOD_CD_ADVANCED_LEAP_ORDER=[0,4,8,12,16,20,24,28,32,36,40,44,48,52,56,60,64,68,72,76,80,84,88,92,96];
     const METHOD_CD_ADVANCED_LEAP_MAP=new Map([[0,0],[4,-2],[8,3],[12,1],[16,-1],[20,-3],[24,2],[28,0],[32,-2],[36,3],[40,1],[44,-1],[48,-3],[52,2],[56,0],[60,-2],[64,3],[68,1],[72,-1],[76,-3],[80,2],[84,0],[88,-2],[92,3],[96,1]]);
@@ -249,26 +225,12 @@
       }
     }
     const blankDedTypeStore=()=>({year:null,month:null,day:null});
-    // Format IDs and rollFormat live at module scope so the dateByMode useState
-    // initializer can stamp ._fmt on the very first dates. Previously these were
-    // declared inside the component, which meant the initializer fell back to
-    // dateFormat (default 'written-mdy') for the first date in each mode even
-    // when randomFormat was on — visible as "April 2, 2020" being the first
-    // launch date every time. Other call sites (attachFmt, advanceDate) use
-    // these same module-scope versions.
-    const FORMAT_IDS=['written-mdy','written-dmy','numeric-mdy','numeric-dmy','numeric-ymd'];
-    const rollFormat=()=>FORMAT_IDS[Math.floor(Math.random()*FORMAT_IDS.length)];
     const normalizeMod7=v=>((v%7)+7)%7;
     const canonicalizeMod=v=>{const m=normalizeMod7(v);return m>3?m-7:m;};
     function calcDayCode(d){const lo=Math.floor(d/7)*7,hi=lo+7,fl=d-lo,fu=d-hi;return Math.abs(fu)<=Math.abs(fl)?fu:fl;}
     function calcCdCode(cd){if(METHOD_CD_ADVANCED_ZERO_YEARS.has(cd))return 0;let b=METHOD_CD_ADVANCED_LEAP_ORDER[0];for(const y of METHOD_CD_ADVANCED_LEAP_ORDER){if(y>cd)break;b=y;}return canonicalizeMod((METHOD_CD_ADVANCED_LEAP_MAP.get(b)??0)+(cd-b));}
     function yearParts(y){const f=((y%10000)+10000)%10000;return{a:Math.floor(f/1000),b:Math.floor((f%1000)/100),cd:f%100};}
-    // leapCode is the calculation contribution for leap correction (matches the
-    // framing of the other numeric codes in the codes panel): -1 only when it's
-    // a leap year AND month is January or February (where the leap correction
-    // applies in the day-of-week calculation), 0 otherwise. leapYear boolean is
-    // kept in the return object too in case future code needs the underlying state.
-    function computeMethodSummary({y,m,d},useJulian=false){if(!Number.isFinite(y)||y<=0)return null;const mc=METHOD_MONTH_CODES[m]??null;if(mc==null)return null;const p=yearParts(y);const julian=useJulian&&isJulianDate(y,m,d);const abCode=julian?(JULIAN_AB_MAP.get(p.a*10+p.b)??0):((p.a%2===0?METHOD_AB_ADVANCED_MAP.even:METHOD_AB_ADVANCED_MAP.odd).get(p.b)??0);const leapYear=julian?isLeapJulian(y):isLeap(y);const leapCode=(leapYear&&(m===1||m===2))?-1:0;const weekday=DAY[julian?wdayJulian(y,m,d):wday(y,m,d)];return{monthCode:mc,dayCode:calcDayCode(d),abCode,cdCode:calcCdCode(p.cd),leapYear,leapCode,weekday,calendarSystem:julian?'Julian':'Gregorian'};}
+    function computeMethodSummary({y,m,d},useJulian=false){if(!Number.isFinite(y)||y<=0)return null;const mc=METHOD_MONTH_CODES[m]??null;if(mc==null)return null;const p=yearParts(y);const julian=useJulian&&isJulianDate(y,m,d);const abCode=julian?(JULIAN_AB_MAP.get(p.a*10+p.b)??0):((p.a%2===0?METHOD_AB_ADVANCED_MAP.even:METHOD_AB_ADVANCED_MAP.odd).get(p.b)??0);const leapYear=julian?isLeapJulian(y):isLeap(y);const weekday=DAY[julian?wdayJulian(y,m,d):wday(y,m,d)];return{monthCode:mc,dayCode:calcDayCode(d),abCode,cdCode:calcCdCode(p.cd),leapYear,weekday,calendarSystem:julian?'Julian':'Gregorian'};}
     const isTouch=typeof window!=="undefined"&&("ontouchstart" in window||navigator.maxTouchPoints>0||matchMedia("(pointer:coarse)").matches);
     const isTimer=m=>m==="blitz"||m==="flash";
     const fmtBlitzT=s=>{const sec=Math.ceil(s);if(sec<60)return sec+"s";const m=Math.floor(sec/60),r=sec%60;return m+"m "+r+"s";};
@@ -381,7 +343,7 @@
 
 
 
-    const DEPLOY_TS=new Date('2026-05-03T20:54:00Z');
+    const DEPLOY_TS=new Date('2026-05-03T04:18:00Z');
 
     function StatPanel({stats}){
       // For fractional values (Score, Streak as "X/Y"), shrink the value font
@@ -461,11 +423,7 @@
       );
       const codesDisabled=runPhase==="idle"||(oneByOne&&!shown&&!inBackMode&&!isLocked);
       const optionsDisabled=isLocked||codesOpen||(oneByOne&&!shown&&!inBackMode)||runPhase==="idle"||inBackMode;
-      // Tailwind's `transition` utility intentionally omitted — it would re-introduce
-      // a 150ms multi-property fade on persist (red on wrong, green at end of run)
-      // and on flash border-color. Hover fades are handled by surface-button's own
-      // targeted 200ms bg-only transition (see <style> block at top of file).
-      const baseBtn="w-full rounded-2xl border px-4 py-3 text-base shadow-sm select-none";
+      const baseBtn="w-full rounded-2xl border px-4 py-3 text-base transition shadow-sm select-none";
 
       function reset(){setRunPhase("idle");setDisplayN(n);setShown(false);setInBackMode(false);setAoxStack([]);setAoxForwardStack([]);setTimes([]);setStreak(0);setBestStreak(0);setAttempts(0);setGuesses([]);setMsg("");setFlash(null);resetAoxPB();setCodesOpen(false);setCanOverrideCorrect(false);setQuestionCounted(false);setPendingWrongCredit(null);setOverrideUsedAox(false);setBestNew({});setDate(genDate(minY,maxY));tStartRef.current=null;wrongTimeRef.current=null;prevTimesSnapRef.current=null;prevStreakSnapRef.current=null;prevBestSnapRef.current=null;}
       useEffect(()=>{if(!visible&&runPhase==="running")reset();},[visible]);
@@ -802,7 +760,7 @@
               <button type="button" className={`col-span-1 px-3 py-2 rounded-xl border surface-button text-sm font-medium text-center ${!overrideAvail?"opacity-60 pointer-events-none":""}`} onClick={handleOverride}>Override</button>
             </div>
             <button type="button" className={`w-full px-4 py-2 rounded-xl btn-solid text-sm font-medium ${codesDisabled&&!inBackMode?"opacity-60 pointer-events-none":""}`} onClick={openCodes}>{codesOpen?"Hide Codes":"Show Codes"}</button>
-            <Expander open={codesOpen}><div className="mt-3 rounded-2xl thin px-4 pt-[3px] pb-1.5"><MethodExplanation date={aoxFrozenDate} useJulian={inBackMode?(aoxFrozenDate?._jul??useJulian):useJulian} displayedFormat={(randomFormat&&aoxFrozenDate?._fmt)||dateFormat}/></div></Expander>
+            <Expander open={codesOpen}><div className="mt-3 rounded-2xl thin px-4 pt-[3px] pb-1.5"><MethodExplanation date={aoxFrozenDate} useJulian={inBackMode?(aoxFrozenDate?._jul??useJulian):useJulian}/></div></Expander>
           </div>
         </div>
       );
@@ -864,16 +822,7 @@
       const [minInputVal,setMinInputVal]=useState("1");
       const [maxInputVal,setMaxInputVal]=useState("10000");
       const minInputRef=useRef(null),maxInputRef=useRef(null);
-      // genDate isn't accessible here — it's declared later in the component and
-      // depends on state declared later (Babel hoists `const` as `var`, so calling
-      // genDate from this initializer would crash with "genDate is undefined").
-      // The literal `false` for _jul and unconditional rollFormat() call mirror
-      // the corresponding useState defaults (useJulian=false, randomFormat=true).
-      // If those defaults change, this initializer must be updated to match.
-      const [dateByMode,setDateByMode]=useState(()=>{
-        const mk=()=>{const d=randomDate(1,10000);d._fmt=rollFormat();d._jul=false;return d;};
-        return{classic:mk(),blitz:mk(),flash:mk()};
-      });
+      const [dateByMode,setDateByMode]=useState(()=>({classic:randomDate(1,10000),blitz:randomDate(1,10000),flash:randomDate(1,10000)}));
       const date=dateByMode[mode]??dateByMode.classic;
       const setDate=valOrFn=>setDateByMode(prev=>({...prev,[mode]:typeof valOrFn==='function'?valOrFn(prev[mode]??prev.classic):valOrFn}));
       const [stack,setStack]=useState([]),[dedStack,setDedStack]=useState([]);
@@ -979,30 +928,7 @@
       // The BFCache layout-shift protection works the same way: anchoring #root to the current
       // viewport prevents iOS from restoring stale layout state. 'guide' mode allows scrolling
       // because the HtP content is long.
-      //
-      // lastAppliedScrollLockRef tracks whether 'guide' or 'lock' state was last applied. When
-      // mode changes between two non-guide modes (e.g. Classic → AoX), the desired DOM state is
-      // identical and we skip the work entirely — previously the cleanup-then-body sequence
-      // unconditionally rewrote #root styles + scrolled to top on every mode change, churning
-      // layout in a way that iOS Safari can interpret as the focused <select> being moved away,
-      // closing any open native picker. window.scrollTo(0,0) only fires when leaving guide
-      // (where scrolling was actually possible). No cleanup function — the App never unmounts
-      // in practice and skipping cleanup avoids redundant work on every effect re-run.
-      const lastAppliedScrollLockRef=useRef(null);
-      useEffect(()=>{
-        const desired=mode==='guide'?'guide':'lock';
-        if(lastAppliedScrollLockRef.current===desired)return;
-        const el=document.documentElement;const body=document.body;const root=document.getElementById('root');
-        if(desired==='guide'){
-          el.style.overflow='auto';body.style.overflow='auto';
-          if(root){root.style.position='';root.style.top='';root.style.left='';root.style.right='';root.style.bottom='';root.style.overflow='';}
-        }else{
-          el.style.overflow='hidden';body.style.overflow='hidden';
-          if(root){root.style.position='fixed';root.style.top='0';root.style.left='0';root.style.right='0';root.style.bottom='0';root.style.overflow='hidden';}
-          if(lastAppliedScrollLockRef.current==='guide')window.scrollTo(0,0);
-        }
-        lastAppliedScrollLockRef.current=desired;
-      },[mode]);
+      useEffect(()=>{const el=document.documentElement;const body=document.body;const root=document.getElementById('root');if(mode==='guide'){el.style.overflow='auto';body.style.overflow='auto';if(root){root.style.position='';root.style.top='';root.style.left='';root.style.right='';root.style.bottom='';root.style.overflow='';}}else{el.style.overflow='hidden';body.style.overflow='hidden';if(root){root.style.position='fixed';root.style.top='0';root.style.left='0';root.style.right='0';root.style.bottom='0';root.style.overflow='hidden';}window.scrollTo(0,0);}return()=>{el.style.overflow='';body.style.overflow='';if(root){root.style.position='';root.style.top='';root.style.left='';root.style.right='';root.style.bottom='';root.style.overflow='';}};},[mode]);
       // BFCache scroll reset (defense-in-depth alongside position:fixed #root).
       // Multiple events + deferred resets cover edge cases where pageshow alone isn't reliable
       // on iOS Safari. visibilitychange catches tab-foreground transitions; rAF + setTimeout
@@ -1033,11 +959,7 @@
         raf=requestAnimationFrame(loop);return()=>cancelAnimationFrame(raf);
       },[mode,blitzSec,qSec,blitzRunning,active,flashPhase]);
       const trackingOn=()=>["classic","blitz","flash","deduction"].includes(mode);
-      // arm() is the canonical mode-arrival reset for Classic/Flash/Deduction/Blitz state.
-      // Resets every transient question-state value: locked, revealed, countedWrong,
-      // calcPenaltyActive, guesses, msg, flash, etc. If a new piece of question state is
-      // added that should not survive a mode change, reset it here.
-      const arm=()=>{resetPB();setActive(false);setShowTimerDate(false);setMsg("");setGuesses([]);setFlash(null);setLocked(false);setRevealed(false);setCountedWrong(false);setCanOverrideCorrect(false);setPendingWrongOverride(null);setOverrideUsedThisQ(false);setCalcPenalty(false);setBackDepth(0);setTimerDone(false);setStack([]);setForwardStack([]);setDedStack([]);setDedForwardStack([]);if(mode==="blitz")resetStatsCurrent();if(mode==="blitz"){setBlitzBestNew({});setSuddenBestNew({});}setBlitzRemain(blitzSec);blitzRemainRef.current=blitzSec;blitzStartRef.current=null;blitzPausedAtRef.current=null;blitzPausedAccRef.current=0;setBlitzRunning(false);if(mode==="blitz")setBlitzRoundStats(blankStats());qDeadlineRef.current=null;qPausedAtRef.current=null;qPausedAccRef.current=0;setQRemain(qSec);clearTimeout(flashTimerRef.current);flashTimerRef.current=null;setFlashPhase("dash");flashDeadlineRef.current=null;setFlashRemainMs(flashMs);resetFlashBar();tStartRef.current=null;wrongTimeRef.current=null;prevStatsSnapshotRef.current=null;if(blitzBarRef.current)blitzBarRef.current.style.width="100%";if(blitzTimeRef.current)blitzTimeRef.current.textContent=fmtBlitzT(blitzSec);if(suddenBarRef.current)suddenBarRef.current.style.width="100%";if(suddenTimeRef.current)suddenTimeRef.current.textContent=qSec+"s";};
+      const arm=()=>{resetPB();setActive(false);setShowTimerDate(false);setMsg("");setGuesses([]);setFlash(null);setLocked(false);setRevealed(false);setCountedWrong(false);setCanOverrideCorrect(false);setPendingWrongOverride(null);setOverrideUsedThisQ(false);setBackDepth(0);setTimerDone(false);setStack([]);setForwardStack([]);setDedStack([]);setDedForwardStack([]);if(mode==="blitz")resetStatsCurrent();if(mode==="blitz"){setBlitzBestNew({});setSuddenBestNew({});}setBlitzRemain(blitzSec);blitzRemainRef.current=blitzSec;blitzStartRef.current=null;blitzPausedAtRef.current=null;blitzPausedAccRef.current=0;setBlitzRunning(false);if(mode==="blitz")setBlitzRoundStats(blankStats());qDeadlineRef.current=null;qPausedAtRef.current=null;qPausedAccRef.current=0;setQRemain(qSec);clearTimeout(flashTimerRef.current);flashTimerRef.current=null;setFlashPhase("dash");flashDeadlineRef.current=null;setFlashRemainMs(flashMs);resetFlashBar();tStartRef.current=null;wrongTimeRef.current=null;prevStatsSnapshotRef.current=null;if(blitzBarRef.current)blitzBarRef.current.style.width="100%";if(blitzTimeRef.current)blitzTimeRef.current.textContent=fmtBlitzT(blitzSec);if(suddenBarRef.current)suddenBarRef.current.style.width="100%";if(suddenTimeRef.current)suddenTimeRef.current.textContent=qSec+"s";};
       const begin=()=>{
         setActive(true);setShowTimerDate(false);setMsg("");setLocked(false);setRevealed(false);setCountedWrong(false);setCanOverrideCorrect(false);if(mode==="blitz")resetStatsCurrent();if(mode==="blitz"&&!perQ){blitzStartRef.current=performance.now();blitzPausedAccRef.current=0;blitzPausedAtRef.current=null;setBlitzRunning(true);setBlitzRemain(blitzSec);blitzRemainRef.current=blitzSec;setBlitzRoundStats(blankStats());}if(mode==="blitz"&&perQ){const now=performance.now();qDeadlineRef.current=now+qSec*1000;qPausedAccRef.current=0;qPausedAtRef.current=null;setQRemain(qSec);}if(mode==="flash"){setFlashPhase("show");clearTimeout(flashTimerRef.current);const now=performance.now();flashDeadlineRef.current=now+flashMs;setFlashRemainMs(flashMs);flashTimerRef.current=setTimeout(endFlashPhase,Math.max(50,flashMs));startFlashBar(flashMs);}tStartRef.current=performance.now();pushAndNext();
       };
@@ -1285,14 +1207,7 @@
           wrongTimeRef.current=null;prevStatsSnapshotRef.current=null;
           if(mode==="blitz")setBlitzRoundStats(p=>({...p,good:p.good+1}));
           setCountedWrong(false);setCanOverrideCorrect(false);setGuesses([]);setMsg("");setLocked(false);setRevealed(false);setCalcPenalty(false);setCalcOpen(false);
-          // Deduction renders flash from dedFlash (shape: {kind, index, ok}) — `flash`
-          // state is for Classic/Flash buttons only. Without this branch, override-after-wrong
-          // would set the wrong state variable in Deduction and no green would appear.
-          if(mode==="deduction"){
-            setDedFlash({kind:ded.type,index:getDedCorrectIdx(),ok:true});setTimeout(()=>setDedFlash(null),FLASH_MS);
-          }else{
-            setFlash({type:"good",idx:correct});setTimeout(()=>setFlash(null),FLASH_MS);
-          }
+          setFlash({type:"good",idx:mode==="deduction"?getDedCorrectIdx():correct});setTimeout(()=>setFlash(null),FLASH_MS);
           // Timer-mode resume after override-from-wrong:
           //   Blitz Per Round: resume countdown where it left off.
           //   Blitz Per Question: restart the per-Q timer, revert saved best if it was just written.
@@ -1864,11 +1779,7 @@
         if(snap&&snap.ded){setDed(snap.ded);setGuesses(snap.guesses||[]);setCountedWrong(!!snap.countedWrong);setMsg(snap.msg||"");setLocked(!!snap.locked);setRevealed(!!snap.revealed);setCalcPenalty(!!snap.calcPenaltyActive);return;}
         setMsg("");setGuesses([]);setLocked(false);setRevealed(false);setCountedWrong(false);spawnDed();
       },[dedType,mode,savedDedByType]);
-      // Tailwind's `transition` utility intentionally omitted — it would re-introduce
-      // a 150ms multi-property fade on persist (red on wrong) and on flash border-color.
-      // Hover fades are handled by surface-button's own targeted 200ms bg-only
-      // transition (see <style> block at top of file).
-      const baseBtn="w-full rounded-2xl border px-4 py-3 text-base shadow-sm select-none";
+      const baseBtn="w-full rounded-2xl border px-4 py-3 text-base transition shadow-sm select-none";
       const idleBtn="surface-button";
       const optionsDisabled=(isTimer(mode)&&!active)||locked||calcOpen||calcPenaltyActive;
       // Layout helper for option grids in 3-col mode. Used by Day sub-mode (N=7 → last button
@@ -1960,8 +1871,9 @@
       // Leap-year date generation settings (apply to all game modes; Lookup unaffected).
       const [leapChance,setLeapChance]=useState('random');
       const [forceJanFebOnLeap,setForceJanFebOnLeap]=useState(false);
-      // FORMAT_IDS and rollFormat are defined at module scope (see top of file)
-      // so the dateByMode useState initializer can also use them.
+      // The 5 reachable formats. Random rolls one per date in game modes.
+      const FORMAT_IDS=['written-mdy','written-dmy','numeric-mdy','numeric-dmy','numeric-ymd'];
+      const rollFormat=()=>FORMAT_IDS[Math.floor(Math.random()*FORMAT_IDS.length)];
       // fmtDate: if Random Format is on AND date carries a stored _fmt (from per-date roll), use it; else use selected format.
       // Toggling Random off makes already-displayed dates immediately fall back to the selected format.
       const fmtDate=(y,m,d,storedFmt)=>fmt(y,m,d,(randomFormat&&storedFmt)||dateFormat);
@@ -2321,9 +2233,9 @@
         <div className="space-y-2 pt-3 border-t border-purple-500/20">
           <div className="text-[10px] uppercase tracking-widest text-purple-300/60">Year Range</div>
           <div className="flex items-center gap-2">
-            <input ref={minInputRef} type="text" inputMode="numeric" pattern="[0-9]*" value={minInputVal} onChange={e=>{if(e.target.value===''||/^\d*$/.test(e.target.value))setMinInputVal(e.target.value);}} onBlur={commitMin} onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();commitMin();e.currentTarget.blur();}if(e.key==="Escape"){setMinInputVal(String(minY));e.currentTarget.blur();}blockMinus(e);}} onBeforeInput={blockMinusBI} className="w-20 panel rounded-xl px-2 py-1.5 text-sm text-center focus:outline-none focus-ring tabular-nums"/>
+            <input ref={minInputRef} type="text" inputMode="numeric" pattern="[0-9]*" value={minInputVal} onChange={e=>{if(e.target.value===''||/^\d*$/.test(e.target.value))setMinInputVal(e.target.value);}} onBlur={commitMin} onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();commitMin();e.currentTarget.blur();}if(e.key==="Escape"){setMinInputVal(String(minY));e.currentTarget.blur();}blockMinus(e);}} onBeforeInput={blockMinusBI} className="w-20 panel rounded-xl px-2 py-1.5 text-sm text-center focus:outline-none focus:ring-2 focus:ring-purple-400 tabular-nums"/>
             <span className="text-purple-300/60 text-sm shrink-0">→</span>
-            <input ref={maxInputRef} type="text" inputMode="numeric" pattern="[0-9]*" value={maxInputVal} onChange={e=>{if(e.target.value===''||/^\d*$/.test(e.target.value))setMaxInputVal(e.target.value);}} onBlur={commitMax} onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();commitMax();e.currentTarget.blur();}if(e.key==="Escape"){setMaxInputVal(String(maxY));e.currentTarget.blur();}blockMinus(e);}} onBeforeInput={blockMinusBI} className="w-20 panel rounded-xl px-2 py-1.5 text-sm text-center focus:outline-none focus-ring tabular-nums"/>
+            <input ref={maxInputRef} type="text" inputMode="numeric" pattern="[0-9]*" value={maxInputVal} onChange={e=>{if(e.target.value===''||/^\d*$/.test(e.target.value))setMaxInputVal(e.target.value);}} onBlur={commitMax} onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();commitMax();e.currentTarget.blur();}if(e.key==="Escape"){setMaxInputVal(String(maxY));e.currentTarget.blur();}blockMinus(e);}} onBeforeInput={blockMinusBI} className="w-20 panel rounded-xl px-2 py-1.5 text-sm text-center focus:outline-none focus:ring-2 focus:ring-purple-400 tabular-nums"/>
           </div>
         </div>
         <div className="space-y-2 pt-3 border-t border-purple-500/20">
@@ -2340,7 +2252,7 @@
         <div className="space-y-2 pt-3 border-t border-purple-500/20">
           <div className="text-[10px] uppercase tracking-widest text-purple-300/60">Theme</div>
           <div className="flex items-center justify-between"><span className="text-xs text-purple-200/80">Use System Settings</span><button type="button" onClick={()=>setUseSystem(v=>!v)} className={`px-3 py-1 rounded-xl text-xs font-medium border ${useSystem?"btn-solid border-transparent":"surface-toggle border-purple-800/60 text-purple-100/80"}`}>{useSystem?"On":"Off"}</button></div>
-          {useSystem?(<><div className="flex items-center gap-3"><span className="text-xs text-purple-200/80 w-10 shrink-0">Dark:</span><select value={darkTheme} onChange={e=>setDarkTheme(e.target.value)} className="panel rounded-xl px-2 py-1 text-sm flex-1 focus:outline-none focus-ring appearance-none">{DARK_THEMES.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></div><div className="flex items-center gap-3"><span className="text-xs text-purple-200/80 w-10 shrink-0">Light:</span><select value={lightTheme} onChange={e=>setLightTheme(e.target.value)} className="panel rounded-xl px-2 py-1 text-sm flex-1 focus:outline-none focus-ring appearance-none">{LIGHT_THEMES.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></div></>):(<div className="flex items-center gap-3"><span className="text-xs text-purple-200/80 w-10 shrink-0">Theme:</span><select value={manualTheme} onChange={e=>setManualTheme(e.target.value)} className="panel rounded-xl px-2 py-1 text-sm flex-1 focus:outline-none focus-ring appearance-none">{ALL_THEMES_LABELED.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></div>)}
+          {useSystem?(<><div className="flex items-center gap-3"><span className="text-xs text-purple-200/80 w-10 shrink-0">Dark:</span><select value={darkTheme} onChange={e=>setDarkTheme(e.target.value)} className="panel rounded-xl px-2 py-1 text-sm flex-1 focus:outline-none focus:ring-2 focus:ring-purple-400 appearance-none">{DARK_THEMES.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></div><div className="flex items-center gap-3"><span className="text-xs text-purple-200/80 w-10 shrink-0">Light:</span><select value={lightTheme} onChange={e=>setLightTheme(e.target.value)} className="panel rounded-xl px-2 py-1 text-sm flex-1 focus:outline-none focus:ring-2 focus:ring-purple-400 appearance-none">{LIGHT_THEMES.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></div></>):(<div className="flex items-center gap-3"><span className="text-xs text-purple-200/80 w-10 shrink-0">Theme:</span><select value={manualTheme} onChange={e=>setManualTheme(e.target.value)} className="panel rounded-xl px-2 py-1 text-sm flex-1 focus:outline-none focus:ring-2 focus:ring-purple-400 appearance-none">{ALL_THEMES_LABELED.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></div>)}
         </div>
         <div className="pt-2 border-t border-purple-500/20 text-[11px] text-purple-300/60">Last Updated: {(()=>{const d=DEPLOY_TS;const yy=d.getFullYear();const mo=d.getMonth()+1;const da=d.getDate();const numFmt=numericFormatOf(dateFormat);const datePart=fmt(yy,mo,da,numFmt);const timePart=d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',hour12:false});return`${datePart} ${timePart}`;})()}</div>
       </div>);
@@ -2355,14 +2267,8 @@
                 <button type="button" onClick={()=>setSettingsOpen(v=>!v)} className={`px-2.5 py-2 rounded-xl text-sm border ${settingsOpen?"btn-solid border-transparent":"surface-button text-purple-100/80"}`} aria-label="Settings">⚙</button>
               </div>
               {/* mode selector */}
-              {/* The previous onChange handler set #root.style.pointerEvents='none'
-                  for 400ms after a mode change — a blanket workaround that swallowed
-                  every tap on the page for nearly half a second. Removed.
-                  Any phantom-tap regression on iOS picker dismiss must be fixed
-                  at its source (e.g. narrow guard on the specific affected
-                  button), not by re-adding the blanket lock on #root. */}
               <div className="relative">
-                <select ref={modeSelectRef} value={mode} onChange={e=>{setMode(e.target.value);setSettingsOpen(false);e.target.blur();}} className="panel rounded-xl px-2.5 py-2 pr-9 text-sm focus:outline-none focus-ring appearance-none">
+                <select ref={modeSelectRef} value={mode} onChange={e=>{setMode(e.target.value);setSettingsOpen(false);e.target.blur();const root=document.getElementById('root');if(root){root.style.pointerEvents='none';setTimeout(()=>root.style.pointerEvents='',400);}}} className="panel rounded-xl px-2.5 py-2 pr-9 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 appearance-none">
                   <option value="classic">Classic</option><option value="aox">AoX</option><option value="deduction">Deduction</option><option value="flash">Flash</option><option value="blitz">Blitz</option><option value="lookup">Lookup</option><option value="guide">How to Play</option>
                 </select>
                 <div className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 flex flex-col items-center leading-none text-[7px] text-white/90"><span>▲</span><span>▼</span></div>
@@ -2421,7 +2327,7 @@
                   <button type="button" className={`col-span-1 px-3 py-2 rounded-xl border surface-button text-sm font-medium text-center ${revealDisabled?"opacity-60 pointer-events-none":""}`} onClick={reveal}>Reveal</button>
                   <button type="button" className={`col-span-1 px-3 py-2 rounded-xl border surface-button text-sm font-medium text-center ${!overrideAvail?"opacity-60 pointer-events-none":""}`} onClick={override}>Override</button>
                 </div>
-                <MethodBreakdownSection key={mode} date={calcTarget} open={calcOpen} onOpenChange={handleCalcOpenChange} className="" contentClassName="mt-3 rounded-2xl thin px-4 pt-[3px] pb-1.5" useJulian={backDepth>0?(calcTarget?._jul??useJulian):useJulian} displayedFormat={(randomFormat&&calcTarget?._fmt)||dateFormat}/>
+                <MethodBreakdownSection key={mode} date={calcTarget} open={calcOpen} onOpenChange={handleCalcOpenChange} className="" contentClassName="mt-3 rounded-2xl thin px-4 pt-[3px] pb-1.5" useJulian={backDepth>0?(calcTarget?._jul??useJulian):useJulian}/>
               </div>
             </div>
           )}
@@ -2505,20 +2411,7 @@
                   <button type="button" className={`col-span-1 px-3 py-2 rounded-xl border surface-button text-sm font-medium text-center ${revealDisabled?"opacity-60 pointer-events-none":""}`} onClick={reveal}>Reveal</button>
                   <button type="button" className={`col-span-1 px-3 py-2 rounded-xl border surface-button text-sm font-medium text-center ${!overrideAvail?"opacity-60 pointer-events-none":""}`} onClick={override}>Override</button>
                 </div>
-                {(()=>{
-                  // Build cellDates for Deduction Month sub-mode 1582 only, when the
-                  // answer cell groups months from both calendars. Each entry is a
-                  // {y,m,d} interpretation that MethodExplanation will use for dual codes.
-                  let cellDates=null;
-                  if(ded&&ded.type==='month'&&ded.y===1582&&ded.boxes){
-                    const ci=getDedCorrectIdx();
-                    const box=ci>=0?ded.boxes[ci]:null;
-                    if(box&&Array.isArray(box.months)&&box.months.length>=2){
-                      cellDates=box.months.map(m=>({y:ded.y,m,d:ded.d}));
-                    }
-                  }
-                  return(<MethodBreakdownSection date={calcTarget} open={calcOpen} onOpenChange={handleCalcOpenChange} className="" contentClassName="mt-3 rounded-2xl thin px-4 pt-[3px] pb-1.5" useJulian={calcTarget?._jul??useJulian} displayedFormat={(randomFormat&&calcTarget?._fmt)||dateFormat} cellDates={cellDates}/>);
-                })()}
+                <MethodBreakdownSection date={calcTarget} open={calcOpen} onOpenChange={handleCalcOpenChange} className="" contentClassName="mt-3 rounded-2xl thin px-4 pt-[3px] pb-1.5" useJulian={calcTarget?._jul??useJulian}/>
               </div>
             </div>
           )}
@@ -2557,7 +2450,7 @@
             <p className="text-purple-300/70 text-[12px]">In modes designed for casual practice (Classic, Deduction, Flash), you can tap any stat to hide it. Tapping Score, Accuracy, or Streak hides all three; tapping any timing stat hides all three. Stats always track in the background regardless of visibility. Enabling timing stats resets all stats so the score and timing always reflect the same set of questions. When timing stats are off, leaving and returning to a mode preserves the current question exactly as you left it — same date, same answers, codes panel in the same state. In all other modes, stats are always visible.</p>
           </GuideSection>
           <Divider label="Settings"/>
-          <GuideSection id="dateformat" title="Date Format" openId={open} onToggle={toggle}><p>Set via the ⚙ settings menu. Choose one of five real-world formats: <b>Written MDY</b> (April 27, 1828), <b>Written DMY</b> (27 April 1828), <b>Numeric MDY</b> (4/27/1828), <b>Numeric DMY</b> (27.4.1828), or <b>Numeric YMD</b> (1828-4-27). Numeric formats use a fixed separator convention: MDY uses '/', DMY uses '.', YMD uses '-'. Years always show in full, never abbreviated.</p><p>Only DMY, MDY, and YMD orderings are offered because those are the only orderings actually used in real life — orderings like YDM aren't standard anywhere.</p><p><b>Random Format</b>, when on, rolls one of the five formats per date in game modes only — your selected format is preserved underneath (the panels just lock visually). Lookup and the Last Updated timestamp ignore Random and always use the selected format. The Last Updated timestamp uses the numeric version of whichever format you've selected. In Classic, Deduction, and Flash, changing the format or toggling Random Format regenerates the displayed date — unless you've already made a wrong guess, in which case the change is deferred so the wrong-state is preserved; the new format applies to the next date. In active Blitz rounds and AoX runs, either change ends the round.</p><p>In game modes' Show Codes, codes appear in the order the date is read (left to right), with Leap shown once you've seen both the year and month.</p></GuideSection>
+          <GuideSection id="dateformat" title="Date Format" openId={open} onToggle={toggle}><p>Set via the ⚙ settings menu. Choose one of five real-world formats: <b>Written MDY</b> (April 27, 1828), <b>Written DMY</b> (27 April 1828), <b>Numeric MDY</b> (4/27/1828), <b>Numeric DMY</b> (27.4.1828), or <b>Numeric YMD</b> (1828-4-27). Numeric formats use a fixed separator convention: MDY uses '/', DMY uses '.', YMD uses '-'. Years always show in full, never abbreviated.</p><p>Only DMY, MDY, and YMD orderings are offered because those are the only orderings actually used in real life — orderings like YDM aren't standard anywhere.</p><p><b>Random Format</b>, when on, rolls one of the five formats per date in game modes only — your selected format is preserved underneath (the panels just lock visually). Lookup and the Last Updated timestamp ignore Random and always use the selected format. The Last Updated timestamp uses the numeric version of whichever format you've selected. In Classic, Deduction, and Flash, changing the format or toggling Random Format regenerates the displayed date — unless you've already made a wrong guess, in which case the change is deferred so the wrong-state is preserved; the new format applies to the next date. In active Blitz rounds and AoX runs, either change ends the round.</p></GuideSection>
           <GuideSection id="julian" title="Julian Calendar" openId={open} onToggle={toggle}><p>Toggle via the ⚙ settings menu under Calendar System. Off by default. When on, dates on or before October 4, 1582 are treated as Julian calendar dates, which have different leap year rules — every year divisible by 4 is a leap year, with no century exception. This affects weekday calculation and the codes shown in Show Codes. October 5–14, 1582 are always excluded since those dates never existed; the Gregorian calendar skipped them to correct accumulated calendar drift.</p><p>Toggling Julian doesn't necessarily regenerate the current date. For dates after October 4, 1582, Julian has no effect. For Julian-eligible dates (October 4, 1582 or earlier), the date stays if you haven't made a wrong guess yet — the answer and codes simply update. If you've already wrong-guessed, the date regenerates and is added to your history with both your red guess and a green for the day that was correct under the calendar system in effect when the date was first generated. Each date snapshots its calendar system at generation, so revisiting an earlier question via Back shows the highlights and codes that were correct under the system in effect when that date was generated. In active Blitz rounds and AoX runs, any Julian toggle ends the round.</p></GuideSection>
           <GuideSection id="range" title="Year Range" openId={open} onToggle={toggle}><p>Set via the ⚙ settings menu. Controls which years dates are drawn from. Defaults to 1–10000 AD. Changing the range regenerates the current date only if it falls outside the new range — and even then, if you've already made a wrong guess on the current date, the change is deferred so the wrong-state is preserved; the new range applies to the next date. While browsing back, settings-driven regen always preserves your history: the date you were viewing and any forward entries are pushed back to history before the live slot is regenerated. In active Blitz rounds and AoX runs, any range change ends the round.</p><p><b>Year sub-mode auto-disable:</b> Deduction's Year sub-mode requires either a year range of at least 5 years (so a 5-year window can be built) or, with Julian on, a range that contains October 15, 1582 (so a 2-year Jul Cross window can be built). When neither condition holds, the Year sub-type button greys out, and if you were already in Year mode when the range changed, you're auto-switched to Day mode. Day and Month sub-modes work for any valid range.</p></GuideSection>
           <GuideSection id="leap" title="Leap Year Settings" openId={open} onToggle={toggle}><p>Two settings in the ⚙ menu control how often leap years appear and what months they're paired with. <b>Leap Year Chance</b> sets how often a generated date lands on a leap year — Random uses the natural rate (~24%); 50%, 75%, and 100% force higher rates. <b>Force Jan/Feb on Leap Years</b>, when on, restricts the month to January or February whenever a leap year is generated. These settings apply to all game modes' date generation; Lookup is unaffected. If your year range happens to contain no leap years and the chance is set to 50/75/100%, the chance is silently ignored per date — the setting itself is preserved. Changing <b>Leap Year Chance</b> always regenerates the displayed date. Toggling <b>Force Jan/Feb on Leap Years</b> regenerates only if the current date is a leap year with a month other than January or February. If you've already made a wrong guess on the current date, either change is deferred so the wrong-state is preserved; the new setting applies to the next date. In active Blitz rounds and AoX runs, any leap setting change ends the round.</p></GuideSection>
@@ -2574,7 +2467,7 @@
             <p><b>Override</b> — after wrong: gives credit with time recorded, preserves streak. After correct: undoes the credit, resets streak, and either ends the run (Allow Mistakes off) or advances to a new date (Allow Mistakes on). You can also override past dates while browsing back with Back/Forward. If overriding on the last question with Allow Mistakes on, a new date is generated to complete the average. One override per question.</p>
             <p>Stats in AoX are always visible and always track. Best average and best median are tracked independently per n and Allow Mistakes combination — they can come from different runs. Beneath each best, the companion metric from the run that set it is also shown (e.g. the median from the run that set your best average). When both bests come from the same run, a · Same Round tag appears on the right. If you override a correct answer that set a new best, the best is also restored. The score display freezes when a run ends and only resets after pressing Reset.</p>
           </GuideSection>
-          <GuideSection id="deduction" title="Deduction" openId={open} onToggle={toggle}><p>Identify the missing piece of a date given the rest plus the weekday. Choose Day, Month, or Year mode. The displayed date follows your selected Date Format (or random format snapshot, if Random Format is on), with a fixed-width underscore placeholder where the missing piece would normally appear.</p><p className="mt-2"><b>Day</b> — seven consecutive days are shown, each with a unique day code. The correct day can appear in any position. <i>October 1582 with Julian on:</i> days 5–14 don't exist (the Gregorian transition skipped them), so the valid days are 1–4 and 15–31. When the window can't fit seven days on one side of the gap, it shrinks to four — codes 1, 2, 3, 4 repeat at days 15, 16, 17, 18, so a five-day window crossing the gap would have a duplicate code.</p><p className="mt-2"><b>Month</b> — seven fixed boxes group months that share the same month code, so tapping any month within a box gives the same weekday for that date. Tap the box containing the correct month. The boxes are always in the same position. In leap years, January shifts into the Apr/Jul box (becoming Jan/Apr/Jul) and February shifts into the Aug box (becoming Feb/Aug); the other boxes are unchanged. <i>Year 1582 with Julian on:</i> a special layout applies because the Julian/Gregorian transition splits the year — January through September and October 1–4 use Julian (year code +1), while October 15+ and November/December use Gregorian (year code −2). October's box position depends on the day: for days 1–4 it joins Jan and Nov ("Jan/Oct/Nov"); for days 15–31 it joins Jun ("Jun/Oct"); for days 5–14 it's excluded since those dates don't exist. The other six boxes are arranged differently from the standard layout — practice carefully.</p><p className="mt-2"><b>Year</b> — five consecutive year options. Each option has a unique year code, so only the correct year matches the displayed weekday. The correct year can appear in any position. <i>With Julian on:</i> when the five-year window would cross October 15, 1582 (the Julian/Gregorian boundary), it shrinks to two years — the calendar's 10-day jump produces a +5 weekday shift across that boundary that breaks distinctness for any longer window. <i>February 29:</i> only allowed when the window contains at least one leap year (Gregorian or Julian as appropriate). Non-leap years still appear as options but trivially can't be the answer, since Feb 29 doesn't exist in those years.</p><p className="mt-2"><b>Per-mode toggles</b> — Year mode adds <i>ab</i> Cross (left of Day/Month/Year) and Jul Cross (right of Day/Month/Year). Month mode adds 1582 Only (right of Day/Month/Year). These are mode-specific, not in the ⚙ Settings menu, since they only apply to one Deduction sub-mode.</p><p className="mt-2"><b><i>ab</i> Cross</b> (Year mode) — when on, the five-year window must cross a year ending in 00 (any 100-year boundary, both leap and non-leap centuries). Practice the <i>ab</i> code change mid-window. Disabled when your year range doesn't span any 100-year boundary.</p><p className="mt-2"><b>Jul Cross</b> (Year mode) — when on, the two-year window must cross October 15, 1582 (the Julian/Gregorian transition). N=2 always. Disabled when the Julian setting is off, or when your year range doesn't contain 1582 plus at least one of its neighbors (1581 or 1583).</p><p className="mt-2"><b>Both Year toggles on</b> — each puzzle randomly picks (50/50) which constraint to enforce. The two can't both be true for the same window.</p><p className="mt-2"><b>1582 Only</b> (Month mode) — when on, every puzzle uses year 1582, forcing the special split layout described above. Disabled when the Julian setting is off or your year range excludes 1582. When the answer's cell groups months from both calendars, Show Codes uses slash notation (e.g., 1/-3, Julian/Gregorian) for any value that differs across the cell's months; values that are the same across all months collapse to a single value.</p><p className="mt-2">Switch subtypes anytime — progress in each is preserved. Stats are tracked separately for each subtype. Reset Stats only resets the current subtype and clears its question history.</p></GuideSection>
+          <GuideSection id="deduction" title="Deduction" openId={open} onToggle={toggle}><p>Identify the missing piece of a date given the rest plus the weekday. Choose Day, Month, or Year mode. The displayed date follows your selected Date Format (or random format snapshot, if Random Format is on), with a fixed-width underscore placeholder where the missing piece would normally appear.</p><p className="mt-2"><b>Day</b> — seven consecutive days are shown, each with a unique day code. The correct day can appear in any position. <i>October 1582 with Julian on:</i> days 5–14 don't exist (the Gregorian transition skipped them), so the valid days are 1–4 and 15–31. When the window can't fit seven days on one side of the gap, it shrinks to four — codes 1, 2, 3, 4 repeat at days 15, 16, 17, 18, so a five-day window crossing the gap would have a duplicate code.</p><p className="mt-2"><b>Month</b> — seven fixed boxes group months that share the same month code, so tapping any month within a box gives the same weekday for that date. Tap the box containing the correct month. The boxes are always in the same position. In leap years, January shifts into the Apr/Jul box (becoming Jan/Apr/Jul) and February shifts into the Aug box (becoming Feb/Aug); the other boxes are unchanged. <i>Year 1582 with Julian on:</i> a special layout applies because the Julian/Gregorian transition splits the year — January through September and October 1–4 use Julian (year code +1), while October 15+ and November/December use Gregorian (year code −2). October's box position depends on the day: for days 1–4 it joins Jan and Nov ("Jan/Oct/Nov"); for days 15–31 it joins Jun ("Jun/Oct"); for days 5–14 it's excluded since those dates don't exist. The other six boxes are arranged differently from the standard layout — practice carefully.</p><p className="mt-2"><b>Year</b> — five consecutive year options. Each option has a unique year code, so only the correct year matches the displayed weekday. The correct year can appear in any position. <i>With Julian on:</i> when the five-year window would cross October 15, 1582 (the Julian/Gregorian boundary), it shrinks to two years — the calendar's 10-day jump produces a +5 weekday shift across that boundary that breaks distinctness for any longer window. <i>February 29:</i> only allowed when the window contains at least one leap year (Gregorian or Julian as appropriate). Non-leap years still appear as options but trivially can't be the answer, since Feb 29 doesn't exist in those years.</p><p className="mt-2"><b>Per-mode toggles</b> — Year mode adds <i>ab</i> Cross (left of Day/Month/Year) and Jul Cross (right of Day/Month/Year). Month mode adds 1582 Only (right of Day/Month/Year). These are mode-specific, not in the ⚙ Settings menu, since they only apply to one Deduction sub-mode.</p><p className="mt-2"><b><i>ab</i> Cross</b> (Year mode) — when on, the five-year window must cross a year ending in 00 (any 100-year boundary, both leap and non-leap centuries). Practice the <i>ab</i> code change mid-window. Disabled when your year range doesn't span any 100-year boundary.</p><p className="mt-2"><b>Jul Cross</b> (Year mode) — when on, the two-year window must cross October 15, 1582 (the Julian/Gregorian transition). N=2 always. Disabled when the Julian setting is off, or when your year range doesn't contain 1582 plus at least one of its neighbors (1581 or 1583).</p><p className="mt-2"><b>Both Year toggles on</b> — each puzzle randomly picks (50/50) which constraint to enforce. The two can't both be true for the same window.</p><p className="mt-2"><b>1582 Only</b> (Month mode) — when on, every puzzle uses year 1582, forcing the special split layout described above. Disabled when the Julian setting is off or your year range excludes 1582.</p><p className="mt-2">Switch subtypes anytime — progress in each is preserved. Stats are tracked separately for each subtype. Reset Stats only resets the current subtype and clears its question history.</p></GuideSection>
           <GuideSection id="flash" title="Flash" openId={open} onToggle={toggle}><p>The date is briefly revealed (0.1s–3.0s, default 0.5s, adjustable via the slider) then hidden. Answer from memory. Reset Stats clears your stats and question history.</p></GuideSection>
           <GuideSection id="blitz" title="Blitz" openId={open} onToggle={toggle}>
             <p>Answer as many dates as possible before time runs out. Score shows correct answers for the current round only.</p>
@@ -2589,52 +2482,14 @@
       );
     }
 
-    // Show Codes panel ordering follows the date's display format (left-to-right reading
-    // order), with Leap appearing once both year and month are visible. mdy/dmy formats:
-    // month/day/ab/cd/leap. ymd format: ab/cd/month/leap/day. Uses the date's _fmt
-    // snapshot when randomFormat is on (passed as displayedFormat), else the user's
-    // selected format.
-    //
-    // When `cellDates` is provided (Deduction Month sub-mode 1582 only — answer cell
-    // groups months from both calendars), each code value is collected across all
-    // interpretations and joined with slashes, deduped via Set (insertion-order
-    // preserved). Calendar text follows the same dedup rule: "Julian/Gregorian Calendar"
-    // not "Julian/Julian/Gregorian". Cell ordering naturally produces Julian-first since
-    // Julian months come first in the cell labels (e.g., Aug/Dec, Jan/Nov).
-    function MethodExplanation({date,useJulian=false,displayedFormat='written-mdy',cellDates=null}){
-      const summaries=React.useMemo(()=>{
-        if(cellDates&&cellDates.length>0)return cellDates.map(cd=>computeMethodSummary(cd,true)).filter(s=>s!=null);
-        return date?[computeMethodSummary(date,useJulian)].filter(s=>s!=null):[];
-      },[cellDates,date?.y,date?.m,date?.d,useJulian]);
-      if(summaries.length===0)return<div className="text-sm text-purple-100/80">Show Codes is only supported for AD dates.</div>;
-      // Collapse-when-same: gather each code's values across all interpretations,
-      // dedup via Set (preserves insertion order), and join with slashes if 2+ unique.
-      const joinDedup=vals=>{const s=[...new Set(vals.map(v=>String(v)))];return s.join('/');};
-      const monthCode=joinDedup(summaries.map(s=>s.monthCode));
-      const dayCode=joinDedup(summaries.map(s=>s.dayCode));
-      const abCode=joinDedup(summaries.map(s=>s.abCode));
-      const cdCode=joinDedup(summaries.map(s=>s.cdCode));
-      const leapValue=joinDedup(summaries.map(s=>String(s.leapCode)));
-      const calendarText=joinDedup(summaries.map(s=>s.calendarSystem))+" Calendar";
-      const codeMap={
-        Month:{label:"Month",italic:false,value:monthCode},
-        Day:{label:"Day",italic:false,value:dayCode},
-        ab:{label:"ab",italic:true,value:abCode},
-        cd:{label:"cd",italic:true,value:cdCode},
-        Leap:{label:"Leap",italic:false,value:leapValue},
-      };
-      // Order the codes left-to-right matching the date format's reading order.
-      // After both year and month appear, Leap is placed.
-      const fmt=displayedFormat||'written-mdy';
-      let order;
-      if(fmt==='numeric-ymd')order=['ab','cd','Month','Leap','Day'];
-      else if(fmt==='written-dmy'||fmt==='numeric-dmy')order=['Day','Month','ab','cd','Leap'];
-      else order=['Month','Day','ab','cd','Leap']; // written-mdy, numeric-mdy, fallback
-      const codes=order.map(k=>codeMap[k]);
-      return(<div><div className="grid grid-cols-5 gap-2 text-center text-sm">{codes.map((c,i)=>(<div key={i} className="flex flex-col gap-1"><div className="text-[11px] text-purple-200/80">{c.italic?<i>{c.label}</i>:c.label}</div><div className="font-semibold tabular-nums text-purple-50">{c.value}</div></div>))}</div><div className="mt-2 text-center text-[11px] text-purple-300/60">{calendarText}</div></div>);
+    function MethodExplanation({date,useJulian=false}){
+      const summary=React.useMemo(()=>date?computeMethodSummary(date,useJulian):null,[date?.y,date?.m,date?.d,useJulian]);
+      if(!summary)return<div className="text-sm text-purple-100/80">Show Codes is only supported for AD dates.</div>;
+      const codes=[{label:"Month",italic:false,value:summary.monthCode},{label:"Day",italic:false,value:summary.dayCode},{label:"ab",italic:true,value:summary.abCode},{label:"cd",italic:true,value:summary.cdCode},{label:"Leap",italic:false,value:summary.leapYear?"Yes":"No"}];
+      return(<div><div className="grid grid-cols-5 gap-2 text-center text-sm">{codes.map((c,i)=>(<div key={i} className="flex flex-col gap-1"><div className="text-[11px] text-purple-200/80">{c.italic?<i>{c.label}</i>:c.label}</div><div className="font-semibold tabular-nums text-purple-50">{c.value}</div></div>))}</div><div className="mt-2 text-center text-[11px] text-purple-300/60">{summary.calendarSystem} Calendar</div></div>);
     }
 
-    function MethodBreakdownSection({date,open:controlledOpen,onOpenChange,className,contentClassName,useJulian=false,displayedFormat='written-mdy',cellDates=null}){
+    function MethodBreakdownSection({date,open:controlledOpen,onOpenChange,className,contentClassName,useJulian=false}){
       const isControlled=typeof controlledOpen==="boolean"&&typeof onOpenChange==="function";
       const [internalOpen,setInternalOpen]=React.useState(false);
       const [frozenDate,setFrozenDate]=React.useState(date);
@@ -2664,7 +2519,7 @@
           setFrozenDate(date);
         }
       },[open,date]);
-      return(<div className={className??"mt-5"}><button type="button" onClick={toggle} className={`w-full px-4 py-2 rounded-xl btn-solid text-sm font-medium${!hasDate?" opacity-60 cursor-not-allowed pointer-events-none":""}`} aria-disabled={!hasDate}>{open?"Hide Codes":"Show Codes"}</button><Expander open={open&&hasDate}><div className={contentClassName??"mt-3 rounded-2xl panel p-4 pb-1"}><MethodExplanation date={frozenDate} useJulian={useJulian} displayedFormat={displayedFormat} cellDates={cellDates}/></div></Expander></div>);
+      return(<div className={className??"mt-5"}><button type="button" onClick={toggle} className={`w-full px-4 py-2 rounded-xl btn-solid text-sm font-medium${!hasDate?" opacity-60 cursor-not-allowed pointer-events-none":""}`} aria-disabled={!hasDate}>{open?"Hide Codes":"Show Codes"}</button><Expander open={open&&hasDate}><div className={contentClassName??"mt-3 rounded-2xl panel p-4 pb-1"}><MethodExplanation date={frozenDate} useJulian={useJulian}/></div></Expander></div>);
     }
 
     function LookupCard({history=[],onAddHistory,onMoveHistory,onClearHistory,inputValue="",onInputChange,outputValue="",onOutputChange,calcDate,onCalcDateChange,selectedHistoryId,onSelectedHistoryIdChange,calcOpen=false,onCalcOpenChange,fmtDate,dateFormat='written-mdy',useJulian=false}){
@@ -2753,7 +2608,7 @@
         <div className="mt-1 space-y-4">
           <div className="rounded-2xl panel p-4 space-y-4">
             <div className="flex flex-wrap items-stretch gap-2">
-              <input ref={lookupInputRef} value={li} onChange={e=>sli(e.target.value)} placeholder={`e.g., ${inputMeta.example}`} className="panel rounded-xl px-3 py-2 focus:outline-none focus-ring flex-1 min-w-0"/>
+              <input ref={lookupInputRef} value={li} onChange={e=>sli(e.target.value)} placeholder={`e.g., ${inputMeta.example}`} className="panel rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-400 flex-1 min-w-0"/>
               <button type="button" onClick={runLookup} onMouseDown={e=>e.preventDefault()} className="px-4 py-2 rounded-xl btn-solid text-sm font-medium">Lookup</button>
               <button type="button" onClick={clearLookup} onMouseDown={e=>e.preventDefault()} className="px-4 py-2 rounded-xl bg-zinc-700 text-white text-sm font-medium">Clear</button>
             </div>
@@ -2763,7 +2618,7 @@
           <div className="rounded-2xl panel p-4 space-y-4">
             <div className="flex items-center justify-between text-[11px] uppercase tracking-wide text-purple-200/70"><span>History</span>{entries.length>0&&(<button type="button" onClick={clearHist} className="text-purple-200/70 font-medium">Clear History</button>)}</div>
             {renderedEntries.length>0?(<ul className="space-y-2 overflow-y-auto max-h-[440px]">{renderedEntries.map(e=>(<li key={e.id}><button type="button" onClick={()=>selEntry(e)} className={`w-full text-left px-3 py-2 rounded-xl panel flex items-center justify-between gap-3 text-xs transition ${sid===e.id?"border-l-2 border-l-purple-400 bg-purple-500/35":"hist-unsel hover:bg-purple-500/15"}`}><span className="block text-[13px] font-medium text-purple-100/90">{e.label}</span><span className="text-[12px] font-semibold text-purple-200/80">{getEntryWeekday(e)}</span></button></li>))}</ul>):(<p className="text-sm text-purple-200/70">No lookups yet</p>)}
-            <MethodBreakdownSection date={cdv} className="pt-4 border-t border-purple-500/40" contentClassName="mt-3 rounded-2xl panel px-4 pt-[3px] pb-1.5" open={cov} onOpenChange={sco} useJulian={useJulian} displayedFormat={dateFormat}/>
+            <MethodBreakdownSection date={cdv} className="pt-4 border-t border-purple-500/40" contentClassName="mt-3 rounded-2xl panel px-4 pt-[3px] pb-1.5" open={cov} onOpenChange={sco} useJulian={useJulian}/>
           </div>
         </div>
       );
