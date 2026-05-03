@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
   <meta name="theme-color" content="#0d1117">
   <title>Calendar Game</title>
   <meta name="application-name" content="Calendar Game">
@@ -18,8 +18,7 @@
     [data-theme="light"]{--bg1:#f2f2f7;--bg2:#f2f2f7;--tc:#f2f2f7;--card-bg:rgba(255,255,255,.95);--card-bd:rgba(120,53,175,.22);--panel-bg:rgba(237,233,254,.48);--panel-bd:rgba(120,53,175,.22);--thin-bd:rgba(120,53,175,.18);--sbtn-bg:rgba(237,233,254,.65);--sbtn-bd:rgba(120,53,175,.28);--sbtn-hov:rgba(237,233,254,.88);--stgl-bg:rgba(237,233,254,.42);--stgl-hov:rgba(237,233,254,.65);--chip-bg:rgba(237,233,254,.75);--chip-bd:rgba(120,53,175,.22);--bar-bg:rgba(237,233,254,.75);--bar-bd:rgba(120,53,175,.22);--body-color:#1e1b4b;--sec-color:rgba(30,27,75,.78);--mut-color:rgba(30,27,75,.62);--fnt-color:rgba(30,27,75,.5)}
     html,body{overflow:hidden}
     html{touch-action:manipulation}
-    html,body{background:var(--bg1)}
-    body{color:var(--body-color);padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+    body{background:var(--bg1);color:var(--body-color)}
     .card{background:var(--card-bg);border:1px solid var(--card-bd)}
     .panel{background:var(--panel-bg);border:1px solid var(--panel-bd)}
     .thin{border:1px solid var(--thin-bd)}
@@ -344,7 +343,7 @@
 
 
 
-    const DEPLOY_TS=new Date('2026-05-03T03:44:00Z');
+    const DEPLOY_TS=new Date('2026-05-02T07:25:00Z');
 
     function StatPanel({stats}){
       // For fractional values (Score, Streak as "X/Y"), shrink the value font
@@ -2212,19 +2211,19 @@
           <div className="text-[10px] uppercase tracking-widest text-purple-300/60">Date Format</div>
           <div className="flex items-center justify-between"><span className="text-xs text-purple-200/80">Random Format</span><button type="button" onClick={()=>setRandomFormat(v=>!v)} className={`px-3 py-1 rounded-xl text-xs font-medium border ${randomFormat?"btn-solid border-transparent":"surface-toggle border-purple-800/60 text-purple-100/80"}`}>{randomFormat?"On":"Off"}</button></div>
           <div className={`flex gap-2 ${randomFormat?"opacity-60 pointer-events-none":""}`}>
-            <div className="flex-1 space-y-1.5">
+            <div className="flex-1 panel rounded-xl p-2 space-y-1.5">
               <div className="text-[10px] uppercase tracking-widest text-purple-300/60 text-center">Written</div>
-              <div className="flex border surface-toggle rounded-xl overflow-hidden">
-                <button type="button" onClick={()=>setDateFormat('written-mdy')} className={`flex-1 px-2 py-1 text-xs font-medium border-r border-[color:var(--sbtn-bd)] ${dateFormat==='written-mdy'?"btn-solid text-white":"text-purple-100/80"}`}>MDY</button>
-                <button type="button" onClick={()=>setDateFormat('written-dmy')} className={`flex-1 px-2 py-1 text-xs font-medium ${dateFormat==='written-dmy'?"btn-solid text-white":"text-purple-100/80"}`}>DMY</button>
+              <div className="flex gap-1.5">
+                <button type="button" onClick={()=>setDateFormat('written-mdy')} className={`flex-1 px-2 py-1 rounded-lg text-xs font-medium border ${dateFormat==='written-mdy'?"btn-solid border-transparent":"surface-toggle text-purple-100/80"}`}>MDY</button>
+                <button type="button" onClick={()=>setDateFormat('written-dmy')} className={`flex-1 px-2 py-1 rounded-lg text-xs font-medium border ${dateFormat==='written-dmy'?"btn-solid border-transparent":"surface-toggle text-purple-100/80"}`}>DMY</button>
               </div>
             </div>
-            <div className="flex-1 space-y-1.5">
+            <div className="flex-1 panel rounded-xl p-2 space-y-1.5">
               <div className="text-[10px] uppercase tracking-widest text-purple-300/60 text-center">Numeric</div>
-              <div className="flex border surface-toggle rounded-xl overflow-hidden">
-                <button type="button" onClick={()=>setDateFormat('numeric-mdy')} className={`flex-1 px-2 py-1 text-xs font-medium border-r border-[color:var(--sbtn-bd)] ${dateFormat==='numeric-mdy'?"btn-solid text-white":"text-purple-100/80"}`}>MDY</button>
-                <button type="button" onClick={()=>setDateFormat('numeric-dmy')} className={`flex-1 px-2 py-1 text-xs font-medium border-r border-[color:var(--sbtn-bd)] ${dateFormat==='numeric-dmy'?"btn-solid text-white":"text-purple-100/80"}`}>DMY</button>
-                <button type="button" onClick={()=>setDateFormat('numeric-ymd')} className={`flex-1 px-2 py-1 text-xs font-medium ${dateFormat==='numeric-ymd'?"btn-solid text-white":"text-purple-100/80"}`}>YMD</button>
+              <div className="flex gap-1.5">
+                <button type="button" onClick={()=>setDateFormat('numeric-mdy')} className={`flex-1 px-2 py-1 rounded-lg text-xs font-medium border ${dateFormat==='numeric-mdy'?"btn-solid border-transparent":"surface-toggle text-purple-100/80"}`}>MDY</button>
+                <button type="button" onClick={()=>setDateFormat('numeric-dmy')} className={`flex-1 px-2 py-1 rounded-lg text-xs font-medium border ${dateFormat==='numeric-dmy'?"btn-solid border-transparent":"surface-toggle text-purple-100/80"}`}>DMY</button>
+                <button type="button" onClick={()=>setDateFormat('numeric-ymd')} className={`flex-1 px-2 py-1 rounded-lg text-xs font-medium border ${dateFormat==='numeric-ymd'?"btn-solid border-transparent":"surface-toggle text-purple-100/80"}`}>YMD</button>
               </div>
             </div>
           </div>
@@ -2343,12 +2342,10 @@
                   Toggle styling matches Blitz/AoX Allow Mistakes / One-By-One / Per Round buttons
                   exactly (px-2 py-1 rounded-xl text-xs font-medium border) — minus flex-1, since
                   these buttons size to content + min-width rather than stretching to fill.
-                  ab Cross, Jul Cross, and 1582 Only all share min-w-[5rem] so all toggles
-                  are matched-width regardless of their label length.
-                  Day/Month/Year share min-w-[4rem] so all three are the same width as each
-                  other (sized to "Month" the widest of the three with px-2 padding). They use
-                  surface-toggle (theme-adaptive border) like the toggles instead of a hard-coded
-                  purple border. */}
+                  ab Cross and Jul Cross share min-w-[5rem] so they always have matched width
+                  regardless of which has the longer label; 1582 Only sizes naturally to its text.
+                  Day/Month/Year also share min-w-[5rem] so all three are the same width as each
+                  other (sized to "Month" the widest of the three). */}
               <div className="grid grid-cols-[1fr_auto_1fr] gap-2 items-center">
                 <div className="flex justify-start">
                   {dedType==="year"&&(()=>{
@@ -2364,7 +2361,7 @@
                     // Year sub-type button auto-disables when range can't support a buildable
                     // puzzle (yearSubPossible). Day and Month always available.
                     const disabled=t==="year"&&!yearSubPossible;
-                    return(<button key={t} type="button" onClick={()=>{if(disabled)return;changeDedType(t);}} className={`px-2 py-1.5 rounded-xl text-sm font-medium border min-w-[4rem] ${dedType===t?"btn-solid border-transparent text-white":"surface-toggle text-purple-100/80"}${disabled?" opacity-60 pointer-events-none":""}`}>{t[0].toUpperCase()+t.slice(1)}</button>);
+                    return(<button key={t} type="button" onClick={()=>{if(disabled)return;changeDedType(t);}} className={`px-3 py-1.5 rounded-xl text-sm font-medium border min-w-[5rem] ${dedType===t?"btn-solid border-transparent text-white":"surface-toggle border-purple-800/60 text-purple-100/80"}${disabled?" opacity-60 pointer-events-none":""}`}>{t[0].toUpperCase()+t.slice(1)}</button>);
                   })}
                 </div>
                 <div className="flex justify-end">
@@ -2383,7 +2380,7 @@
                     const possible=useJulian&&1582>=minY&&1582<=maxY;
                     const disabled=!possible;
                     const active=monthOnly1582&&!disabled;
-                    return(<button type="button" onClick={()=>{if(disabled)return;setMonthOnly1582(v=>!v);}} className={`px-2 py-1 rounded-xl text-xs font-medium border min-w-[5rem] ${active?"btn-solid border-transparent":"surface-toggle text-purple-100/80"}${disabled?" opacity-60 pointer-events-none":""}`}>1582 Only</button>);
+                    return(<button type="button" onClick={()=>{if(disabled)return;setMonthOnly1582(v=>!v);}} className={`px-2 py-1 rounded-xl text-xs font-medium border ${active?"btn-solid border-transparent":"surface-toggle text-purple-100/80"}${disabled?" opacity-60 pointer-events-none":""}`}>1582 Only</button>);
                   })()}
                 </div>
               </div>
