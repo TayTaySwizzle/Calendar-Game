@@ -23,20 +23,30 @@
     .panel{background:var(--panel-bg);border:1px solid var(--panel-bd)}
     .thin{border:1px solid var(--thin-bd)}
     .surface-button{background:var(--sbtn-bg);border-color:var(--sbtn-bd);transition:background-color .2s}
-    .surface-button:hover{background:var(--sbtn-hov)}
     .surface-toggle{background:var(--stgl-bg);border-color:var(--sbtn-bd);transition:background-color .2s}
-    .surface-toggle:hover{background:var(--stgl-hov)}
     .btn-solid{background:#7c3aed;color:#fff;transition:background-color .2s}
-    .btn-solid:hover{background:#6d28d9}
+    /* Hover styles guarded by hover-capable media query so touch devices (iOS, Android)
+       don't get sticky-hover residual highlights after a tap. Tailwind's own hover:
+       utilities already do this guard automatically; these custom rules now match. */
+    @media (hover: hover){
+      .surface-button:hover{background:var(--sbtn-hov)}
+      .surface-toggle:hover{background:var(--stgl-hov)}
+      .btn-solid:hover{background:#6d28d9}
+    }
     .btn-solid[aria-disabled="true"],.btn-solid:disabled{opacity:.6;cursor:not-allowed}
     button,input,select{-webkit-tap-highlight-color:transparent}
     button{touch-action:manipulation}
     button:focus,select:focus{outline:none}
-    /* #7 — darker flash colors for dark themes */
-    @keyframes flashGood{0%,60%{background:rgba(21,128,61,.95);box-shadow:0 0 0 2px rgba(20,83,45,1)}100%{background:transparent;box-shadow:none}}
-    @keyframes flashBad{0%,60%{background:rgba(185,28,28,.95);box-shadow:0 0 0 2px rgba(127,29,29,1)}100%{background:transparent;box-shadow:none}}
-    @keyframes flashGoodLight{0%,60%{background:rgba(22,163,74,.82);box-shadow:0 0 0 2px rgba(21,128,61,.7)}100%{background:transparent;box-shadow:none}}
-    @keyframes flashBadLight{0%,60%{background:rgba(220,38,38,.82);box-shadow:0 0 0 2px rgba(185,28,28,.7)}100%{background:transparent;box-shadow:none}}
+    /* Flash keyframes drive ALL THREE visual layers that change during a flash:
+       background, box-shadow, and border-color. If any layer is omitted, the
+       button's other CSS transitions will leak in and cause a 150ms fade on
+       that property — visible as flicker or a lingering border at flash start.
+       Endpoints (100%) match surface-button's resting state so the flash
+       resolves cleanly into idle without a second-stage transition. */
+    @keyframes flashGood{0%,60%{background:rgba(21,128,61,.95);box-shadow:0 0 0 2px rgba(20,83,45,1);border-color:transparent}100%{background:var(--sbtn-bg);box-shadow:0 1px 2px 0 rgb(0 0 0 / 0.05);border-color:var(--sbtn-bd)}}
+    @keyframes flashBad{0%,60%{background:rgba(185,28,28,.95);box-shadow:0 0 0 2px rgba(127,29,29,1);border-color:transparent}100%{background:var(--sbtn-bg);box-shadow:0 1px 2px 0 rgb(0 0 0 / 0.05);border-color:var(--sbtn-bd)}}
+    @keyframes flashGoodLight{0%,60%{background:rgba(22,163,74,.82);box-shadow:0 0 0 2px rgba(21,128,61,.7);border-color:transparent}100%{background:var(--sbtn-bg);box-shadow:0 1px 2px 0 rgb(0 0 0 / 0.05);border-color:var(--sbtn-bd)}}
+    @keyframes flashBadLight{0%,60%{background:rgba(220,38,38,.82);box-shadow:0 0 0 2px rgba(185,28,28,.7);border-color:transparent}100%{background:var(--sbtn-bg);box-shadow:0 1px 2px 0 rgb(0 0 0 / 0.05);border-color:var(--sbtn-bd)}}
     .flash-good{animation:flashGood .55s ease-out forwards}
     .flash-bad{animation:flashBad .55s ease-out forwards}
     [data-theme="light"] .flash-good,[data-theme="parchment"] .flash-good{animation-name:flashGoodLight}
@@ -225,6 +235,15 @@
       }
     }
     const blankDedTypeStore=()=>({year:null,month:null,day:null});
+    // Format IDs and rollFormat live at module scope so the dateByMode useState
+    // initializer can stamp ._fmt on the very first dates. Previously these were
+    // declared inside the component, which meant the initializer fell back to
+    // dateFormat (default 'written-mdy') for the first date in each mode even
+    // when randomFormat was on — visible as "April 2, 2020" being the first
+    // launch date every time. Other call sites (attachFmt, advanceDate) use
+    // these same module-scope versions.
+    const FORMAT_IDS=['written-mdy','written-dmy','numeric-mdy','numeric-dmy','numeric-ymd'];
+    const rollFormat=()=>FORMAT_IDS[Math.floor(Math.random()*FORMAT_IDS.length)];
     const normalizeMod7=v=>((v%7)+7)%7;
     const canonicalizeMod=v=>{const m=normalizeMod7(v);return m>3?m-7:m;};
     function calcDayCode(d){const lo=Math.floor(d/7)*7,hi=lo+7,fl=d-lo,fu=d-hi;return Math.abs(fu)<=Math.abs(fl)?fu:fl;}
@@ -343,7 +362,7 @@
 
 
 
-    const DEPLOY_TS=new Date('2026-05-03T04:18:00Z');
+    const DEPLOY_TS=new Date('2026-05-03T07:34:00Z');
 
     function StatPanel({stats}){
       // For fractional values (Score, Streak as "X/Y"), shrink the value font
@@ -423,7 +442,11 @@
       );
       const codesDisabled=runPhase==="idle"||(oneByOne&&!shown&&!inBackMode&&!isLocked);
       const optionsDisabled=isLocked||codesOpen||(oneByOne&&!shown&&!inBackMode)||runPhase==="idle"||inBackMode;
-      const baseBtn="w-full rounded-2xl border px-4 py-3 text-base transition shadow-sm select-none";
+      // Tailwind's `transition` utility intentionally omitted — it would re-introduce
+      // a 150ms multi-property fade on persist (red on wrong, green at end of run)
+      // and on flash border-color. Hover fades are handled by surface-button's own
+      // targeted 200ms bg-only transition (see <style> block at top of file).
+      const baseBtn="w-full rounded-2xl border px-4 py-3 text-base shadow-sm select-none";
 
       function reset(){setRunPhase("idle");setDisplayN(n);setShown(false);setInBackMode(false);setAoxStack([]);setAoxForwardStack([]);setTimes([]);setStreak(0);setBestStreak(0);setAttempts(0);setGuesses([]);setMsg("");setFlash(null);resetAoxPB();setCodesOpen(false);setCanOverrideCorrect(false);setQuestionCounted(false);setPendingWrongCredit(null);setOverrideUsedAox(false);setBestNew({});setDate(genDate(minY,maxY));tStartRef.current=null;wrongTimeRef.current=null;prevTimesSnapRef.current=null;prevStreakSnapRef.current=null;prevBestSnapRef.current=null;}
       useEffect(()=>{if(!visible&&runPhase==="running")reset();},[visible]);
@@ -822,7 +845,16 @@
       const [minInputVal,setMinInputVal]=useState("1");
       const [maxInputVal,setMaxInputVal]=useState("10000");
       const minInputRef=useRef(null),maxInputRef=useRef(null);
-      const [dateByMode,setDateByMode]=useState(()=>({classic:randomDate(1,10000),blitz:randomDate(1,10000),flash:randomDate(1,10000)}));
+      // genDate isn't accessible here — it's declared later in the component and
+      // depends on state declared later (Babel hoists `const` as `var`, so calling
+      // genDate from this initializer would crash with "genDate is undefined").
+      // The literal `false` for _jul and unconditional rollFormat() call mirror
+      // the corresponding useState defaults (useJulian=false, randomFormat=true).
+      // If those defaults change, this initializer must be updated to match.
+      const [dateByMode,setDateByMode]=useState(()=>{
+        const mk=()=>{const d=randomDate(1,10000);d._fmt=rollFormat();d._jul=false;return d;};
+        return{classic:mk(),blitz:mk(),flash:mk()};
+      });
       const date=dateByMode[mode]??dateByMode.classic;
       const setDate=valOrFn=>setDateByMode(prev=>({...prev,[mode]:typeof valOrFn==='function'?valOrFn(prev[mode]??prev.classic):valOrFn}));
       const [stack,setStack]=useState([]),[dedStack,setDedStack]=useState([]);
@@ -1779,7 +1811,11 @@
         if(snap&&snap.ded){setDed(snap.ded);setGuesses(snap.guesses||[]);setCountedWrong(!!snap.countedWrong);setMsg(snap.msg||"");setLocked(!!snap.locked);setRevealed(!!snap.revealed);setCalcPenalty(!!snap.calcPenaltyActive);return;}
         setMsg("");setGuesses([]);setLocked(false);setRevealed(false);setCountedWrong(false);spawnDed();
       },[dedType,mode,savedDedByType]);
-      const baseBtn="w-full rounded-2xl border px-4 py-3 text-base transition shadow-sm select-none";
+      // Tailwind's `transition` utility intentionally omitted — it would re-introduce
+      // a 150ms multi-property fade on persist (red on wrong) and on flash border-color.
+      // Hover fades are handled by surface-button's own targeted 200ms bg-only
+      // transition (see <style> block at top of file).
+      const baseBtn="w-full rounded-2xl border px-4 py-3 text-base shadow-sm select-none";
       const idleBtn="surface-button";
       const optionsDisabled=(isTimer(mode)&&!active)||locked||calcOpen||calcPenaltyActive;
       // Layout helper for option grids in 3-col mode. Used by Day sub-mode (N=7 → last button
@@ -1871,9 +1907,8 @@
       // Leap-year date generation settings (apply to all game modes; Lookup unaffected).
       const [leapChance,setLeapChance]=useState('random');
       const [forceJanFebOnLeap,setForceJanFebOnLeap]=useState(false);
-      // The 5 reachable formats. Random rolls one per date in game modes.
-      const FORMAT_IDS=['written-mdy','written-dmy','numeric-mdy','numeric-dmy','numeric-ymd'];
-      const rollFormat=()=>FORMAT_IDS[Math.floor(Math.random()*FORMAT_IDS.length)];
+      // FORMAT_IDS and rollFormat are defined at module scope (see top of file)
+      // so the dateByMode useState initializer can also use them.
       // fmtDate: if Random Format is on AND date carries a stored _fmt (from per-date roll), use it; else use selected format.
       // Toggling Random off makes already-displayed dates immediately fall back to the selected format.
       const fmtDate=(y,m,d,storedFmt)=>fmt(y,m,d,(randomFormat&&storedFmt)||dateFormat);
@@ -2233,9 +2268,9 @@
         <div className="space-y-2 pt-3 border-t border-purple-500/20">
           <div className="text-[10px] uppercase tracking-widest text-purple-300/60">Year Range</div>
           <div className="flex items-center gap-2">
-            <input ref={minInputRef} type="text" inputMode="numeric" pattern="[0-9]*" value={minInputVal} onChange={e=>{if(e.target.value===''||/^\d*$/.test(e.target.value))setMinInputVal(e.target.value);}} onBlur={commitMin} onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();commitMin();e.currentTarget.blur();}if(e.key==="Escape"){setMinInputVal(String(minY));e.currentTarget.blur();}blockMinus(e);}} onBeforeInput={blockMinusBI} className="w-20 panel rounded-xl px-2 py-1.5 text-sm text-center focus:outline-none focus:ring-2 focus:ring-purple-400 tabular-nums"/>
+            <input ref={minInputRef} type="text" inputMode="numeric" pattern="[0-9]*" value={minInputVal} onChange={e=>{if(e.target.value===''||/^\d*$/.test(e.target.value))setMinInputVal(e.target.value);}} onBlur={commitMin} onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();commitMin();e.currentTarget.blur();}if(e.key==="Escape"){setMinInputVal(String(minY));e.currentTarget.blur();}blockMinus(e);}} onBeforeInput={blockMinusBI} className="w-20 panel rounded-xl px-2 py-1.5 text-sm text-center focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-400 tabular-nums"/>
             <span className="text-purple-300/60 text-sm shrink-0">→</span>
-            <input ref={maxInputRef} type="text" inputMode="numeric" pattern="[0-9]*" value={maxInputVal} onChange={e=>{if(e.target.value===''||/^\d*$/.test(e.target.value))setMaxInputVal(e.target.value);}} onBlur={commitMax} onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();commitMax();e.currentTarget.blur();}if(e.key==="Escape"){setMaxInputVal(String(maxY));e.currentTarget.blur();}blockMinus(e);}} onBeforeInput={blockMinusBI} className="w-20 panel rounded-xl px-2 py-1.5 text-sm text-center focus:outline-none focus:ring-2 focus:ring-purple-400 tabular-nums"/>
+            <input ref={maxInputRef} type="text" inputMode="numeric" pattern="[0-9]*" value={maxInputVal} onChange={e=>{if(e.target.value===''||/^\d*$/.test(e.target.value))setMaxInputVal(e.target.value);}} onBlur={commitMax} onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();commitMax();e.currentTarget.blur();}if(e.key==="Escape"){setMaxInputVal(String(maxY));e.currentTarget.blur();}blockMinus(e);}} onBeforeInput={blockMinusBI} className="w-20 panel rounded-xl px-2 py-1.5 text-sm text-center focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-400 tabular-nums"/>
           </div>
         </div>
         <div className="space-y-2 pt-3 border-t border-purple-500/20">
@@ -2252,7 +2287,7 @@
         <div className="space-y-2 pt-3 border-t border-purple-500/20">
           <div className="text-[10px] uppercase tracking-widest text-purple-300/60">Theme</div>
           <div className="flex items-center justify-between"><span className="text-xs text-purple-200/80">Use System Settings</span><button type="button" onClick={()=>setUseSystem(v=>!v)} className={`px-3 py-1 rounded-xl text-xs font-medium border ${useSystem?"btn-solid border-transparent":"surface-toggle border-purple-800/60 text-purple-100/80"}`}>{useSystem?"On":"Off"}</button></div>
-          {useSystem?(<><div className="flex items-center gap-3"><span className="text-xs text-purple-200/80 w-10 shrink-0">Dark:</span><select value={darkTheme} onChange={e=>setDarkTheme(e.target.value)} className="panel rounded-xl px-2 py-1 text-sm flex-1 focus:outline-none focus:ring-2 focus:ring-purple-400 appearance-none">{DARK_THEMES.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></div><div className="flex items-center gap-3"><span className="text-xs text-purple-200/80 w-10 shrink-0">Light:</span><select value={lightTheme} onChange={e=>setLightTheme(e.target.value)} className="panel rounded-xl px-2 py-1 text-sm flex-1 focus:outline-none focus:ring-2 focus:ring-purple-400 appearance-none">{LIGHT_THEMES.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></div></>):(<div className="flex items-center gap-3"><span className="text-xs text-purple-200/80 w-10 shrink-0">Theme:</span><select value={manualTheme} onChange={e=>setManualTheme(e.target.value)} className="panel rounded-xl px-2 py-1 text-sm flex-1 focus:outline-none focus:ring-2 focus:ring-purple-400 appearance-none">{ALL_THEMES_LABELED.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></div>)}
+          {useSystem?(<><div className="flex items-center gap-3"><span className="text-xs text-purple-200/80 w-10 shrink-0">Dark:</span><select value={darkTheme} onChange={e=>setDarkTheme(e.target.value)} className="panel rounded-xl px-2 py-1 text-sm flex-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-400 appearance-none">{DARK_THEMES.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></div><div className="flex items-center gap-3"><span className="text-xs text-purple-200/80 w-10 shrink-0">Light:</span><select value={lightTheme} onChange={e=>setLightTheme(e.target.value)} className="panel rounded-xl px-2 py-1 text-sm flex-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-400 appearance-none">{LIGHT_THEMES.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></div></>):(<div className="flex items-center gap-3"><span className="text-xs text-purple-200/80 w-10 shrink-0">Theme:</span><select value={manualTheme} onChange={e=>setManualTheme(e.target.value)} className="panel rounded-xl px-2 py-1 text-sm flex-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-400 appearance-none">{ALL_THEMES_LABELED.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></div>)}
         </div>
         <div className="pt-2 border-t border-purple-500/20 text-[11px] text-purple-300/60">Last Updated: {(()=>{const d=DEPLOY_TS;const yy=d.getFullYear();const mo=d.getMonth()+1;const da=d.getDate();const numFmt=numericFormatOf(dateFormat);const datePart=fmt(yy,mo,da,numFmt);const timePart=d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',hour12:false});return`${datePart} ${timePart}`;})()}</div>
       </div>);
@@ -2267,8 +2302,14 @@
                 <button type="button" onClick={()=>setSettingsOpen(v=>!v)} className={`px-2.5 py-2 rounded-xl text-sm border ${settingsOpen?"btn-solid border-transparent":"surface-button text-purple-100/80"}`} aria-label="Settings">⚙</button>
               </div>
               {/* mode selector */}
+              {/* The previous onChange handler set #root.style.pointerEvents='none'
+                  for 400ms after a mode change — a blanket workaround that swallowed
+                  every tap on the page for nearly half a second. Removed.
+                  Any phantom-tap regression on iOS picker dismiss must be fixed
+                  at its source (e.g. narrow guard on the specific affected
+                  button), not by re-adding the blanket lock on #root. */}
               <div className="relative">
-                <select ref={modeSelectRef} value={mode} onChange={e=>{setMode(e.target.value);setSettingsOpen(false);e.target.blur();const root=document.getElementById('root');if(root){root.style.pointerEvents='none';setTimeout(()=>root.style.pointerEvents='',400);}}} className="panel rounded-xl px-2.5 py-2 pr-9 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 appearance-none">
+                <select ref={modeSelectRef} value={mode} onChange={e=>{setMode(e.target.value);setSettingsOpen(false);e.target.blur();}} className="panel rounded-xl px-2.5 py-2 pr-9 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-400 appearance-none">
                   <option value="classic">Classic</option><option value="aox">AoX</option><option value="deduction">Deduction</option><option value="flash">Flash</option><option value="blitz">Blitz</option><option value="lookup">Lookup</option><option value="guide">How to Play</option>
                 </select>
                 <div className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 flex flex-col items-center leading-none text-[7px] text-white/90"><span>▲</span><span>▼</span></div>
@@ -2608,7 +2649,7 @@
         <div className="mt-1 space-y-4">
           <div className="rounded-2xl panel p-4 space-y-4">
             <div className="flex flex-wrap items-stretch gap-2">
-              <input ref={lookupInputRef} value={li} onChange={e=>sli(e.target.value)} placeholder={`e.g., ${inputMeta.example}`} className="panel rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-400 flex-1 min-w-0"/>
+              <input ref={lookupInputRef} value={li} onChange={e=>sli(e.target.value)} placeholder={`e.g., ${inputMeta.example}`} className="panel rounded-xl px-3 py-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-400 flex-1 min-w-0"/>
               <button type="button" onClick={runLookup} onMouseDown={e=>e.preventDefault()} className="px-4 py-2 rounded-xl btn-solid text-sm font-medium">Lookup</button>
               <button type="button" onClick={clearLookup} onMouseDown={e=>e.preventDefault()} className="px-4 py-2 rounded-xl bg-zinc-700 text-white text-sm font-medium">Clear</button>
             </div>
