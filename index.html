@@ -263,7 +263,12 @@
     function calcDayCode(d){const lo=Math.floor(d/7)*7,hi=lo+7,fl=d-lo,fu=d-hi;return Math.abs(fu)<=Math.abs(fl)?fu:fl;}
     function calcCdCode(cd){if(METHOD_CD_ADVANCED_ZERO_YEARS.has(cd))return 0;let b=METHOD_CD_ADVANCED_LEAP_ORDER[0];for(const y of METHOD_CD_ADVANCED_LEAP_ORDER){if(y>cd)break;b=y;}return canonicalizeMod((METHOD_CD_ADVANCED_LEAP_MAP.get(b)??0)+(cd-b));}
     function yearParts(y){const f=((y%10000)+10000)%10000;return{a:Math.floor(f/1000),b:Math.floor((f%1000)/100),cd:f%100};}
-    function computeMethodSummary({y,m,d},useJulian=false){if(!Number.isFinite(y)||y<=0)return null;const mc=METHOD_MONTH_CODES[m]??null;if(mc==null)return null;const p=yearParts(y);const julian=useJulian&&isJulianDate(y,m,d);const abCode=julian?(JULIAN_AB_MAP.get(p.a*10+p.b)??0):((p.a%2===0?METHOD_AB_ADVANCED_MAP.even:METHOD_AB_ADVANCED_MAP.odd).get(p.b)??0);const leapYear=julian?isLeapJulian(y):isLeap(y);const weekday=DAY[julian?wdayJulian(y,m,d):wday(y,m,d)];return{monthCode:mc,dayCode:calcDayCode(d),abCode,cdCode:calcCdCode(p.cd),leapYear,weekday,calendarSystem:julian?'Julian':'Gregorian'};}
+    // leapCode is the calculation contribution for leap correction (matches the
+    // framing of the other numeric codes in the codes panel): -1 only when it's
+    // a leap year AND month is January or February (where the leap correction
+    // applies in the day-of-week calculation), 0 otherwise. leapYear boolean is
+    // kept in the return object too in case future code needs the underlying state.
+    function computeMethodSummary({y,m,d},useJulian=false){if(!Number.isFinite(y)||y<=0)return null;const mc=METHOD_MONTH_CODES[m]??null;if(mc==null)return null;const p=yearParts(y);const julian=useJulian&&isJulianDate(y,m,d);const abCode=julian?(JULIAN_AB_MAP.get(p.a*10+p.b)??0):((p.a%2===0?METHOD_AB_ADVANCED_MAP.even:METHOD_AB_ADVANCED_MAP.odd).get(p.b)??0);const leapYear=julian?isLeapJulian(y):isLeap(y);const leapCode=(leapYear&&(m===1||m===2))?-1:0;const weekday=DAY[julian?wdayJulian(y,m,d):wday(y,m,d)];return{monthCode:mc,dayCode:calcDayCode(d),abCode,cdCode:calcCdCode(p.cd),leapYear,leapCode,weekday,calendarSystem:julian?'Julian':'Gregorian'};}
     const isTouch=typeof window!=="undefined"&&("ontouchstart" in window||navigator.maxTouchPoints>0||matchMedia("(pointer:coarse)").matches);
     const isTimer=m=>m==="blitz"||m==="flash";
     const fmtBlitzT=s=>{const sec=Math.ceil(s);if(sec<60)return sec+"s";const m=Math.floor(sec/60),r=sec%60;return m+"m "+r+"s";};
@@ -376,7 +381,7 @@
 
 
 
-    const DEPLOY_TS=new Date('2026-05-03T19:43:00Z');
+    const DEPLOY_TS=new Date('2026-05-03T20:54:00Z');
 
     function StatPanel({stats}){
       // For fractional values (Score, Streak as "X/Y"), shrink the value font
@@ -2609,7 +2614,7 @@
       const dayCode=joinDedup(summaries.map(s=>s.dayCode));
       const abCode=joinDedup(summaries.map(s=>s.abCode));
       const cdCode=joinDedup(summaries.map(s=>s.cdCode));
-      const leapValue=joinDedup(summaries.map(s=>s.leapYear?"Yes":"No"));
+      const leapValue=joinDedup(summaries.map(s=>String(s.leapCode)));
       const calendarText=joinDedup(summaries.map(s=>s.calendarSystem))+" Calendar";
       const codeMap={
         Month:{label:"Month",italic:false,value:monthCode},
