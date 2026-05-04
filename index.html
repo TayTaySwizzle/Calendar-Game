@@ -385,7 +385,7 @@
 
 
 
-    const DEPLOY_TS=new Date('2026-05-04T15:57:00Z');
+    const DEPLOY_TS=new Date('2026-05-04T17:04:00Z');
 
     function StatPanel({stats}){
       // For fractional values (Score, Streak as "X/Y"), shrink the value font
@@ -850,7 +850,7 @@
       }
 
       // #4 — done+inBackMode → Reset; running+inBackMode → Continue
-      const primaryBtn=runPhase==="idle"?(<button type="button" className="col-span-1 px-3 py-2 rounded-xl btn-solid text-sm font-medium" onClick={startOrContinue}>Begin</button>):runPhase==="done"&&inBackMode?(<button type="button" className="col-span-1 px-3 py-2 rounded-xl bg-rose-600/90 text-white text-sm font-medium" onClick={reset}>Reset</button>):isLocked?(<button type="button" className="col-span-1 px-3 py-2 rounded-xl bg-rose-600/90 text-white text-sm font-medium" onClick={reset}>Reset</button>):inBackMode||(!shown&&oneByOne)?(<button type="button" className="col-span-1 px-3 py-2 rounded-xl btn-solid text-sm font-medium" onClick={startOrContinue}>Continue</button>):(<button type="button" className="col-span-1 px-3 py-2 rounded-xl bg-rose-600/90 text-white text-sm font-medium" onClick={reset}>Reset</button>);
+      const primaryBtn=runPhase==="idle"?(<button type="button" data-key="N" className="col-span-1 px-3 py-2 rounded-xl btn-solid text-sm font-medium" onClick={startOrContinue}>Begin</button>):runPhase==="done"&&inBackMode?(<button type="button" data-key="N" className="col-span-1 px-3 py-2 rounded-xl bg-rose-600/90 text-white text-sm font-medium" onClick={reset}>Reset</button>):isLocked?(<button type="button" data-key="N" className="col-span-1 px-3 py-2 rounded-xl bg-rose-600/90 text-white text-sm font-medium" onClick={reset}>Reset</button>):inBackMode||(!shown&&oneByOne)?(<button type="button" data-key="N" className="col-span-1 px-3 py-2 rounded-xl btn-solid text-sm font-medium" onClick={startOrContinue}>Continue</button>):(<button type="button" data-key="N" className="col-span-1 px-3 py-2 rounded-xl bg-rose-600/90 text-white text-sm font-medium" onClick={reset}>Reset</button>);
 
       const scoreDisplay=runPhase==="idle"?"0/0":`${doneCount}/${attempts}`;
       const accuracyDisplay=attempts>0?`${(doneCount/attempts*100).toFixed(1)}%`:"—";
@@ -896,13 +896,13 @@
             <div className="grid grid-cols-4 gap-2">
               {primaryBtn}
               <div className="col-span-1 flex gap-1">
-                <button type="button" className={`flex-1 px-1 py-2 rounded-xl border surface-button text-sm font-medium flex items-center justify-center ${backDisabled?"opacity-60 pointer-events-none":""}`} onClick={goBackAox}><span style={{position:'relative',top:'-1.5px'}}>&lt;</span></button>
-                <button type="button" className={`flex-1 px-1 py-2 rounded-xl border surface-button text-sm font-medium flex items-center justify-center ${(aoxForwardStack.length===0||runPhase==="idle"||runPhase==="running")?"opacity-60 pointer-events-none":""}`} onClick={goForwardAox}><span style={{position:'relative',top:'-1.5px'}}>&gt;</span></button>
+                <button type="button" data-key="ArrowLeft" className={`flex-1 px-1 py-2 rounded-xl border surface-button text-sm font-medium flex items-center justify-center ${backDisabled?"opacity-60 pointer-events-none":""}`} onClick={goBackAox}><span style={{position:'relative',top:'-1.5px'}}>&lt;</span></button>
+                <button type="button" data-key="ArrowRight" className={`flex-1 px-1 py-2 rounded-xl border surface-button text-sm font-medium flex items-center justify-center ${(aoxForwardStack.length===0||runPhase==="idle"||runPhase==="running")?"opacity-60 pointer-events-none":""}`} onClick={goForwardAox}><span style={{position:'relative',top:'-1.5px'}}>&gt;</span></button>
               </div>
-              <button type="button" className={`col-span-1 px-3 py-2 rounded-xl border surface-button text-sm font-medium text-center ${revealLocked?"opacity-60 pointer-events-none":""}`} onClick={revealAnswer}>Reveal</button>
-              <button type="button" className={`col-span-1 px-3 py-2 rounded-xl border surface-button text-sm font-medium text-center ${!overrideAvail?"opacity-60 pointer-events-none":""}`} onClick={handleOverride}>Override</button>
+              <button type="button" data-key="R" className={`col-span-1 px-3 py-2 rounded-xl border surface-button text-sm font-medium text-center ${revealLocked?"opacity-60 pointer-events-none":""}`} onClick={revealAnswer}>Reveal</button>
+              <button type="button" data-key="O" className={`col-span-1 px-3 py-2 rounded-xl border surface-button text-sm font-medium text-center ${!overrideAvail?"opacity-60 pointer-events-none":""}`} onClick={handleOverride}>Override</button>
             </div>
-            <button type="button" className={`w-full px-4 py-2 rounded-xl btn-solid text-sm font-medium ${codesDisabled&&!inBackMode?"opacity-60 pointer-events-none":""}`} onClick={openCodes}>{codesOpen?"Hide Codes":"Show Codes"}</button>
+            <button type="button" data-key="C" className={`w-full px-4 py-2 rounded-xl btn-solid text-sm font-medium ${codesDisabled&&!inBackMode?"opacity-60 pointer-events-none":""}`} onClick={openCodes}>{codesOpen?"Hide Codes":"Show Codes"}</button>
             <Expander open={codesOpen}><div className="mt-3 rounded-2xl thin px-4 pt-[3px] pb-1.5"><MethodExplanation date={aoxFrozenDate} useJulian={inBackMode?(aoxFrozenDate?._jul??useJulian):useJulian} displayedFormat={(randomFormat&&aoxFrozenDate?._fmt)||dateFormat}/></div></Expander>
           </div>
         </div>
@@ -919,6 +919,13 @@
     // ============================================================
     function App(){
       const [mode,setMode]=useState("classic");
+      // Tracks the most recent non-guide mode so the H key bind can toggle out of
+      // guide back to where the user was. Updated whenever mode changes (excluding
+      // changes INTO guide). Initial value 'classic' covers the never-left-classic case.
+      // Distinct from the unrelated prevModeRef declared further down which tracks
+      // mode changes for codes-freeze logic.
+      const prevNonGuideModeRef=useRef('classic');
+      useEffect(()=>{if(mode!=='guide')prevNonGuideModeRef.current=mode;},[mode]);
       const modeSelectRef=useRef(null);
       const [systemIsDark,setSystemIsDark]=useState(()=>typeof window!=="undefined"?window.matchMedia("(prefers-color-scheme: dark)").matches:true);
       const [useSystem,setUseSystem]=useState(true);
@@ -1113,17 +1120,70 @@
       // on iOS Safari. visibilitychange catches tab-foreground transitions; rAF + setTimeout
       // catch late scroll restorations that happen after the initial event fires.
       useEffect(()=>{const reset=()=>{window.scrollTo(0,0);if(document.documentElement.scrollTop!==0)document.documentElement.scrollTop=0;if(document.body.scrollTop!==0)document.body.scrollTop=0;};const onPageShow=()=>{reset();requestAnimationFrame(reset);setTimeout(reset,0);};const onVisChange=()=>{if(document.visibilityState==='visible'){reset();requestAnimationFrame(reset);}};reset();window.addEventListener('pageshow',onPageShow);document.addEventListener('visibilitychange',onVisChange);return()=>{window.removeEventListener('pageshow',onPageShow);document.removeEventListener('visibilitychange',onVisChange);};},[]);
-      // Keyboard answer input — desktop convenience, mobile-no-op.
-      // Number keys 0–9 trigger the answer-grid button at that 0-based index, left-to-right
-      // and top-to-bottom (0 = first button). Indexing matches the book's day codes (Sun=0 ... Sat=6).
-      // The listener is always-on; phones with no hardware keyboard simply never fire it.
-      // Skips: modifier keys held (preserves Cmd+1 etc.), focus inside text inputs (preserves typing),
-      // key repeat / IME composition. Finds the visible answer-grid by walking [data-answer-grid="true"]
-      // elements and picking the one with non-null offsetParent (display:none excluded). Each answer
-      // grid div contains its option buttons as direct children, so children[idx] is the button at
-      // visual position idx. Programmatic .click() bypasses CSS pointer-events, so we explicitly skip
-      // when the button has the pointer-events-none class to mirror real-click locked-button behavior.
-      useEffect(()=>{const onKey=e=>{if(e.repeat||e.isComposing)return;if(e.ctrlKey||e.metaKey||e.altKey||e.shiftKey)return;const k=e.key;if(k<'0'||k>'9')return;const ae=document.activeElement;if(ae){const tag=ae.tagName;if(tag==='INPUT'||tag==='TEXTAREA'||ae.isContentEditable)return;}const grids=document.querySelectorAll('[data-answer-grid="true"]');let visible=null;for(const g of grids){if(g.offsetParent!==null){visible=g;break;}}if(!visible)return;const idx=parseInt(k,10);const btn=visible.children[idx];if(!btn||btn.tagName!=='BUTTON')return;if(btn.className.includes('pointer-events-none'))return;e.preventDefault();btn.click();};window.addEventListener('keydown',onKey);return()=>window.removeEventListener('keydown',onKey);},[]);
+      // Keyboard input — desktop convenience, mobile-no-op.
+      // Three categories of keys are handled, all subject to the same gates: not in
+      // an input/textarea/contentEditable, no modifiers held (Cmd+L stays browser),
+      // not a key repeat or IME composition.
+      //
+      // 1. Number keys 0–9 trigger the visible answer-grid button at that 0-based
+      //    index, left-to-right and top-to-bottom. Indexing matches the book's day
+      //    codes (Sun=0 ... Sat=6) for day grids; positional for Deduction Month/Year.
+      // 2. Letters (case-insensitive) and ArrowLeft/Right walk the DOM for a button
+      //    with matching data-key attribute and click the first one that's both
+      //    visible (offsetParent != null) and not locked (no pointer-events-none class).
+      //    Game-loop binds: N (New/Begin/Reset), R (Reveal), O (Override), C (Show/Hide
+      //    Codes), S (Reset Stats), ← Back, → Forward.
+      // 3. Special direct-action keys, no DOM button needed:
+      //    - Mode switching: K Classic, F Flash, B Blitz, A AoX, D Deduction, L Lookup
+      //    - H toggles to/from guide (returns to prevNonGuideModeRef when leaving guide)
+      //    - G toggles the settings popover
+      //
+      // All keyboard activations bypass CSS pointer-events via .click(), so the
+      // pointer-events-none className check is mandatory to mirror real-click locks.
+      useEffect(()=>{const onKey=e=>{
+        if(e.repeat||e.isComposing)return;
+        if(e.ctrlKey||e.metaKey||e.altKey||e.shiftKey)return;
+        const k=e.key;
+        const ae=document.activeElement;
+        if(ae){const tag=ae.tagName;if(tag==='INPUT'||tag==='TEXTAREA'||ae.isContentEditable)return;}
+        // Category 1: 0–9 → answer grid
+        if(k>='0'&&k<='9'){
+          const grids=document.querySelectorAll('[data-answer-grid="true"]');
+          let visible=null;
+          for(const g of grids){if(g.offsetParent!==null){visible=g;break;}}
+          if(!visible)return;
+          const idx=parseInt(k,10);
+          const btn=visible.children[idx];
+          if(!btn||btn.tagName!=='BUTTON')return;
+          if(btn.className.includes('pointer-events-none'))return;
+          e.preventDefault();
+          btn.click();
+          return;
+        }
+        // Determine target key string for letters and arrows
+        let dataKey=null;
+        if(k==='ArrowLeft')dataKey='ArrowLeft';
+        else if(k==='ArrowRight')dataKey='ArrowRight';
+        else if(k.length===1){const upper=k.toUpperCase();if(upper>='A'&&upper<='Z')dataKey=upper;}
+        if(!dataKey)return;
+        // Category 3a: mode switching — direct setMode (no DOM button per mode)
+        const MODE_KEYS={K:'classic',F:'flash',B:'blitz',A:'aox',D:'deduction',L:'lookup'};
+        if(MODE_KEYS[dataKey]){e.preventDefault();setMode(MODE_KEYS[dataKey]);setSettingsOpen(false);return;}
+        // Category 3b: H — toggle to/from guide, preserving previous non-guide mode
+        if(dataKey==='H'){e.preventDefault();setMode(m=>m==='guide'?(prevNonGuideModeRef.current||'classic'):'guide');setSettingsOpen(false);return;}
+        // Category 3c: G — toggle settings popover
+        if(dataKey==='G'){e.preventDefault();setSettingsOpen(v=>!v);return;}
+        // Category 2: data-key DOM walk for game-loop letters and arrows
+        const tagged=document.querySelectorAll(`[data-key="${dataKey}"]`);
+        for(const btn of tagged){
+          if(btn.tagName!=='BUTTON')continue;
+          if(btn.offsetParent===null)continue;
+          if(btn.className.includes('pointer-events-none'))continue;
+          e.preventDefault();
+          btn.click();
+          return;
+        }
+      };window.addEventListener('keydown',onKey);return()=>window.removeEventListener('keydown',onKey);},[]);
       const updateStats=mutator=>{if(isPerQGated()){freezeSaveStatsForQ();if(!saveStatsThisQRef.current)return;}const sk=mode==="deduction"?`deduction-${dedType}`:mode;setStatsByMode(prev=>{const ms={...(prev[sk]||blankStatsByEra())};const es={...(ms.AD||blankStats())};mutator(es);return{...prev,[sk]:{...ms,AD:es}};});};
       const resetStatsCurrent=()=>{const sk=mode==="deduction"?`deduction-${dedType}`:mode;setStatsByMode(prev=>{const ms={...(prev[sk]||blankStatsByEra())};return{...prev,[sk]:{...ms,AD:blankStats()}};});};
       const setCalcPenalty=v=>setCalcPenaltyActive(v);
@@ -2492,7 +2552,13 @@
         setLightTheme("light");
         setManualTheme("dusk");
       };
-      const settingsJsx=settingsOpen&&(<div ref={settingsPopoverRef} className="absolute left-0 right-0 top-full mt-2 z-50 rounded-2xl card p-4 space-y-4 shadow-xl">
+      // True when every popover-controlled value matches its initial useState default.
+      // Drives Reset Settings dim-and-lock — same pattern as Reveal/Override/etc.
+      // Includes year range *input text* values so a dirty (uncommitted) input keeps
+      // the button active to clear it back to "1" / "10000".
+      const settingsAtDefaults=randomFormat===true&&dateFormat==='written-mdy'&&useJulian===false&&minY===1&&maxY===10000&&minInputVal==="1"&&maxInputVal==="10000"&&leapChance==='random'&&forceJanFebOnLeap===false&&saveStats===true&&useSystem===true&&darkTheme==='dusk'&&lightTheme==='light'&&manualTheme==='dusk';
+      const settingsJsx=settingsOpen&&(<div ref={settingsPopoverRef} className="absolute left-0 right-0 top-full mt-2 z-50 rounded-2xl card p-4 space-y-4 shadow-xl flex flex-col max-h-[calc(100dvh-80px)]">
+        <div className="overflow-y-auto flex-1 min-h-0 space-y-4">
         <div className="space-y-2">
           <div className="text-[10px] uppercase tracking-widest text-purple-300/60">Date Format</div>
           <div className="flex items-center justify-between"><span className="text-xs text-purple-200/80">Random Format</span><button type="button" onClick={()=>setRandomFormat(v=>!v)} className={`px-3 py-1 rounded-xl text-xs font-medium border ${randomFormat?"btn-solid border-transparent":"surface-toggle border-purple-800/60 text-purple-100/80"}`}>{randomFormat?"On":"Off"}</button></div>
@@ -2521,9 +2587,9 @@
         <div className="space-y-2 pt-3 border-t border-purple-500/20">
           <div className="text-[10px] uppercase tracking-widest text-purple-300/60">Year Range</div>
           <div className="flex items-center gap-2">
-            <input ref={minInputRef} type="text" inputMode="numeric" pattern="[0-9]*" value={minInputVal} onChange={e=>{if(e.target.value===''||/^\d*$/.test(e.target.value))setMinInputVal(e.target.value);}} onBlur={commitMin} onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();commitMin();e.currentTarget.blur();}if(e.key==="Escape"){setMinInputVal(String(minY));e.currentTarget.blur();}blockMinus(e);}} onBeforeInput={blockMinusBI} className="w-20 panel rounded-xl px-2 py-1.5 text-sm text-center focus:outline-none focus-ring tabular-nums"/>
+            <input ref={minInputRef} type="text" inputMode="numeric" pattern="[0-9]*" value={minInputVal} onChange={e=>{if(e.target.value===''||/^\d*$/.test(e.target.value))setMinInputVal(e.target.value);}} onBlur={commitMin} onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();commitMin();e.currentTarget.blur();}if(e.key==="Escape"){setMinInputVal(String(minY));e.currentTarget.blur();}blockMinus(e);}} onBeforeInput={blockMinusBI} className="w-20 panel rounded-xl px-2 py-1.5 text-xs text-center focus:outline-none focus-ring tabular-nums"/>
             <span className="text-purple-300/60 text-sm shrink-0">→</span>
-            <input ref={maxInputRef} type="text" inputMode="numeric" pattern="[0-9]*" value={maxInputVal} onChange={e=>{if(e.target.value===''||/^\d*$/.test(e.target.value))setMaxInputVal(e.target.value);}} onBlur={commitMax} onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();commitMax();e.currentTarget.blur();}if(e.key==="Escape"){setMaxInputVal(String(maxY));e.currentTarget.blur();}blockMinus(e);}} onBeforeInput={blockMinusBI} className="w-20 panel rounded-xl px-2 py-1.5 text-sm text-center focus:outline-none focus-ring tabular-nums"/>
+            <input ref={maxInputRef} type="text" inputMode="numeric" pattern="[0-9]*" value={maxInputVal} onChange={e=>{if(e.target.value===''||/^\d*$/.test(e.target.value))setMaxInputVal(e.target.value);}} onBlur={commitMax} onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();commitMax();e.currentTarget.blur();}if(e.key==="Escape"){setMaxInputVal(String(maxY));e.currentTarget.blur();}blockMinus(e);}} onBeforeInput={blockMinusBI} className="w-20 panel rounded-xl px-2 py-1.5 text-xs text-center focus:outline-none focus-ring tabular-nums"/>
           </div>
         </div>
         <div className="space-y-2 pt-3 border-t border-purple-500/20">
@@ -2542,8 +2608,9 @@
           <div className="flex items-center justify-between"><span className="text-xs text-purple-200/80">Use System Settings</span><button type="button" onClick={()=>setUseSystem(v=>!v)} className={`px-3 py-1 rounded-xl text-xs font-medium border ${useSystem?"btn-solid border-transparent":"surface-toggle border-purple-800/60 text-purple-100/80"}`}>{useSystem?"On":"Off"}</button></div>
           {useSystem?(<><div className="flex items-center gap-3"><span className="text-xs text-purple-200/80 w-10 shrink-0">Dark:</span><CustomSelect value={darkTheme} onChange={setDarkTheme} options={DARK_THEMES} ariaLabel="Dark theme" wrapperClassName="flex-1" className="panel rounded-xl px-2 py-1 text-sm w-full focus:outline-none focus-ring text-left"/></div><div className="flex items-center gap-3"><span className="text-xs text-purple-200/80 w-10 shrink-0">Light:</span><CustomSelect value={lightTheme} onChange={setLightTheme} options={LIGHT_THEMES} ariaLabel="Light theme" wrapperClassName="flex-1" className="panel rounded-xl px-2 py-1 text-sm w-full focus:outline-none focus-ring text-left"/></div></>):(<div className="flex items-center gap-3"><span className="text-xs text-purple-200/80 w-10 shrink-0">Theme:</span><CustomSelect value={manualTheme} onChange={setManualTheme} options={ALL_THEMES_LABELED} ariaLabel="Theme" wrapperClassName="flex-1" className="panel rounded-xl px-2 py-1 text-sm w-full focus:outline-none focus-ring text-left"/></div>)}
         </div>
+        </div>
         <div className="pt-3 border-t border-purple-500/20">
-          <button type="button" onClick={resetSettings} className="w-full px-3 py-2 rounded-xl bg-rose-600/90 text-white text-sm font-medium">Reset Settings</button>
+          <button type="button" onClick={resetSettings} className={`w-full px-3 py-2 rounded-xl bg-rose-600/90 text-white text-sm font-medium ${settingsAtDefaults?"opacity-60 pointer-events-none":""}`}>Reset Settings</button>
         </div>
         <div className="pt-2 border-t border-purple-500/20 text-[11px] text-purple-300/60 space-y-0.5">
           <div>Contact: <a href="mailto:dayoftheweekcalculation@gmail.com" className="underline break-all">dayoftheweekcalculation@gmail.com</a></div>
@@ -2580,7 +2647,7 @@
               {label:"Average",value:fmtTime(sAvg),off:effectiveAvgVisOff,fn:canHideStats?toggleTimingVis:null},
               {label:"Median",value:fmtTime(sMed),off:effectiveAvgVisOff,fn:canHideStats?toggleTimingVis:null},
             ]}/></div>
-            {["classic","deduction"].includes(mode)&&(<div className="mt-3"><button type="button" className="w-full px-3 py-1.5 rounded-xl btn-solid border border-transparent text-sm font-medium" onClick={handleResetStats}>Reset Stats</button></div>)}
+            {["classic","deduction"].includes(mode)&&(<div className="mt-3"><button type="button" data-key="S" className="w-full px-3 py-1.5 rounded-xl btn-solid border border-transparent text-sm font-medium" onClick={handleResetStats}>Reset Stats</button></div>)}
             {mode==='blitz'&&!perQ&&(()=>{const bk=`${allowMistakes?'m':'n'}${blitzSec}`;const newF=blitzBestNew[bk]||{score:false,streak:false};const b=blitzBest[bk];const showTag=b&&b.scoreRoundId!=null&&b.streakRoundId!=null;return(<div className="mt-3 text-xs text-purple-300/60"><div className="flex flex-wrap items-start gap-4"><div className="min-w-[125px]">Best Score: {b?.score??'—'}{newF.score&&<sup className="text-purple-400 font-bold ml-0.5 text-[8px]">★</sup>}</div><div className="min-w-[125px]">Best Streak: {b?.streak??'—'}{newF.streak&&<sup className="text-purple-400 font-bold ml-0.5 text-[8px]">★</sup>}</div>{showTag&&<span className="shrink-0 ml-auto">{b.scoreRoundId===b.streakRoundId?"Same Round":"Different Rounds"}</span>}</div></div>);})()}
             {mode==='blitz'&&perQ&&(<div className="mt-3 text-xs text-purple-300/60"><div className="flex flex-wrap items-start gap-4"><div className="min-w-[125px]">Best Score: {suddenBest[qSec]?.score??'—'}{suddenBestNew[qSec]&&<sup className="text-purple-400 font-bold ml-0.5 text-[8px]">★</sup>}</div></div></div>)}
             {mode==='blitz'&&(<div className="mt-3 rounded-2xl panel p-3 space-y-2">
@@ -2591,7 +2658,7 @@
               {timerSettingControl}
             </div>)}
             {mode==='flash'&&(<>
-              <div className="mt-3"><button type="button" className="w-full px-3 py-1.5 rounded-xl btn-solid border border-transparent text-sm font-medium" onClick={handleResetStats}>Reset Stats</button></div>
+              <div className="mt-3"><button type="button" data-key="S" className="w-full px-3 py-1.5 rounded-xl btn-solid border border-transparent text-sm font-medium" onClick={handleResetStats}>Reset Stats</button></div>
               <div className="mt-3">{timerSettingControl}</div>
             </>)}
           </>)}
@@ -2614,13 +2681,13 @@
               </div>
               <div className="mt-4 rounded-2xl panel p-3 space-y-3">
                 <div className="grid grid-cols-4 gap-2">
-                  {isTimer(mode)?(active?(<button type="button" className="col-span-1 px-3 py-2 rounded-xl bg-rose-600/90 text-white text-sm font-medium" onClick={arm}>Reset</button>):timerDone?(<button type="button" className="col-span-1 px-3 py-2 rounded-xl bg-rose-600/90 text-white text-sm font-medium" onClick={arm}>Reset</button>):(<button type="button" className="col-span-1 px-3 py-2 rounded-xl btn-solid text-sm font-medium" onClick={begin}>Begin</button>)):(<button type="button" className="col-span-1 px-3 py-2 rounded-xl border surface-button text-sm font-medium" onClick={()=>doNew()}>New</button>)}
+                  {isTimer(mode)?(active?(<button type="button" data-key="N" className="col-span-1 px-3 py-2 rounded-xl bg-rose-600/90 text-white text-sm font-medium" onClick={arm}>Reset</button>):timerDone?(<button type="button" data-key="N" className="col-span-1 px-3 py-2 rounded-xl bg-rose-600/90 text-white text-sm font-medium" onClick={arm}>Reset</button>):(<button type="button" data-key="N" className="col-span-1 px-3 py-2 rounded-xl btn-solid text-sm font-medium" onClick={begin}>Begin</button>)):(<button type="button" data-key="N" className="col-span-1 px-3 py-2 rounded-xl border surface-button text-sm font-medium" onClick={()=>doNew()}>New</button>)}
                   <div className="col-span-1 flex gap-1">
-                    <button type="button" className={`flex-1 px-1 py-2 rounded-xl border surface-button text-sm font-medium flex items-center justify-center ${(timerBusy||stack.length===0)?"opacity-60 pointer-events-none":""}`} onClick={goBack}><span style={{position:'relative',top:'-1.5px'}}>&lt;</span></button>
-                    <button type="button" className={`flex-1 px-1 py-2 rounded-xl border surface-button text-sm font-medium flex items-center justify-center ${(timerBusy||forwardStack.length===0)?"opacity-60 pointer-events-none":""}`} onClick={goForward}><span style={{position:'relative',top:'-1.5px'}}>&gt;</span></button>
+                    <button type="button" data-key="ArrowLeft" className={`flex-1 px-1 py-2 rounded-xl border surface-button text-sm font-medium flex items-center justify-center ${(timerBusy||stack.length===0)?"opacity-60 pointer-events-none":""}`} onClick={goBack}><span style={{position:'relative',top:'-1.5px'}}>&lt;</span></button>
+                    <button type="button" data-key="ArrowRight" className={`flex-1 px-1 py-2 rounded-xl border surface-button text-sm font-medium flex items-center justify-center ${(timerBusy||forwardStack.length===0)?"opacity-60 pointer-events-none":""}`} onClick={goForward}><span style={{position:'relative',top:'-1.5px'}}>&gt;</span></button>
                   </div>
-                  <button type="button" className={`col-span-1 px-3 py-2 rounded-xl border surface-button text-sm font-medium text-center ${revealDisabled?"opacity-60 pointer-events-none":""}`} onClick={reveal}>Reveal</button>
-                  <button type="button" className={`col-span-1 px-3 py-2 rounded-xl border surface-button text-sm font-medium text-center ${!overrideAvail?"opacity-60 pointer-events-none":""}`} onClick={override}>Override</button>
+                  <button type="button" data-key="R" className={`col-span-1 px-3 py-2 rounded-xl border surface-button text-sm font-medium text-center ${revealDisabled?"opacity-60 pointer-events-none":""}`} onClick={reveal}>Reveal</button>
+                  <button type="button" data-key="O" className={`col-span-1 px-3 py-2 rounded-xl border surface-button text-sm font-medium text-center ${!overrideAvail?"opacity-60 pointer-events-none":""}`} onClick={override}>Override</button>
                 </div>
                 <MethodBreakdownSection key={mode} date={calcTarget} open={calcOpen} onOpenChange={handleCalcOpenChange} className="" contentClassName="mt-3 rounded-2xl thin px-4 pt-[3px] pb-1.5" useJulian={backDepth>0?(calcTarget?._jul??useJulian):useJulian} displayedFormat={(randomFormat&&calcTarget?._fmt)||dateFormat}/>
               </div>
@@ -2698,13 +2765,13 @@
               </div>
               <div className="mt-4 rounded-2xl panel p-3 space-y-3">
                 <div className="grid grid-cols-4 gap-2">
-                  <button type="button" className="col-span-1 px-3 py-2 rounded-xl border surface-button text-sm font-medium" onClick={()=>runDeductionRound()}>New</button>
+                  <button type="button" data-key="N" className="col-span-1 px-3 py-2 rounded-xl border surface-button text-sm font-medium" onClick={()=>runDeductionRound()}>New</button>
                   <div className="col-span-1 flex gap-1">
-                    <button type="button" className={`flex-1 px-1 py-2 rounded-xl border surface-button text-sm font-medium flex items-center justify-center ${dedStack.length===0?"opacity-60 pointer-events-none":""}`} onClick={goBack}><span style={{position:'relative',top:'-1.5px'}}>&lt;</span></button>
-                    <button type="button" className={`flex-1 px-1 py-2 rounded-xl border surface-button text-sm font-medium flex items-center justify-center ${dedForwardStack.length===0?"opacity-60 pointer-events-none":""}`} onClick={goForward}><span style={{position:'relative',top:'-1.5px'}}>&gt;</span></button>
+                    <button type="button" data-key="ArrowLeft" className={`flex-1 px-1 py-2 rounded-xl border surface-button text-sm font-medium flex items-center justify-center ${dedStack.length===0?"opacity-60 pointer-events-none":""}`} onClick={goBack}><span style={{position:'relative',top:'-1.5px'}}>&lt;</span></button>
+                    <button type="button" data-key="ArrowRight" className={`flex-1 px-1 py-2 rounded-xl border surface-button text-sm font-medium flex items-center justify-center ${dedForwardStack.length===0?"opacity-60 pointer-events-none":""}`} onClick={goForward}><span style={{position:'relative',top:'-1.5px'}}>&gt;</span></button>
                   </div>
-                  <button type="button" className={`col-span-1 px-3 py-2 rounded-xl border surface-button text-sm font-medium text-center ${revealDisabled?"opacity-60 pointer-events-none":""}`} onClick={reveal}>Reveal</button>
-                  <button type="button" className={`col-span-1 px-3 py-2 rounded-xl border surface-button text-sm font-medium text-center ${!overrideAvail?"opacity-60 pointer-events-none":""}`} onClick={override}>Override</button>
+                  <button type="button" data-key="R" className={`col-span-1 px-3 py-2 rounded-xl border surface-button text-sm font-medium text-center ${revealDisabled?"opacity-60 pointer-events-none":""}`} onClick={reveal}>Reveal</button>
+                  <button type="button" data-key="O" className={`col-span-1 px-3 py-2 rounded-xl border surface-button text-sm font-medium text-center ${!overrideAvail?"opacity-60 pointer-events-none":""}`} onClick={override}>Override</button>
                 </div>
                 {(()=>{
                   // Build cellDates for Deduction Month sub-mode 1582 only, when the
@@ -2765,7 +2832,7 @@
           <GuideSection id="savestats" title="Save Stats" openId={open} onToggle={toggle}><p>Toggle via the ⚙ settings menu under Stats. On by default. When off, your answers don't update stats or saved bests. The stats panel dims to indicate the off state. The toggle works differently per mode:</p><p className="mt-2"><b>Classic, Deduction, Flash</b> — per-question. The toggle's value is locked in at the moment of your first stat-affecting action (your first wrong guess on the question, or your correct answer if you got it right on the first try). Toggling afterward doesn't change that question's outcome, but does apply to the next question. If you've already made a wrong guess on the current question, toggling Save Stats does not regenerate the date — the toggle's frozen value sticks for the question. When off, the question doesn't update stats and isn't pushed to history (Back can't browse to it). Override still advances to the next date the same way it normally would (or stays put if timing is hidden), just without any stat or history changes.</p><p className="mt-2"><b>Blitz</b> — round-level. In-round score, accuracy, streak, and Back/Forward navigation through round questions all work normally regardless of the toggle. Whatever the toggle is set to when the round ends determines whether the round's Best Score and Best Streak update.</p><p className="mt-2"><b>AoX</b> — run-level. In-run score, streak, times, and Back/Forward navigation all work normally regardless of the toggle. Whatever the toggle is set to when the run ends determines whether Best Average, Best Median, and Best Streak update. If a run finishes with Save Stats off, overriding entries after the run is a no-op on persistent bests; round-level stats still adjust.</p></GuideSection>
           <GuideSection id="theme" title="Theme" openId={open} onToggle={toggle}><p>Five themes: Dusk (default dark navy), Midnight (true black with purple), Nebula (deep purple), Light (clean white), and Parchment (warm cream). Accessible from the ⚙ settings menu in any tab. Enable Use System Settings to match your device's light/dark mode automatically, with separate theme choices for each. Disable to pick one manually.</p></GuideSection>
           <GuideSection id="reset-settings" title="Reset Settings" openId={open} onToggle={toggle}><p>The Reset Settings button at the bottom of the ⚙ menu restores everything in the menu to its defaults: Random Format on, Written MDY, Julian off, year range 1–10000, Leap Year Chance Random, Force Jan/Feb off, Save Stats on, and theme back to Use System Settings with Dusk (dark) and Light (light). It does not touch mode-specific config outside the menu (AoX N, timer durations, Deduction sub-types and toggles) or your stats and history. No confirmation prompt — tap to apply.</p></GuideSection>
-          <GuideSection id="keyboard" title="Keyboard Input" openId={open} onToggle={toggle}><p>On any device with a hardware keyboard (typically desktop), you can press number keys <b>0</b>–<b>9</b> to select an answer button instead of tapping. The on-screen layout is identical to mobile — number-key input is the only desktop-specific addition.</p><p className="mt-2">Buttons are numbered left-to-right, top-to-bottom in their visible order, starting at <b>0</b> to match the day code convention (Sunday=0). <b>Classic, AoX, Flash, Blitz:</b> <b>0</b>=Sunday, <b>1</b>=Monday, <b>2</b>=Tuesday, <b>3</b>=Wednesday, <b>4</b>=Thursday, <b>5</b>=Friday, <b>6</b>=Saturday. <b>Deduction Day:</b> <b>0</b>–<b>6</b> map to the seven displayed days (or <b>0</b>–<b>3</b> in the October 1582 special case). <b>Deduction Month:</b> <b>0</b>–<b>6</b> map to the seven boxes in their grid order. <b>Deduction Year:</b> <b>0</b>–<b>4</b> map to the five options (or <b>0</b>–<b>1</b> with Jul Cross).</p><p className="mt-2">Locked or already-pressed buttons are skipped, just like a click would be. Keys are ignored when you're typing in an input field, when a modifier key (Ctrl/Cmd/Alt/Shift) is held, or when there's no answer grid on screen (Lookup, How to Play).</p></GuideSection>
+          <GuideSection id="keyboard" title="Keyboard Input" openId={open} onToggle={toggle}><p>On any device with a hardware keyboard (typically desktop), you can press keys to operate the site without tapping. The on-screen layout is identical to mobile — keyboard input is the only desktop-specific addition.</p><p className="mt-2"><b>Number keys 0–9</b> select an answer button on whichever grid is visible. Buttons are numbered left-to-right, top-to-bottom in their visible order, starting at <b>0</b> to match the day code convention (Sunday=0). <b>Classic, AoX, Flash, Blitz:</b> <b>0</b>=Sunday, <b>1</b>=Monday, <b>2</b>=Tuesday, <b>3</b>=Wednesday, <b>4</b>=Thursday, <b>5</b>=Friday, <b>6</b>=Saturday. <b>Deduction Day:</b> <b>0</b>–<b>6</b> map to the seven displayed days (or <b>0</b>–<b>3</b> in the October 1582 special case). <b>Deduction Month:</b> <b>0</b>–<b>6</b> map to the seven boxes in their grid order. <b>Deduction Year:</b> <b>0</b>–<b>4</b> map to the five options (or <b>0</b>–<b>1</b> with Jul Cross).</p><p className="mt-2"><b>Letter and arrow keys</b> trigger site-wide actions. Each key activates the matching button on the current screen if it's available; locked or already-pressed buttons are skipped, just like a click would be.</p><div className="mt-3 space-y-3"><div><div className="text-[10px] uppercase tracking-widest text-purple-300/60 mb-1.5">Game Actions</div><div className="space-y-1 text-sm"><div className="flex items-center gap-2"><kbd className="inline-block panel rounded px-1.5 py-0.5 text-[11px] font-mono min-w-[1.5rem] text-center shrink-0">N</kbd><span>New / Begin / Reset</span></div><div className="flex items-center gap-2"><kbd className="inline-block panel rounded px-1.5 py-0.5 text-[11px] font-mono min-w-[1.5rem] text-center shrink-0">R</kbd><span>Reveal</span></div><div className="flex items-center gap-2"><kbd className="inline-block panel rounded px-1.5 py-0.5 text-[11px] font-mono min-w-[1.5rem] text-center shrink-0">O</kbd><span>Override</span></div><div className="flex items-center gap-2"><kbd className="inline-block panel rounded px-1.5 py-0.5 text-[11px] font-mono min-w-[1.5rem] text-center shrink-0">C</kbd><span>Show / Hide Codes</span></div><div className="flex items-center gap-2"><kbd className="inline-block panel rounded px-1.5 py-0.5 text-[11px] font-mono min-w-[1.5rem] text-center shrink-0">S</kbd><span>Reset Stats</span></div><div className="flex items-center gap-2"><kbd className="inline-block panel rounded px-1.5 py-0.5 text-[11px] font-mono min-w-[1.5rem] text-center shrink-0">←</kbd><span>Back</span></div><div className="flex items-center gap-2"><kbd className="inline-block panel rounded px-1.5 py-0.5 text-[11px] font-mono min-w-[1.5rem] text-center shrink-0">→</kbd><span>Forward</span></div></div></div><div><div className="text-[10px] uppercase tracking-widest text-purple-300/60 mb-1.5">Overlays</div><div className="space-y-1 text-sm"><div className="flex items-center gap-2"><kbd className="inline-block panel rounded px-1.5 py-0.5 text-[11px] font-mono min-w-[1.5rem] text-center shrink-0">H</kbd><span>How to Play (toggle)</span></div><div className="flex items-center gap-2"><kbd className="inline-block panel rounded px-1.5 py-0.5 text-[11px] font-mono min-w-[1.5rem] text-center shrink-0">G</kbd><span>Settings ⚙ (toggle)</span></div></div></div><div><div className="text-[10px] uppercase tracking-widest text-purple-300/60 mb-1.5">Mode Switching</div><div className="space-y-1 text-sm"><div className="flex items-center gap-2"><kbd className="inline-block panel rounded px-1.5 py-0.5 text-[11px] font-mono min-w-[1.5rem] text-center shrink-0">K</kbd><span>Classic</span></div><div className="flex items-center gap-2"><kbd className="inline-block panel rounded px-1.5 py-0.5 text-[11px] font-mono min-w-[1.5rem] text-center shrink-0">F</kbd><span>Flash</span></div><div className="flex items-center gap-2"><kbd className="inline-block panel rounded px-1.5 py-0.5 text-[11px] font-mono min-w-[1.5rem] text-center shrink-0">B</kbd><span>Blitz</span></div><div className="flex items-center gap-2"><kbd className="inline-block panel rounded px-1.5 py-0.5 text-[11px] font-mono min-w-[1.5rem] text-center shrink-0">A</kbd><span>AoX</span></div><div className="flex items-center gap-2"><kbd className="inline-block panel rounded px-1.5 py-0.5 text-[11px] font-mono min-w-[1.5rem] text-center shrink-0">D</kbd><span>Deduction</span></div><div className="flex items-center gap-2"><kbd className="inline-block panel rounded px-1.5 py-0.5 text-[11px] font-mono min-w-[1.5rem] text-center shrink-0">L</kbd><span>Lookup</span></div></div></div></div><p className="mt-3">Letter keys are case-insensitive. Keys are ignored when you're typing in an input field or when a modifier key (Ctrl/Cmd/Alt/Shift) is held.</p></GuideSection>
           <Divider label="Modes"/>
           <GuideSection id="classic" title="Classic" openId={open} onToggle={toggle}><p>The main practice mode with no time pressure. Answer at your own pace. Override works after both wrong and correct answers. Reset Stats clears your stats and question history.</p></GuideSection>
           <GuideSection id="aox" title="AoX" openId={open} onToggle={toggle}>
@@ -2905,7 +2972,7 @@
           setFrozenUseJulian(useJulian);
         }
       },[open,date,displayedFormat,useJulian,cellDatesKey]);
-      return(<div className={className??"mt-5"}><button type="button" onClick={toggle} className={`w-full px-4 py-2 rounded-xl btn-solid text-sm font-medium${!hasDate?" opacity-60 cursor-not-allowed pointer-events-none":""}`} aria-disabled={!hasDate}>{open?"Hide Codes":"Show Codes"}</button><Expander open={open&&hasDate}><div className={contentClassName??"mt-3 rounded-2xl panel p-4 pb-1"}><MethodExplanation date={frozenDate} useJulian={frozenUseJulian} displayedFormat={frozenDisplayedFormat} cellDates={frozenCellDates}/></div></Expander></div>);
+      return(<div className={className??"mt-5"}><button type="button" data-key="C" onClick={toggle} className={`w-full px-4 py-2 rounded-xl btn-solid text-sm font-medium${!hasDate?" opacity-60 cursor-not-allowed pointer-events-none":""}`} aria-disabled={!hasDate}>{open?"Hide Codes":"Show Codes"}</button><Expander open={open&&hasDate}><div className={contentClassName??"mt-3 rounded-2xl panel p-4 pb-1"}><MethodExplanation date={frozenDate} useJulian={frozenUseJulian} displayedFormat={frozenDisplayedFormat} cellDates={frozenCellDates}/></div></Expander></div>);
     }
 
     function LookupCard({history=[],onAddHistory,onMoveHistory,onClearHistory,inputValue="",onInputChange,outputValue="",onOutputChange,calcDate,onCalcDateChange,selectedHistoryId,onSelectedHistoryIdChange,calcOpen=false,onCalcOpenChange,fmtDate,dateFormat='written-mdy',useJulian=false}){
