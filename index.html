@@ -384,7 +384,7 @@
 
 
 
-    const DEPLOY_TS=new Date('2026-05-04T00:45:00Z');
+    const DEPLOY_TS=new Date('2026-05-04T01:04:00Z');
 
     function StatPanel({stats}){
       // For fractional values (Score, Streak as "X/Y"), shrink the value font
@@ -416,10 +416,11 @@
       // settings popover.
       //
       // Visual design (matches iOS native picker):
-      // - Light translucent surface (rgba(245,245,247,0.78)) regardless of app
+      // - Light translucent surface (rgba(245,245,247,0.65)) regardless of app
       //   theme — iOS itself keeps the picker light in dark mode, we mirror that.
-      //   Alpha is intentionally <1 so dark backgrounds bleed through and tone
-      //   down the brightness.
+      //   Alpha is intentionally low so dark backgrounds bleed through and tone
+      //   down the brightness; blur is bumped to 28px to keep the frosted look
+      //   at the lower alpha.
       // - Backdrop blur + saturate filter for the frosted-glass effect.
       // - Rounded corners, subtle shadow, dark text, checkmark on selected.
       // - Trigger button reuses the original <select>'s className so the visible
@@ -428,6 +429,11 @@
       //   other (only the selected one visible) so the trigger's width is
       //   stable across selections — same auto-fit-to-longest behavior as the
       //   native <select>, no layout shift on change.
+      // - Open direction (up vs down) is decided at toggle time from the
+      //   trigger's bounding rect: if there isn't enough room below, the panel
+      //   flips above the trigger. Needed because html/body have overflow:hidden
+      //   for the scroll-lock behavior, so a panel extending past the viewport
+      //   edge gets clipped instead of overflowing.
       //
       // wrapperRef is forwarded to the outer relative div so callers (e.g. the
       // settings click-outside handler) can keep treating the wrapper the same
@@ -436,8 +442,24 @@
       // "flex-1" here (not on the inner button) so the wrapper itself fills its
       // flex row — matches the original <select>'s flex-1 behavior.
       const [open,setOpen]=useState(false);
+      const [openUpward,setOpenUpward]=useState(false);
       const localRef=useRef(null);
       const ref=wrapperRef||localRef;
+      // Toggle handler measures available space at the moment the user opens
+      // the dropdown. Each option button is ~45px tall (py-3 + text-[15px]),
+      // plus a small panel margin. If space below isn't enough AND there's
+      // more space above, flip upward. Measurement only happens on open
+      // (not on close) so close is cheap.
+      const handleToggle=()=>{
+        if(!open&&ref.current){
+          const rect=ref.current.getBoundingClientRect();
+          const spaceBelow=window.innerHeight-rect.bottom;
+          const spaceAbove=rect.top;
+          const estimatedHeight=options.length*45+10;
+          setOpenUpward(spaceBelow<estimatedHeight&&spaceAbove>spaceBelow);
+        }
+        setOpen(v=>!v);
+      };
       useEffect(()=>{
         if(!open)return;
         const h=(e)=>{if(ref.current&&!ref.current.contains(e.target))setOpen(false);};
@@ -450,14 +472,14 @@
       },[open]);
       return(
         <div ref={ref} className={`relative ${wrapperClassName||""}`}>
-          <button type="button" onClick={()=>setOpen(v=>!v)} className={className} aria-label={ariaLabel} aria-expanded={open}>
+          <button type="button" onClick={handleToggle} className={className} aria-label={ariaLabel} aria-expanded={open}>
             <span className="grid items-center">
               {options.map(o=>(<span key={o.value} className={`col-start-1 row-start-1 truncate text-left ${o.value===value?'':'invisible'}`} aria-hidden={o.value!==value}>{o.label}</span>))}
             </span>
           </button>
           {showChevron&&(<div className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 flex flex-col items-center leading-none text-[7px] text-white/90"><span>▲</span><span>▼</span></div>)}
           {open&&(
-            <div className="absolute right-0 top-full mt-1.5 z-[60] rounded-2xl overflow-hidden" style={{background:'rgba(245,245,247,0.78)',WebkitBackdropFilter:'blur(20px) saturate(180%)',backdropFilter:'blur(20px) saturate(180%)',boxShadow:'0 6px 28px rgba(0,0,0,0.12), 0 0 0 0.5px rgba(0,0,0,0.05)',minWidth:'100%',width:'max-content',maxWidth:'90vw'}}>
+            <div className={`absolute right-0 ${openUpward?"bottom-full mb-1.5":"top-full mt-1.5"} z-[60] rounded-2xl overflow-hidden`} style={{background:'rgba(245,245,247,0.65)',WebkitBackdropFilter:'blur(28px) saturate(180%)',backdropFilter:'blur(28px) saturate(180%)',boxShadow:'0 6px 28px rgba(0,0,0,0.12), 0 0 0 0.5px rgba(0,0,0,0.05)',minWidth:'100%',width:'max-content',maxWidth:'90vw'}}>
               {options.map(opt=>(
                 <button key={opt.value} type="button" onClick={()=>{onChange(opt.value);setOpen(false);}} className="w-full text-left pl-4 pr-6 py-3 text-[15px] flex items-center gap-2.5 active:bg-black/10" style={{color:'#1a1a1a',whiteSpace:'nowrap'}}>
                   <span style={{display:'inline-block',width:'14px',color:'#1a1a1a',fontSize:'14px'}}>{opt.value===value?'✓':''}</span>
