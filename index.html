@@ -384,7 +384,7 @@
 
 
 
-    const DEPLOY_TS=new Date('2026-05-04T01:04:00Z');
+    const DEPLOY_TS=new Date('2026-05-04T02:19:00Z');
 
     function StatPanel({stats}){
       // For fractional values (Score, Streak as "X/Y"), shrink the value font
@@ -416,7 +416,7 @@
       // settings popover.
       //
       // Visual design (matches iOS native picker):
-      // - Light translucent surface (rgba(245,245,247,0.65)) regardless of app
+      // - Light translucent surface (rgba(245,245,247,0.50)) regardless of app
       //   theme — iOS itself keeps the picker light in dark mode, we mirror that.
       //   Alpha is intentionally low so dark backgrounds bleed through and tone
       //   down the brightness; blur is bumped to 28px to keep the frosted look
@@ -429,6 +429,11 @@
       //   other (only the selected one visible) so the trigger's width is
       //   stable across selections — same auto-fit-to-longest behavior as the
       //   native <select>, no layout shift on change.
+      // - Panel sizes purely to its content (width:max-content, no minWidth).
+      //   This gives every dropdown the same visual right padding regardless
+      //   of trigger width — wide triggers (theme selects with flex-1) get a
+      //   panel that's content-sized and hangs off the right edge of the
+      //   trigger, exactly like the native iOS picker.
       // - Open direction (up vs down) is decided at toggle time from the
       //   trigger's bounding rect: if there isn't enough room below, the panel
       //   flips above the trigger. Needed because html/body have overflow:hidden
@@ -450,11 +455,17 @@
       // plus a small panel margin. If space below isn't enough AND there's
       // more space above, flip upward. Measurement only happens on open
       // (not on close) so close is cheap.
+      // visualViewport.height is preferred over window.innerHeight because it
+      // excludes Safari's bottom toolbar — without this, dropdowns near the
+      // bottom of the page render downward and get clipped behind the toolbar.
+      // Falls back to innerHeight for browsers without visualViewport. The 16px
+      // safety buffer keeps the panel from kissing the viewport edge.
       const handleToggle=()=>{
         if(!open&&ref.current){
           const rect=ref.current.getBoundingClientRect();
-          const spaceBelow=window.innerHeight-rect.bottom;
-          const spaceAbove=rect.top;
+          const vh=(window.visualViewport&&window.visualViewport.height)||window.innerHeight;
+          const spaceBelow=vh-rect.bottom-16;
+          const spaceAbove=rect.top-16;
           const estimatedHeight=options.length*45+10;
           setOpenUpward(spaceBelow<estimatedHeight&&spaceAbove>spaceBelow);
         }
@@ -479,9 +490,9 @@
           </button>
           {showChevron&&(<div className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 flex flex-col items-center leading-none text-[7px] text-white/90"><span>▲</span><span>▼</span></div>)}
           {open&&(
-            <div className={`absolute right-0 ${openUpward?"bottom-full mb-1.5":"top-full mt-1.5"} z-[60] rounded-2xl overflow-hidden`} style={{background:'rgba(245,245,247,0.65)',WebkitBackdropFilter:'blur(28px) saturate(180%)',backdropFilter:'blur(28px) saturate(180%)',boxShadow:'0 6px 28px rgba(0,0,0,0.12), 0 0 0 0.5px rgba(0,0,0,0.05)',minWidth:'100%',width:'max-content',maxWidth:'90vw'}}>
+            <div className={`absolute right-0 ${openUpward?"bottom-full mb-1.5":"top-full mt-1.5"} z-[60] rounded-2xl overflow-hidden`} style={{background:'rgba(245,245,247,0.50)',WebkitBackdropFilter:'blur(28px) saturate(180%)',backdropFilter:'blur(28px) saturate(180%)',boxShadow:'0 6px 28px rgba(0,0,0,0.12), 0 0 0 0.5px rgba(0,0,0,0.05)',width:'max-content',maxWidth:'90vw'}}>
               {options.map(opt=>(
-                <button key={opt.value} type="button" onClick={()=>{onChange(opt.value);setOpen(false);}} className="w-full text-left pl-4 pr-6 py-3 text-[15px] flex items-center gap-2.5 active:bg-black/10" style={{color:'#1a1a1a',whiteSpace:'nowrap'}}>
+                <button key={opt.value} type="button" onClick={()=>{onChange(opt.value);setOpen(false);}} className="w-full text-left pl-4 pr-8 py-3 text-[15px] flex items-center gap-2.5 active:bg-black/10" style={{color:'#1a1a1a',whiteSpace:'nowrap'}}>
                   <span style={{display:'inline-block',width:'14px',color:'#1a1a1a',fontSize:'14px'}}>{opt.value===value?'✓':''}</span>
                   <span>{opt.label}</span>
                 </button>
