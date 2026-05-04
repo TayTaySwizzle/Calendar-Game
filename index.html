@@ -385,7 +385,7 @@
 
 
 
-    const DEPLOY_TS=new Date('2026-05-04T03:23:00Z');
+    const DEPLOY_TS=new Date('2026-05-04T15:57:00Z');
 
     function StatPanel({stats}){
       // For fractional values (Score, Streak as "X/Y"), shrink the value font
@@ -1348,11 +1348,60 @@
       //   4. pendingWrongOverride (wrong on previous question, now correcting retroactively):
       //      give retroactive credit for the previous date, update stack entry to green-only
       function override(){
-        // Early no-op: if Classic/Flash/Deduction with frozen Save Stats OFF
-        // for this question, override has nothing to do (no stats updated, no
-        // entry pushed). Still flip overrideUsedThisQ for visual consistency.
+        // Save Stats OFF for this question (Classic/Flash/Deduction with frozen-OFF):
+        // no stats to update and no history to push (frozen-OFF questions never enter
+        // the stack), but we still need to advance the date / clean up state — mirroring
+        // the structure of the three live override paths below.
+        //
+        // Path 1 (browsing-back) is reached AFTER this branch. While browsing back,
+        // saveStatsThisQRef.current is forced to true (see goBack), so this Save Stats
+        // OFF branch never fires during back-browse — path 1 still handles those.
+        //
+        // We deliberately don't call setStack/setDedStack to mark a previous entry
+        // overrideUsed (as the Save Stats ON paths do) because no entry was just pushed
+        // for this Q — doing so would corrupt the previous Q's history entry.
         if(isPerQGated()&&!effectiveSaveStats()){
           setOverrideUsedThisQ(true);
+          if(canOverrideCorrect){
+            // Mirrors path 2 (canOverrideCorrect → undo correct). With stats off there's
+            // nothing to undo — just advance / stay + clean up.
+            setCanOverrideCorrect(false);
+            if(!avgVisOff){
+              pushAndNext();
+              setPendingWrongOverride(null);
+            }else{
+              setCountedWrong(false);
+              setGuesses([]);setMsg("");setLocked(false);setRevealed(false);setCalcPenalty(false);setCalcOpen(false);
+            }
+          }else if(countedWrong){
+            // Mirrors path 3 (countedWrong → give credit after wrong/reveal). With stats
+            // off there's nothing to credit — just advance and clean up. Always advances
+            // (matches path 3's unconditional pushAndNext).
+            setCountedWrong(false);setCanOverrideCorrect(false);
+            setGuesses([]);setMsg("");setLocked(false);setRevealed(false);setCalcPenalty(false);setCalcOpen(false);
+            // Flash is the only timer mode in isPerQGated; drop it back to idle so the
+            // next date appears as a fresh dash awaiting Begin (matches path 3 Flash).
+            if(mode==="flash"){
+              setActive(false);setShowTimerDate(false);
+              clearTimeout(flashTimerRef.current);flashTimerRef.current=null;
+              setFlashPhase("dash");flashDeadlineRef.current=null;
+              setFlashRemainMs(flashMs);resetFlashBar();
+            }
+            pushAndNext();
+            setPendingWrongOverride(null);
+          }else if(pendingWrongOverride!=null){
+            // Mirrors path 4 (pendingWrongOverride → retroactive credit on previous Q).
+            // With stats off, no credit to apply — just clear the pending state and advance.
+            setPendingWrongOverride(null);
+            preCalcPenaltySnapshotRef.current=null;
+            if(!avgVisOff){
+              pushAndNext();
+              setPendingWrongOverride(null);
+            }
+          }
+          wrongTimeRef.current=null;
+          prevStatsSnapshotRef.current=null;
+          saveStatsThisQRef.current=null;
           return;
         }
         setOverrideUsedThisQ(true);
@@ -2424,6 +2473,25 @@
       const DARK_THEMES=[{value:'dusk',label:'Dusk'},{value:'midnight',label:'Midnight'},{value:'nebula',label:'Nebula'}];
       const LIGHT_THEMES=[{value:'light',label:'Light'},{value:'parchment',label:'Parchment'}];
       const ALL_THEMES_LABELED=[{value:'dusk',label:'Dusk (dark)'},{value:'midnight',label:'Midnight (dark)'},{value:'nebula',label:'Nebula (dark)'},{value:'light',label:'Light (light)'},{value:'parchment',label:'Parchment (light)'}];
+      // Resets every setting in the ⚙ popover to its initial useState default.
+      // Does NOT touch mode-specific config outside the popover (AoX N, timer durations,
+      // Deduction sub-types/toggles) or stats/history (Reset Stats handles that).
+      // Triggers the unified popover-settings effect, which will regenerate the current
+      // date as appropriate (Random Format / Date Format / Leap Chance are always-regen).
+      const resetSettings=()=>{
+        setRandomFormat(true);
+        setDateFormat('written-mdy');
+        setUseJulian(false);
+        setMinY(1);setMaxY(10000);
+        setMinInputVal("1");setMaxInputVal("10000");
+        setLeapChance('random');
+        setForceJanFebOnLeap(false);
+        setSaveStats(true);
+        setUseSystem(true);
+        setDarkTheme("dusk");
+        setLightTheme("light");
+        setManualTheme("dusk");
+      };
       const settingsJsx=settingsOpen&&(<div ref={settingsPopoverRef} className="absolute left-0 right-0 top-full mt-2 z-50 rounded-2xl card p-4 space-y-4 shadow-xl">
         <div className="space-y-2">
           <div className="text-[10px] uppercase tracking-widest text-purple-300/60">Date Format</div>
@@ -2474,7 +2542,13 @@
           <div className="flex items-center justify-between"><span className="text-xs text-purple-200/80">Use System Settings</span><button type="button" onClick={()=>setUseSystem(v=>!v)} className={`px-3 py-1 rounded-xl text-xs font-medium border ${useSystem?"btn-solid border-transparent":"surface-toggle border-purple-800/60 text-purple-100/80"}`}>{useSystem?"On":"Off"}</button></div>
           {useSystem?(<><div className="flex items-center gap-3"><span className="text-xs text-purple-200/80 w-10 shrink-0">Dark:</span><CustomSelect value={darkTheme} onChange={setDarkTheme} options={DARK_THEMES} ariaLabel="Dark theme" wrapperClassName="flex-1" className="panel rounded-xl px-2 py-1 text-sm w-full focus:outline-none focus-ring text-left"/></div><div className="flex items-center gap-3"><span className="text-xs text-purple-200/80 w-10 shrink-0">Light:</span><CustomSelect value={lightTheme} onChange={setLightTheme} options={LIGHT_THEMES} ariaLabel="Light theme" wrapperClassName="flex-1" className="panel rounded-xl px-2 py-1 text-sm w-full focus:outline-none focus-ring text-left"/></div></>):(<div className="flex items-center gap-3"><span className="text-xs text-purple-200/80 w-10 shrink-0">Theme:</span><CustomSelect value={manualTheme} onChange={setManualTheme} options={ALL_THEMES_LABELED} ariaLabel="Theme" wrapperClassName="flex-1" className="panel rounded-xl px-2 py-1 text-sm w-full focus:outline-none focus-ring text-left"/></div>)}
         </div>
-        <div className="pt-2 border-t border-purple-500/20 text-[11px] text-purple-300/60">Last Updated: {(()=>{const d=DEPLOY_TS;const yy=d.getFullYear();const mo=d.getMonth()+1;const da=d.getDate();const numFmt=numericFormatOf(dateFormat);const datePart=fmt(yy,mo,da,numFmt);const timePart=d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',hour12:false});return`${datePart} ${timePart}`;})()}</div>
+        <div className="pt-3 border-t border-purple-500/20">
+          <button type="button" onClick={resetSettings} className="w-full px-3 py-2 rounded-xl bg-rose-600/90 text-white text-sm font-medium">Reset Settings</button>
+        </div>
+        <div className="pt-2 border-t border-purple-500/20 text-[11px] text-purple-300/60 space-y-0.5">
+          <div>Contact: <a href="mailto:dayoftheweekcalculation@gmail.com" className="underline break-all">dayoftheweekcalculation@gmail.com</a></div>
+          <div>Last Updated: {(()=>{const d=DEPLOY_TS;const yy=d.getFullYear();const mo=d.getMonth()+1;const da=d.getDate();const numFmt=numericFormatOf(dateFormat);const datePart=fmt(yy,mo,da,numFmt);const timePart=d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',hour12:false});return`${datePart} ${timePart}`;})()}</div>
+        </div>
       </div>);
       return(
         <div className="mx-auto px-4 py-5 w-full max-w-[480px]">
@@ -2663,7 +2737,7 @@
       const Divider=({label})=>(<div className="flex items-center gap-2 px-1 pt-1"><div className="flex-1 h-px bg-purple-500/20"></div><span className="text-[10px] uppercase tracking-widest text-purple-300/60">{label}</span><div className="flex-1 h-px bg-purple-500/20"></div></div>);
       return(
         <div className="space-y-2">
-          <GuideSection id="overview" title="What Is Calendar Game?" openId={open} onToggle={toggle}><p>Calendar Game is a training tool for mental calculation of the day of the week. You're given a date and must identify which weekday it falls on — as quickly and accurately as possible. Dates use the proleptic Gregorian calendar by default. The Julian calendar is supported as an opt-in setting for dates on or before October 4, 1582 (the day before the Gregorian reform took effect).</p></GuideSection>
+          <GuideSection id="overview" title="What Is Calendar Game?" openId={open} onToggle={toggle}><p>Calendar Game is a training tool for mental calculation of the day of the week. You're given a date and must identify which weekday it falls on — as quickly and accurately as possible. Dates use the proleptic Gregorian calendar by default. The Julian calendar is supported as an opt-in setting for dates on or before October 4, 1582 (the day before the Gregorian reform took effect).</p><p className="mt-2">It pairs with the book <i>Day-of-the-Week Calculation: A Highly Optimized Mental Method</i>.</p><p className="mt-2">If you have any questions, ideas, or recommendations, or have noticed any bugs or mistakes — whether about the site or the book — please feel free to reach out: <a href="mailto:dayoftheweekcalculation@gmail.com" className="underline break-all">dayoftheweekcalculation@gmail.com</a>.</p></GuideSection>
           <Divider label="Interface"/>
           <GuideSection id="buttons" title="Buttons" openId={open} onToggle={toggle}>
             <p><b>New</b> — load a fresh date. In timer modes, only available after pressing Begin.</p>
@@ -2688,8 +2762,9 @@
           <GuideSection id="julian" title="Julian Calendar" openId={open} onToggle={toggle}><p>Toggle via the ⚙ settings menu under Calendar System. Off by default. When on, dates on or before October 4, 1582 are treated as Julian calendar dates, which have different leap year rules — every year divisible by 4 is a leap year, with no century exception. This affects weekday calculation and the codes shown in Show Codes. October 5–14, 1582 are always excluded since those dates never existed; the Gregorian calendar skipped them to correct accumulated calendar drift.</p><p>Toggling Julian doesn't necessarily regenerate the current date. For dates after October 4, 1582, Julian has no effect. For Julian-eligible dates (October 4, 1582 or earlier), the date stays if you haven't made a wrong guess yet — the answer and codes simply update. If you've already wrong-guessed, the date regenerates and is added to your history with both your red guess and a green for the day that was correct under the calendar system in effect when the date was first generated. Each date snapshots its calendar system at generation, so revisiting an earlier question via Back shows the highlights and codes that were correct under the system in effect when that date was generated. In active Blitz rounds and AoX runs, any Julian toggle ends the round.</p></GuideSection>
           <GuideSection id="range" title="Year Range" openId={open} onToggle={toggle}><p>Set via the ⚙ settings menu. Controls which years dates are drawn from. Defaults to 1–10000 AD. Changing the range regenerates the current date only if it falls outside the new range — and even then, if you've already made a wrong guess on the current date, the change is deferred so the wrong-state is preserved; the new range applies to the next date. While browsing back, settings-driven regen always preserves your history: the date you were viewing and any forward entries are pushed back to history before the live slot is regenerated. In active Blitz rounds and AoX runs, any range change ends the round.</p><p><b>Year sub-mode auto-disable:</b> Deduction's Year sub-mode requires either a year range of at least 5 years (so a 5-year window can be built) or, with Julian on, a range that contains October 15, 1582 (so a 2-year Jul Cross window can be built). When neither condition holds, the Year sub-type button greys out, and if you were already in Year mode when the range changed, you're auto-switched to Day mode. Day and Month sub-modes work for any valid range.</p></GuideSection>
           <GuideSection id="leap" title="Leap Year Settings" openId={open} onToggle={toggle}><p>Two settings in the ⚙ menu control how often leap years appear and what months they're paired with. <b>Leap Year Chance</b> sets how often a generated date lands on a leap year — Random uses the natural rate (~24%); 50%, 75%, and 100% force higher rates. <b>Force Jan/Feb on Leap Years</b>, when on, restricts the month to January or February whenever a leap year is generated. These settings apply to all game modes' date generation; Lookup is unaffected. If your year range happens to contain no leap years and the chance is set to 50/75/100%, the chance is silently ignored per date — the setting itself is preserved. Changing <b>Leap Year Chance</b> always regenerates the displayed date. Toggling <b>Force Jan/Feb on Leap Years</b> regenerates only if the current date is a leap year with a month other than January or February. If you've already made a wrong guess on the current date, either change is deferred so the wrong-state is preserved; the new setting applies to the next date. In active Blitz rounds and AoX runs, any leap setting change ends the round.</p></GuideSection>
-          <GuideSection id="savestats" title="Save Stats" openId={open} onToggle={toggle}><p>Toggle via the ⚙ settings menu under Stats. On by default. When off, your answers don't update stats or saved bests. The stats panel dims to indicate the off state. The toggle works differently per mode:</p><p className="mt-2"><b>Classic, Deduction, Flash</b> — per-question. The toggle's value is locked in at the moment of your first stat-affecting action (your first wrong guess on the question, or your correct answer if you got it right on the first try). Toggling afterward doesn't change that question's outcome, but does apply to the next question. If you've already made a wrong guess on the current question, toggling Save Stats does not regenerate the date — the toggle's frozen value sticks for the question. When off, the question doesn't update stats and isn't pushed to history (Back can't browse to it).</p><p className="mt-2"><b>Blitz</b> — round-level. In-round score, accuracy, streak, and Back/Forward navigation through round questions all work normally regardless of the toggle. Whatever the toggle is set to when the round ends determines whether the round's Best Score and Best Streak update.</p><p className="mt-2"><b>AoX</b> — run-level. In-run score, streak, times, and Back/Forward navigation all work normally regardless of the toggle. Whatever the toggle is set to when the run ends determines whether Best Average, Best Median, and Best Streak update. If a run finishes with Save Stats off, overriding entries after the run is a no-op on persistent bests; round-level stats still adjust.</p></GuideSection>
+          <GuideSection id="savestats" title="Save Stats" openId={open} onToggle={toggle}><p>Toggle via the ⚙ settings menu under Stats. On by default. When off, your answers don't update stats or saved bests. The stats panel dims to indicate the off state. The toggle works differently per mode:</p><p className="mt-2"><b>Classic, Deduction, Flash</b> — per-question. The toggle's value is locked in at the moment of your first stat-affecting action (your first wrong guess on the question, or your correct answer if you got it right on the first try). Toggling afterward doesn't change that question's outcome, but does apply to the next question. If you've already made a wrong guess on the current question, toggling Save Stats does not regenerate the date — the toggle's frozen value sticks for the question. When off, the question doesn't update stats and isn't pushed to history (Back can't browse to it). Override still advances to the next date the same way it normally would (or stays put if timing is hidden), just without any stat or history changes.</p><p className="mt-2"><b>Blitz</b> — round-level. In-round score, accuracy, streak, and Back/Forward navigation through round questions all work normally regardless of the toggle. Whatever the toggle is set to when the round ends determines whether the round's Best Score and Best Streak update.</p><p className="mt-2"><b>AoX</b> — run-level. In-run score, streak, times, and Back/Forward navigation all work normally regardless of the toggle. Whatever the toggle is set to when the run ends determines whether Best Average, Best Median, and Best Streak update. If a run finishes with Save Stats off, overriding entries after the run is a no-op on persistent bests; round-level stats still adjust.</p></GuideSection>
           <GuideSection id="theme" title="Theme" openId={open} onToggle={toggle}><p>Five themes: Dusk (default dark navy), Midnight (true black with purple), Nebula (deep purple), Light (clean white), and Parchment (warm cream). Accessible from the ⚙ settings menu in any tab. Enable Use System Settings to match your device's light/dark mode automatically, with separate theme choices for each. Disable to pick one manually.</p></GuideSection>
+          <GuideSection id="reset-settings" title="Reset Settings" openId={open} onToggle={toggle}><p>The Reset Settings button at the bottom of the ⚙ menu restores everything in the menu to its defaults: Random Format on, Written MDY, Julian off, year range 1–10000, Leap Year Chance Random, Force Jan/Feb off, Save Stats on, and theme back to Use System Settings with Dusk (dark) and Light (light). It does not touch mode-specific config outside the menu (AoX N, timer durations, Deduction sub-types and toggles) or your stats and history. No confirmation prompt — tap to apply.</p></GuideSection>
           <GuideSection id="keyboard" title="Keyboard Input" openId={open} onToggle={toggle}><p>On any device with a hardware keyboard (typically desktop), you can press number keys <b>0</b>–<b>9</b> to select an answer button instead of tapping. The on-screen layout is identical to mobile — number-key input is the only desktop-specific addition.</p><p className="mt-2">Buttons are numbered left-to-right, top-to-bottom in their visible order, starting at <b>0</b> to match the day code convention (Sunday=0). <b>Classic, AoX, Flash, Blitz:</b> <b>0</b>=Sunday, <b>1</b>=Monday, <b>2</b>=Tuesday, <b>3</b>=Wednesday, <b>4</b>=Thursday, <b>5</b>=Friday, <b>6</b>=Saturday. <b>Deduction Day:</b> <b>0</b>–<b>6</b> map to the seven displayed days (or <b>0</b>–<b>3</b> in the October 1582 special case). <b>Deduction Month:</b> <b>0</b>–<b>6</b> map to the seven boxes in their grid order. <b>Deduction Year:</b> <b>0</b>–<b>4</b> map to the five options (or <b>0</b>–<b>1</b> with Jul Cross).</p><p className="mt-2">Locked or already-pressed buttons are skipped, just like a click would be. Keys are ignored when you're typing in an input field, when a modifier key (Ctrl/Cmd/Alt/Shift) is held, or when there's no answer grid on screen (Lookup, How to Play).</p></GuideSection>
           <Divider label="Modes"/>
           <GuideSection id="classic" title="Classic" openId={open} onToggle={toggle}><p>The main practice mode with no time pressure. Answer at your own pace. Override works after both wrong and correct answers. Reset Stats clears your stats and question history.</p></GuideSection>
@@ -2841,8 +2916,13 @@
       const cdv=calcDate??null;const scd=typeof onCalcDateChange==="function"?onCalcDateChange:()=>{};
       const sid=selectedHistoryId??null;const ssid=typeof onSelectedHistoryIdChange==="function"?onSelectedHistoryIdChange:()=>{};
       const cov=!!calcOpen;
-      const [calcOpenByEntry,setCalcOpenByEntry]=React.useState({});
-      const sco=typeof onCalcOpenChange==="function"?next=>{onCalcOpenChange(!!next);if(sid)setCalcOpenByEntry(prev=>({...prev,[sid]:!!next}));}:()=>{};
+      // Codes-open is purely global state — it stays as-is when the user clicks through
+      // history entries, only changing on (1) a manual toggle, (2) a brand-new lookup
+      // via runLookup, or (3) MethodBreakdownSection's auto-close when the displayed
+      // date becomes null (e.g., clicking a "Does Not Exist" gap entry). Earlier per-entry
+      // tracking via calcOpenByEntry was removed because it made codes auto-close on
+      // every history click that landed on an entry whose codes had never been opened.
+      const sco=typeof onCalcOpenChange==="function"?next=>onCalcOpenChange(!!next):()=>{};
       const lastLookupRef=React.useRef(null);
       const lookupInputRef=React.useRef(null);
       function isLeapL(y){y=y>0?y:1-Math.abs(y);return y%400===0||(y%4===0&&y%100!==0);}
@@ -2909,7 +2989,10 @@
       function clearLookup(){sli("");slo("");scd(null);ssid(null);sco(false);lastLookupRef.current=null;}
       const entries=Array.isArray(history)?history:[];
       React.useEffect(()=>{if(!sid)return;if(!entries.some(e=>e.id===sid)){ssid(null);scd(null);slo("");sco(false);}},[entries,sid]);
-      const selEntry=entry=>{if(!entry)return;ssid(entry.id);slo(entry?.result||"");const storedOpen=entry.isGap?false:(calcOpenByEntry[entry.id]??false);if(entry.isGap){scd(null);if(typeof onCalcOpenChange==="function")onCalcOpenChange(false);lastLookupRef.current=null;}else{if(typeof entry.y==="number")scd({y:entry.y,m:entry.m,d:entry.d});if(typeof onCalcOpenChange==="function")onCalcOpenChange(storedOpen);}if(document.activeElement)document.activeElement.blur();};
+      // Selecting a history entry never changes calcOpen directly. For non-gap entries,
+      // codes-open simply stays as-is. For gap entries (Does Not Exist), calcDate becomes
+      // null, which triggers MethodBreakdownSection's hasDate auto-close effect.
+      const selEntry=entry=>{if(!entry)return;ssid(entry.id);slo(entry?.result||"");if(entry.isGap){scd(null);lastLookupRef.current=null;}else{if(typeof entry.y==="number")scd({y:entry.y,m:entry.m,d:entry.d});}if(document.activeElement)document.activeElement.blur();};
       const clearHist=()=>{if(onClearHistory)onClearHistory();ssid(null);scd(null);slo("");sco(false);lastLookupRef.current=null;};
       const displayNote=React.useMemo(()=>{const selectedEntry=entries.find(e=>e.id===sid);if(selectedEntry&&!selectedEntry.isGap&&typeof selectedEntry.y==='number'&&isJulianDate(selectedEntry.y,selectedEntry.m,selectedEntry.d)){const isJul=useJulian;const wd=isJul?wdayJulian(selectedEntry.y,selectedEntry.m,selectedEntry.d):wdayL(selectedEntry.y,selectedEntry.m,selectedEntry.d);const displayDate=fmtDate?fmtDate(selectedEntry.y,selectedEntry.m,selectedEntry.d):`${MONTH[selectedEntry.m-1]} ${selectedEntry.d}, ${selectedEntry.y}`;return`${displayDate} is a ${DAY[wd]} (${isJul?"Julian":"Gregorian"}).`;}return lo;},[sid,entries,useJulian,fmtDate,lo]);
       const getEntryWeekday=e=>{if(e.isGap)return"Does Not Exist";if(typeof e.y==='number'&&isJulianDate(e.y,e.m,e.d)){const wd=useJulian?wdayJulian(e.y,e.m,e.d):wdayL(e.y,e.m,e.d);return DAY[wd];}return e.weekday;};
