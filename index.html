@@ -384,7 +384,7 @@
 
 
 
-    const DEPLOY_TS=new Date('2026-05-04T00:20:00Z');
+    const DEPLOY_TS=new Date('2026-05-04T00:45:00Z');
 
     function StatPanel({stats}){
       // For fractional values (Score, Streak as "X/Y"), shrink the value font
@@ -406,7 +406,7 @@
       );
     }
 
-    function CustomSelect({value,onChange,options,className,ariaLabel,wrapperRef,showChevron=false}){
+    function CustomSelect({value,onChange,options,className,wrapperClassName,ariaLabel,wrapperRef,showChevron=false}){
       // Custom dropdown that mimics the native iOS picker visually but renders
       // entirely from page DOM. Replaces native <select> elements site-wide so
       // iOS WebKit's popover dismissal heuristic (which auto-closes the native
@@ -416,8 +416,10 @@
       // settings popover.
       //
       // Visual design (matches iOS native picker):
-      // - Light translucent surface (rgba(245,245,247,0.92)) regardless of app
+      // - Light translucent surface (rgba(245,245,247,0.78)) regardless of app
       //   theme — iOS itself keeps the picker light in dark mode, we mirror that.
+      //   Alpha is intentionally <1 so dark backgrounds bleed through and tone
+      //   down the brightness.
       // - Backdrop blur + saturate filter for the frosted-glass effect.
       // - Rounded corners, subtle shadow, dark text, checkmark on selected.
       // - Trigger button reuses the original <select>'s className so the visible
@@ -430,6 +432,9 @@
       // wrapperRef is forwarded to the outer relative div so callers (e.g. the
       // settings click-outside handler) can keep treating the wrapper the same
       // way they treated the original <select> ref.
+      // wrapperClassName attaches to the outer relative div. Theme selects pass
+      // "flex-1" here (not on the inner button) so the wrapper itself fills its
+      // flex row — matches the original <select>'s flex-1 behavior.
       const [open,setOpen]=useState(false);
       const localRef=useRef(null);
       const ref=wrapperRef||localRef;
@@ -444,7 +449,7 @@
         };
       },[open]);
       return(
-        <div ref={ref} className="relative">
+        <div ref={ref} className={`relative ${wrapperClassName||""}`}>
           <button type="button" onClick={()=>setOpen(v=>!v)} className={className} aria-label={ariaLabel} aria-expanded={open}>
             <span className="grid items-center">
               {options.map(o=>(<span key={o.value} className={`col-start-1 row-start-1 truncate text-left ${o.value===value?'':'invisible'}`} aria-hidden={o.value!==value}>{o.label}</span>))}
@@ -452,9 +457,9 @@
           </button>
           {showChevron&&(<div className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 flex flex-col items-center leading-none text-[7px] text-white/90"><span>▲</span><span>▼</span></div>)}
           {open&&(
-            <div className="absolute right-0 top-full mt-1.5 z-[60] rounded-2xl overflow-hidden" style={{background:'rgba(245,245,247,0.92)',WebkitBackdropFilter:'blur(20px) saturate(180%)',backdropFilter:'blur(20px) saturate(180%)',boxShadow:'0 6px 28px rgba(0,0,0,0.20), 0 0 0 0.5px rgba(0,0,0,0.05)',minWidth:'100%',width:'max-content',maxWidth:'90vw'}}>
+            <div className="absolute right-0 top-full mt-1.5 z-[60] rounded-2xl overflow-hidden" style={{background:'rgba(245,245,247,0.78)',WebkitBackdropFilter:'blur(20px) saturate(180%)',backdropFilter:'blur(20px) saturate(180%)',boxShadow:'0 6px 28px rgba(0,0,0,0.12), 0 0 0 0.5px rgba(0,0,0,0.05)',minWidth:'100%',width:'max-content',maxWidth:'90vw'}}>
               {options.map(opt=>(
-                <button key={opt.value} type="button" onClick={()=>{onChange(opt.value);setOpen(false);}} className="w-full text-left px-4 py-3 text-[15px] flex items-center gap-2.5 active:bg-black/10" style={{color:'#1a1a1a',whiteSpace:'nowrap'}}>
+                <button key={opt.value} type="button" onClick={()=>{onChange(opt.value);setOpen(false);}} className="w-full text-left pl-4 pr-6 py-3 text-[15px] flex items-center gap-2.5 active:bg-black/10" style={{color:'#1a1a1a',whiteSpace:'nowrap'}}>
                   <span style={{display:'inline-block',width:'14px',color:'#1a1a1a',fontSize:'14px'}}>{opt.value===value?'✓':''}</span>
                   <span>{opt.label}</span>
                 </button>
@@ -2411,7 +2416,7 @@
         <div className="space-y-2 pt-3 border-t border-purple-500/20">
           <div className="text-[10px] uppercase tracking-widest text-purple-300/60">Theme</div>
           <div className="flex items-center justify-between"><span className="text-xs text-purple-200/80">Use System Settings</span><button type="button" onClick={()=>setUseSystem(v=>!v)} className={`px-3 py-1 rounded-xl text-xs font-medium border ${useSystem?"btn-solid border-transparent":"surface-toggle border-purple-800/60 text-purple-100/80"}`}>{useSystem?"On":"Off"}</button></div>
-          {useSystem?(<><div className="flex items-center gap-3"><span className="text-xs text-purple-200/80 w-10 shrink-0">Dark:</span><CustomSelect value={darkTheme} onChange={setDarkTheme} options={DARK_THEMES} ariaLabel="Dark theme" className="panel rounded-xl px-2 py-1 text-sm flex-1 focus:outline-none focus-ring text-left"/></div><div className="flex items-center gap-3"><span className="text-xs text-purple-200/80 w-10 shrink-0">Light:</span><CustomSelect value={lightTheme} onChange={setLightTheme} options={LIGHT_THEMES} ariaLabel="Light theme" className="panel rounded-xl px-2 py-1 text-sm flex-1 focus:outline-none focus-ring text-left"/></div></>):(<div className="flex items-center gap-3"><span className="text-xs text-purple-200/80 w-10 shrink-0">Theme:</span><CustomSelect value={manualTheme} onChange={setManualTheme} options={ALL_THEMES_LABELED} ariaLabel="Theme" className="panel rounded-xl px-2 py-1 text-sm flex-1 focus:outline-none focus-ring text-left"/></div>)}
+          {useSystem?(<><div className="flex items-center gap-3"><span className="text-xs text-purple-200/80 w-10 shrink-0">Dark:</span><CustomSelect value={darkTheme} onChange={setDarkTheme} options={DARK_THEMES} ariaLabel="Dark theme" wrapperClassName="flex-1" className="panel rounded-xl px-2 py-1 text-sm w-full focus:outline-none focus-ring text-left"/></div><div className="flex items-center gap-3"><span className="text-xs text-purple-200/80 w-10 shrink-0">Light:</span><CustomSelect value={lightTheme} onChange={setLightTheme} options={LIGHT_THEMES} ariaLabel="Light theme" wrapperClassName="flex-1" className="panel rounded-xl px-2 py-1 text-sm w-full focus:outline-none focus-ring text-left"/></div></>):(<div className="flex items-center gap-3"><span className="text-xs text-purple-200/80 w-10 shrink-0">Theme:</span><CustomSelect value={manualTheme} onChange={setManualTheme} options={ALL_THEMES_LABELED} ariaLabel="Theme" wrapperClassName="flex-1" className="panel rounded-xl px-2 py-1 text-sm w-full focus:outline-none focus-ring text-left"/></div>)}
         </div>
         <div className="pt-2 border-t border-purple-500/20 text-[11px] text-purple-300/60">Last Updated: {(()=>{const d=DEPLOY_TS;const yy=d.getFullYear();const mo=d.getMonth()+1;const da=d.getDate();const numFmt=numericFormatOf(dateFormat);const datePart=fmt(yy,mo,da,numFmt);const timePart=d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',hour12:false});return`${datePart} ${timePart}`;})()}</div>
       </div>);
