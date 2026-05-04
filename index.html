@@ -60,10 +60,11 @@
     [data-theme="light"] .btn-wrong-dim,[data-theme="parchment"] .btn-wrong-dim{background:rgba(220,38,38,.28)}
     [data-theme="light"] .btn-correct-persist,[data-theme="parchment"] .btn-correct-persist{background:rgba(22,163,74,.82)}
     /* Focus ring for keyboard navigation. Scoped to (pointer: fine) so touch-only
-       devices never see it. iOS Safari fires :focus-visible on <select> taps even
-       on touch (Safari treats picker activation as keyboard-equivalent), which
-       would otherwise display a lingering purple ring on every tap. The native
-       picker / on-screen keyboard already serves as the focus indicator on touch. */
+       devices never see it. Applied to the year range <input> fields and other
+       form controls via the focus-ring class. Native <select> elements were
+       replaced by CustomSelect (see comment in CustomSelect component for the
+       iOS picker auto-close history); the focus-ring class is still used on
+       CustomSelect triggers so keyboard navigation is preserved. */
     @media (pointer: fine){
       .focus-ring:focus-visible{box-shadow:0 0 0 2px rgb(192 132 252)}
     }
@@ -89,7 +90,7 @@
   </style>
 </head>
 <body class="text-purple-50">
-  <div id="root" class="min-h-screen w-full">Loading…</div>
+  <div id="root" class="min-h-screen">Loading…</div>
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -384,7 +385,7 @@
 
 
 
-    const DEPLOY_TS=new Date('2026-05-04T02:19:00Z');
+    const DEPLOY_TS=new Date('2026-05-04T02:32:00Z');
 
     function StatPanel({stats}){
       // For fractional values (Score, Streak as "X/Y"), shrink the value font
@@ -1082,12 +1083,16 @@
       //
       // lastAppliedScrollLockRef tracks whether 'guide' or 'lock' state was last applied. When
       // mode changes between two non-guide modes (e.g. Classic → AoX), the desired DOM state is
-      // identical and we skip the work entirely — previously the cleanup-then-body sequence
-      // unconditionally rewrote #root styles + scrolled to top on every mode change, churning
-      // layout in a way that iOS Safari can interpret as the focused <select> being moved away,
-      // closing any open native picker. window.scrollTo(0,0) only fires when leaving guide
-      // (where scrolling was actually possible). No cleanup function — the App never unmounts
-      // in practice and skipping cleanup avoids redundant work on every effect re-run.
+      // identical and we skip the work entirely. Avoids unnecessary style writes and scroll
+      // resets on every mode change, keeping the transition crisp. window.scrollTo(0,0) only
+      // fires when leaving guide (where scrolling was actually possible). No cleanup function
+      // — the App never unmounts in practice and skipping cleanup avoids redundant work on
+      // every effect re-run.
+      // (Historical note: this optimization originally landed to stop iOS Safari from
+      // dismissing the native <select> picker after fast mode-changes, since unconditional
+      // #root style writes were churning layout. The native <select> has since been replaced
+      // by CustomSelect, which is immune to that dismissal heuristic, so the layout-churn
+      // concern no longer applies — but the optimization remains valuable on its own merits.)
       const lastAppliedScrollLockRef=useRef(null);
       useEffect(()=>{
         const desired=mode==='guide'?'guide':'lock';
@@ -2395,6 +2400,13 @@
       const [settingsOpen,setSettingsOpen]=useState(false);
       const settingsRef=useRef(null);
       const settingsPopoverRef=useRef(null);
+      // Settings popover click-outside handler. Closes settings when the user taps
+      // anywhere outside three regions: the gear button itself (settingsRef), the
+      // popover content (settingsPopoverRef), and the mode CustomSelect wrapper
+      // (modeSelectRef). The mode CustomSelect exclusion is what lets the user open
+      // and pick from the mode dropdown without the settings popover auto-closing
+      // on the same tap — taps inside the mode trigger or its open dropdown panel
+      // are inside modeSelectRef's subtree and therefore "inside" for this check.
       useEffect(()=>{if(!settingsOpen)return;const h=e=>{const inBtn=settingsRef.current&&settingsRef.current.contains(e.target);const inPop=settingsPopoverRef.current&&settingsPopoverRef.current.contains(e.target);const inSel=modeSelectRef.current&&modeSelectRef.current.contains(e.target);if(!inBtn&&!inPop&&!inSel)setSettingsOpen(false);};document.addEventListener('mousedown',h);document.addEventListener('touchstart',h);return()=>{document.removeEventListener('mousedown',h);document.removeEventListener('touchstart',h);};},[settingsOpen]);
       // Theme option arrays — keys match the CustomSelect API (value/label) so
       // they can be passed directly without per-render mapping.
@@ -2464,18 +2476,12 @@
                 <button type="button" onClick={()=>setSettingsOpen(v=>!v)} className={`px-2.5 py-2 rounded-xl text-sm border ${settingsOpen?"btn-solid border-transparent":"surface-button text-purple-100/80"}`} aria-label="Settings">⚙</button>
               </div>
               {/* mode selector */}
-              {/* The previous onChange handler set #root.style.pointerEvents='none'
-                  for 400ms after a mode change — a blanket workaround that swallowed
-                  every tap on the page for nearly half a second. Removed.
-                  Any phantom-tap regression on iOS picker dismiss must be fixed
-                  at its source (e.g. narrow guard on the specific affected
-                  button), not by re-adding the blanket lock on #root. */}
-              {/* Mode CustomSelect. wrapperRef={modeSelectRef} so the existing
-                  settings click-outside handler keeps treating taps inside the
-                  mode dropdown the same way it treated taps on the original
-                  <select> — i.e. opening the mode dropdown does not close the
-                  settings popover. showChevron renders the same ▲▼ indicator
-                  that the original native <select> showed. */}
+              {/* Mode CustomSelect. Replaced the original native <select> as part of the
+                  site-wide CustomSelect rollout that fixed iOS Safari's native picker
+                  auto-close bug — see the CustomSelect component for full context.
+                  wrapperRef={modeSelectRef} so the existing settings click-outside handler
+                  keeps treating taps inside the mode dropdown the same way it treated taps
+                  on the original <select>. showChevron renders the same ▲▼ indicator. */}
               <CustomSelect wrapperRef={modeSelectRef} value={mode} onChange={(v)=>{setMode(v);setSettingsOpen(false);}} options={MODE_LABELS} ariaLabel="Mode" showChevron className="panel rounded-xl px-2.5 py-2 pr-9 text-sm focus:outline-none focus-ring text-left"/>
             </div>
             {settingsJsx}
