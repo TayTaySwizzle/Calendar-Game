@@ -80,14 +80,22 @@
     .btn-correct-persist{background:rgba(21,128,61,.95)}
     /* Q16: Diagonal-split background for stack entries that have been retroactively
        overridden right→wrong (e.g., user got it correct, later flipped via Override on
-       a subsequent live unanswered question). Green-left/red-right tells the time-flow
-       story: originally correct, now counted wrong. Hard 50%/50% color stops produce
-       a sharp diagonal at ~30° from vertical (linear-gradient axis at 120° from up
-       = 30° past horizontal-right, perpendicular dividing line tilts 30° from vertical
-       with its top leaning right). Theme overrides below mirror the existing solid
-       persist-color values (light/parchment use the alpha-reduced variants). */
-    .btn-override-wrong{background:linear-gradient(120deg,rgba(21,128,61,.95) 50%,rgba(185,28,28,.95) 50%)}
-    [data-theme="light"] .btn-override-wrong,[data-theme="parchment"] .btn-override-wrong{background:linear-gradient(120deg,rgba(22,163,74,.82) 50%,rgba(220,38,38,.82) 50%)}
+       a subsequent live unanswered question). Green-upper-left/red-lower-right tells the
+       time-flow story: originally correct (past, upper-left), now counted wrong (present,
+       lower-right). Hard 50%/50% color stops produce a sharp diagonal at ~30° from
+       vertical (linear-gradient axis at 120° from up = 30° past horizontal-right,
+       perpendicular dividing line tilts 30° from vertical with its top leaning right,
+       i.e. forward-slash direction). The 120° angle anchors green at the top-left
+       corner and red at the bottom-right corner, which is what produces the upper-left
+       / lower-right region split. Theme overrides below mirror the existing solid
+       persist-color values (light/parchment use the alpha-reduced variants).
+       background-origin: border-box makes the gradient compute its diagonal against
+       the same box it's displayed in (the visible button shape including the 1px
+       transparent border). Without it, the gradient computes against the slightly
+       smaller padding-box, leaving a visible 1px inset on each edge where the colors
+       don't quite reach the rounded outline. */
+    .btn-override-wrong{background:linear-gradient(120deg,rgba(21,128,61,.95) 50%,rgba(185,28,28,.95) 50%);background-origin:border-box}
+    [data-theme="light"] .btn-override-wrong,[data-theme="parchment"] .btn-override-wrong{background:linear-gradient(120deg,rgba(22,163,74,.82) 50%,rgba(220,38,38,.82) 50%);background-origin:border-box}
     [data-theme="light"] .btn-wrong-persist,[data-theme="parchment"] .btn-wrong-persist{background:rgba(220,38,38,.82)}
     [data-theme="light"] .btn-wrong-dim,[data-theme="parchment"] .btn-wrong-dim{background:rgba(220,38,38,.28)}
     [data-theme="light"] .btn-correct-persist,[data-theme="parchment"] .btn-correct-persist{background:rgba(22,163,74,.82)}
@@ -417,7 +425,7 @@
 
 
 
-    const DEPLOY_TS=new Date('2026-05-05T01:42:00Z');
+    const DEPLOY_TS=new Date('2026-05-05T03:56:00Z');
 
     function StatPanel({stats}){
       // For fractional values (Score, Streak as "X/Y"), shrink the value font
@@ -628,8 +636,10 @@
       //   through anyChanged to trigger this round-end correctly.
       // Done/failed: never auto-replace the displayed last-question date (Cat C).
       // Idle (Cat A): per-setting rules for the currently displayed date —
-      //   Date Format / Random Format → Q12: NO regen. Format is stamped at generation
-      //     and trusted by display until the next advance. (See App's mirror for full notes.)
+      //   Random Format → off→on always regens; on→off regens only if displayed _fmt
+      //     differs from the now-active dropdown value (so the visible format would change)
+      //   Date Format dropdown → regens only if randomFormat is OFF and the new dropdown
+      //     value differs from the displayed _fmt; no-op when randomFormat is ON
       //   Leap Chance → always regen
       //   Force Jan/Feb → regen only if current date is leap-year non-Jan/Feb
       //   Year range → regen only if current date is out of new range
@@ -648,8 +658,23 @@
         if(!anyChanged)return;
         if(runPhase==='running'){reset();return;}
         if(runPhase!=='idle')return;
-        // Q12: only leapChanceChanged remains as an always-regen Cat A trigger.
-        if(leapChanceChanged){setDate(genDate(minY,maxY));return;}
+        // Cat A (AoX idle) regen rules — mirrors App's regenDecisionFor. AoX idle has no
+        // wrong-guess possibility (clicks are gated by isRunning), so the wrong-guess
+        // defer branch isn't needed here.
+        //   leapChance — always regen
+        //   Random Format off→on — always regen
+        //   Random Format on→off — regen if displayed _fmt ≠ now-active dropdown value
+        //   Date Format dropdown change while randomFormat off — regen if _fmt ≠ new value
+        //     (when randomFormat is on, dropdown is overridden so changes are a no-op)
+        //   Force Jan/Feb — regen if current date is leap non-Jan/Feb
+        //   Year range — regen if current date out of new range
+        //   Julian — keep date (current useJulian flows through naturally to codes/answer)
+        const formatRegenReason=(
+          (randomFormatChanged&&randomFormat) ||
+          (randomFormatChanged&&!randomFormat&&date._fmt!==dateFormat) ||
+          (dateFormatChanged&&!randomFormat&&date._fmt!==dateFormat)
+        );
+        if(leapChanceChanged||formatRegenReason){setDate(genDate(minY,maxY));return;}
         const isLeapY=(useJulian&&isJulianDate(date.y,date.m,date.d))?isLeapJulian(date.y):isLeap(date.y);
         if(forceJanFebChanged&&forceJanFebOnLeap&&isLeapY&&date.m!==1&&date.m!==2){setDate(genDate(minY,maxY));return;}
         if(yearRangeChanged&&(date.y<minY||date.y>maxY)){setDate(genDate(minY,maxY));return;}
@@ -2467,15 +2492,21 @@
       const prevPopRef=useRef({randomFormat,dateFormat,useJulian,minY,maxY,leapChance,forceJanFebOnLeap});
       // Unified popover-settings effect. Replaces the old Effect 1/Effect 2/refreshForRange split.
       // Per-setting rules in idle Cat A states (Classic, Deduction, Flash idle, Blitz pre-round):
-      //   Date Format / Random Format — Q12: NO regen. Format is stamped at generation
-      //     and trusted by display until the next advance, so toggling either mid-question
-      //     doesn't re-render the live date. Format changes still flow through anyChanged
-      //     so Cat B (Blitz active) correctly ends the round on either change.
+      //   Random Format — off→on always regens (fresh random format wanted). on→off regens
+      //     only when the date's stored _fmt differs from the now-active dateFormat dropdown
+      //     value (otherwise the visible format already matches and no regen is needed).
+      //   Date Format dropdown — when randomFormat is OFF, regens only if the date's stored
+      //     _fmt differs from the new dropdown value. When randomFormat is ON the dropdown
+      //     is overridden by the random roll, so dropdown changes are a no-op.
       //   Leap Chance — always regen
       //   Force Jan/Feb — regen only if current date is leap-year non-Jan/Feb
       //   Year range — regen only if current date is out of new range
       //   Julian — keep date (answer/codes float to current useJulian) unless current date is
       //            Julian-eligible AND a wrong guess has been made → regen
+      //   In all of the above, a wrong guess on the live date defers any format/leap/jan-feb/
+      //   range regen — the question is finished first, and the new setting applies on the
+      //   next generate. (Julian on a wrong-guessed Julian-eligible date is the carve-out:
+      //   it regens with a synthesized green for the original-Julian correct answer.)
       // Cat B (Blitz active timer): always full reset on any popover change (incl. format).
       // Cat C (Blitz timerDone): never auto-regen. Stale stored dates in non-current modes
       //   that are *permanently violating* (leap-100/jan-feb/range) are still cleaned up.
@@ -2512,9 +2543,6 @@
         }
         const anyChanged=dateFormatChanged||randomFormatChanged||leapChanceChanged||forceJanFebChanged||yearRangeChanged||julianChanged;
         if(!anyChanged)return;
-        // Q12: After dropping format changes from the always-regen set, only leapChanceChanged
-        // remains as an "always regen Cat A" trigger, so the previous anyAlwaysRegen abstraction
-        // is just leapChanceChanged. Used directly below as aReason in regenDecisionFor.
         // regenDecisionFor inspects a candidate live date+wrong-status and returns one of:
         //   'none'             — no regen (either no rule fired, or defer because a wrong
         //                        guess was made and the change isn't the Julian carve-out)
@@ -2525,6 +2553,18 @@
         //                        entry shows both the user's red guess and the original
         //                        green answer. Only fires when a Julian toggle would
         //                        change the answer on a Julian-eligible wrong-guessed date.
+        // Reasons a–g all defer when hasWrong is true (julian carve-out aside) — finishing
+        // the current question takes priority over re-shuffling its presentation.
+        //   a — leapChanceChanged: always
+        //   b — forceJanFebChanged + setting just turned on + current date is leap non-Jan/Feb
+        //   c — yearRangeChanged + current date out of new range
+        //   d — julianChanged + current date is Julian-eligible (carve-out: still fires when
+        //         hasWrong, with synthesized green; outside that, deferred like the rest)
+        //   e — randomFormatChanged off→on: always regen (fresh random format wanted)
+        //   f — randomFormatChanged on→off + current _fmt ≠ now-active dropdown value
+        //   g — dateFormatChanged + randomFormat is off + current _fmt ≠ new dropdown value
+        //         (dropdown changes are no-ops when randomFormat is on, since the random
+        //         roll overrides the dropdown selection at generation time)
         const regenDecisionFor=(dt,hasWrong)=>{
           if(!dt)return'none';
           const isLeapY=(useJulian&&isJulianDate(dt.y,dt.m,dt.d))?isLeapJulian(dt.y):isLeap(dt.y);
@@ -2532,8 +2572,11 @@
           const bReason=forceJanFebChanged&&forceJanFebOnLeap&&isLeapY&&dt.m!==1&&dt.m!==2;
           const cReason=yearRangeChanged&&(dt.y<minY||dt.y>maxY);
           const dReason=julianChanged&&isJulianDate(dt.y,dt.m,dt.d);
+          const eReason=randomFormatChanged&&randomFormat;
+          const fReason=randomFormatChanged&&!randomFormat&&dt._fmt!==dateFormat;
+          const gReason=dateFormatChanged&&!randomFormat&&dt._fmt!==dateFormat;
           if(hasWrong)return dReason?'julianWithGreen':'none';
-          return(aReason||bReason||cReason)?'normal':'none';
+          return(aReason||bReason||cReason||eReason||fReason||gReason)?'normal':'none';
         };
         // Helper: cleanup permanently-violating non-current-mode storage (always runs).
         const cleanseNonCurrent=(skipCurrentGm,skipCurrentDed)=>{
@@ -2885,8 +2928,15 @@
             The htp-sticky-bar class also carries the box-shadow transition (Q14) so the
             shadow fades smoothly in/out as the elev-shadow-down class is added/removed.
             Padding split: outer pt-5 above title bar, content wrapper pb-5 below — total
-            vertical spacing matches the original single py-5 wrapper exactly. */}
-        <div className={`htp-sticky-bar sticky top-0 z-30 bg-[var(--bg1)] w-full pt-5${htpScrolledFromTop?" elev-shadow-down":""}`}>
+            vertical spacing matches the original single py-5 wrapper exactly.
+            HtP-only pb-2.5: in guide mode, the sticky bar absorbs half (10px) of the
+            existing 20px gap that sits between the title row and the first GuidePage
+            panel. Visual layout at rest is unchanged (the <GuidePage/> wrapper drops
+            mt-5 → mt-2.5 to compensate, so the total gap stays 20px) — but the lock
+            line moves down 10px, so when the page scrolls, content disappears at the
+            midpoint between the title row and the first panel rather than right at
+            the title row's bottom edge. */}
+        <div className={`htp-sticky-bar sticky top-0 z-30 bg-[var(--bg1)] w-full pt-5${mode==="guide"?" pb-2.5":""}${htpScrolledFromTop?" elev-shadow-down":""}`}>
           <div className="mx-auto px-4 w-full max-w-[480px] relative">
             <div className="flex items-center justify-between gap-2">
               {/* header left: title */}
@@ -2936,7 +2986,7 @@
           </>)}
           <AoxMode minY={minY} maxY={maxY} visible={mode==="aox"} fmtDate={fmtDate} useJulian={useJulian} genDate={genDate} leapChance={leapChance} forceJanFebOnLeap={forceJanFebOnLeap} randomFormat={randomFormat} dateFormat={dateFormat} saveStats={saveStats}/>
           {mode==="lookup"&&(<div className="mt-5"><LookupCard history={lookupHistory} onAddHistory={pushLookupHistory} onMoveHistory={moveHistoryEntryToTop} onClearHistory={clearLookupHistory} inputValue={lookupInput} onInputChange={setLookupInput} outputValue={lookupOutput} onOutputChange={setLookupOutput} calcDate={lookupCalcDate} onCalcDateChange={setLookupCalcDate} selectedHistoryId={lookupSelectedHistoryId} onSelectedHistoryIdChange={setLookupSelectedHistoryId} calcOpen={lookupCalcOpen} onCalcOpenChange={setLookupCalcOpen} fmtDate={fmtDate} dateFormat={dateFormat} useJulian={useJulian}/></div>)}
-          {mode==="guide"&&(<div className="mt-5"><GuidePage/></div>)}
+          {mode==="guide"&&(<div className="mt-2.5"><GuidePage/></div>)}
           {["classic","blitz","flash"].includes(mode)&&(
             <div className="mt-5">
               {mode==="blitz"&&!perQ&&(<div className="mb-3"><div className="text-center text-xs tabular-nums text-purple-200/80 mb-1"><span ref={blitzTimeRef}>{fmtBlitzT(blitzSec)}</span></div><div className="bar"><span ref={blitzBarRef} style={{width:"100%"}}></span></div></div>)}
@@ -3099,7 +3149,7 @@
             <p className="text-purple-300/70 text-[12px]">In modes designed for casual practice (Classic, Deduction, Flash), you can tap any stat to hide it. Tapping Score, Accuracy, or Streak hides all three; tapping any timing stat hides all three. Stats always track in the background regardless of visibility. Enabling timing stats resets all stats so the score and timing always reflect the same set of questions. When timing stats are off, leaving and returning to a mode preserves the current question exactly as you left it — same date, same answers, codes panel in the same state. In all other modes, stats are always visible.</p>
           </GuideSection>
           <Divider label="Settings"/>
-          <GuideSection id="dateformat" title="Date Format" openId={open} onToggle={toggle}><p>Set via the ⚙ settings menu. Choose one of five real-world formats: <b>Written MDY</b> (April 27, 1828), <b>Written DMY</b> (27 April 1828), <b>Numeric MDY</b> (4/27/1828), <b>Numeric DMY</b> (27.4.1828), or <b>Numeric YMD</b> (1828-4-27). Numeric formats use a fixed separator convention: MDY uses '/', DMY uses '.', YMD uses '-'. Years always show in full, never abbreviated.</p><p>Only DMY, MDY, and YMD orderings are offered because those are the only orderings actually used in real life — orderings like YDM aren't standard anywhere.</p><p><b>Random Format</b>, when on, rolls one of the five formats per date in game modes only — your selected format is preserved underneath (the panels just lock visually). Lookup and the Last Updated timestamp ignore Random and always use the selected format. The Last Updated timestamp uses the numeric version of whichever format you've selected. In Classic, Deduction, Flash, and AoX, changing the selected format or toggling Random Format leaves the displayed date in its original format until you advance — the new format only applies to the next date. In active Blitz rounds and AoX runs, either change ends the round.</p><p>In game modes' Show Codes, codes appear in the order the date is read (left to right), with Leap shown once you've seen both the year and month.</p></GuideSection>
+          <GuideSection id="dateformat" title="Date Format" openId={open} onToggle={toggle}><p>Set via the ⚙ settings menu. Choose one of five real-world formats: <b>Written MDY</b> (April 27, 1828), <b>Written DMY</b> (27 April 1828), <b>Numeric MDY</b> (4/27/1828), <b>Numeric DMY</b> (27.4.1828), or <b>Numeric YMD</b> (1828-4-27). Numeric formats use a fixed separator convention: MDY uses '/', DMY uses '.', YMD uses '-'. Years always show in full, never abbreviated.</p><p>Only DMY, MDY, and YMD orderings are offered because those are the only orderings actually used in real life — orderings like YDM aren't standard anywhere.</p><p><b>Random Format</b>, when on, rolls one of the five formats per date in game modes only — your selected format is preserved underneath (the panels just lock visually). Lookup and the Last Updated timestamp ignore Random and always use the selected format. The Last Updated timestamp uses the numeric version of whichever format you've selected.</p><p>In Classic, Deduction, Flash, and AoX (idle), format changes on an unanswered, untouched date may regenerate the date. Turning Random Format on always regenerates (a fresh random format is rolled). Turning Random Format off regenerates only if the displayed format differs from your selected dropdown format. Changing the dropdown while Random Format is off regenerates only if the new selection differs from the displayed format. Changing the dropdown while Random Format is on does nothing visible — the dropdown is overridden by the random roll. If you've already made a wrong guess on the displayed date, format changes are deferred — the wrong-state is preserved and the new format applies on the next generated date. In active Blitz rounds and AoX runs, any format change ends the round.</p><p>In game modes' Show Codes, codes appear in the order the date is read (left to right), with Leap shown once you've seen both the year and month.</p></GuideSection>
           <GuideSection id="julian" title="Julian Calendar" openId={open} onToggle={toggle}><p>Toggle via the ⚙ settings menu under Calendar System. Off by default. When on, dates on or before October 4, 1582 are treated as Julian calendar dates, which have different leap year rules — every year divisible by 4 is a leap year, with no century exception. This affects weekday calculation and the codes shown in Show Codes. October 5–14, 1582 are always excluded since those dates never existed; the Gregorian calendar skipped them to correct accumulated calendar drift.</p><p>Toggling Julian doesn't necessarily regenerate the current date. For dates after October 4, 1582, Julian has no effect. For Julian-eligible dates (October 4, 1582 or earlier), the date stays if you haven't made a wrong guess yet — the answer and codes simply update. If you've already wrong-guessed, the date regenerates and is added to your history with both your red guess and a green for the day that was correct under the calendar system in effect when the date was first generated. Each date snapshots its calendar system at generation, so revisiting an earlier question via Back shows the highlights and codes that were correct under the system in effect when that date was generated. In active Blitz rounds and AoX runs, any Julian toggle ends the round.</p></GuideSection>
           <GuideSection id="range" title="Year Range" openId={open} onToggle={toggle}><p>Set via the ⚙ settings menu. Controls which years dates are drawn from. Defaults to 1–10000 AD. Changing the range regenerates the current date only if it falls outside the new range — and even then, if you've already made a wrong guess on the current date, the change is deferred so the wrong-state is preserved; the new range applies to the next date. While browsing back, settings-driven regen always preserves your history: the date you were viewing and any forward entries are pushed back to history before the live slot is regenerated. In active Blitz rounds and AoX runs, any range change ends the round.</p><p><b>Year sub-mode auto-disable:</b> Deduction's Year sub-mode requires either a year range of at least 5 years (so a 5-year window can be built) or, with Julian on, a range that contains October 15, 1582 (so a 2-year Jul Cross window can be built). When neither condition holds, the Year sub-type button greys out, and if you were already in Year mode when the range changed, you're auto-switched to Day mode. Day and Month sub-modes work for any valid range.</p></GuideSection>
           <GuideSection id="leap" title="Leap Year Settings" openId={open} onToggle={toggle}><p>Two settings in the ⚙ menu control how often leap years appear and what months they're paired with. <b>Leap Year Chance</b> sets how often a generated date lands on a leap year — Random uses the natural rate (~24%); 50%, 75%, and 100% force higher rates. <b>Force Jan/Feb on Leap Years</b>, when on, restricts the month to January or February whenever a leap year is generated. These settings apply to all game modes' date generation; Lookup is unaffected. If your year range happens to contain no leap years and the chance is set to 50/75/100%, the chance is silently ignored per date — the setting itself is preserved. Changing <b>Leap Year Chance</b> always regenerates the displayed date. Toggling <b>Force Jan/Feb on Leap Years</b> regenerates only if the current date is a leap year with a month other than January or February. If you've already made a wrong guess on the current date, either change is deferred so the wrong-state is preserved; the new setting applies to the next date. In active Blitz rounds and AoX runs, any leap setting change ends the round.</p></GuideSection>
