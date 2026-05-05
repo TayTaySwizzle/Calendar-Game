@@ -425,7 +425,7 @@
 
 
 
-    const DEPLOY_TS=new Date('2026-05-05T03:56:00Z');
+    const DEPLOY_TS=new Date('2026-05-05T06:14:00Z');
 
     function StatPanel({stats}){
       // For fractional values (Score, Streak as "X/Y"), shrink the value font
@@ -1114,8 +1114,13 @@
       const minInputRef=useRef(null),maxInputRef=useRef(null);
       // Q12: every date carries a stamped _fmt — when randomFormat is on it's a random
       // roll, when off it's the current dateFormat. The display layer always trusts
-      // _fmt, so a date keeps its original format until advanced past (toggling either
-      // setting mid-question doesn't re-render the live date).
+      // _fmt (so the visible format on a live date is whatever was stamped at generation,
+      // not the current setting).
+      // Q1 (5/4/2026): on a Cat A unanswered untouched live date, format setting changes
+      // CAN regen — Random off→on always regens; Random on→off and dropdown changes regen
+      // only when the displayed _fmt would no longer match the now-active format. A wrong
+      // guess on the live date defers any format regen until the next generated date.
+      // See regenDecisionFor in the App popover effect for the full set of rules.
       // This lazy initializer can't reference randomFormat/dateFormat state because they
       // are declared later in the component. Hardcoded values mirror those useState
       // defaults (randomFormat=true → rollFormat(); useJulian=false). If those defaults
@@ -1837,8 +1842,10 @@
         // navigation. Per-mode-toggle fields (_abx, _julx, _m1582) are added by the sub-mode
         // branches themselves; attachFmt only handles the always-present pair (_fmt, _jul).
         //   _fmt   — date format snapshot. Always stamped (Q12): random roll when randomFormat
-        //            is on, current dateFormat when off. Display layer always trusts _fmt,
-        //            so a puzzle keeps its original format until advanced past.
+        //            is on, current dateFormat when off. Display layer always trusts _fmt.
+        //            Q1 (5/4/2026): on a Cat A unanswered untouched live puzzle, format setting
+        //            changes can regen the live date (see regenDecisionFor); wrong guesses
+        //            on the live puzzle defer any format regen until the next puzzle.
         //   _jul   — useJulian snapshot at generation time (used by codes panel + history)
         //   _abx   — abCrossOnly snapshot (Year sub-mode; informational, not used for replay)
         //   _julx  — julCrossOnly snapshot (Year sub-mode; informational)
@@ -2449,7 +2456,11 @@
       // Generate a new game-mode date with the current settings baked in.
       // Stamps _fmt and _jul at generation. Q12: _fmt is always present — random roll
       // when randomFormat is on, current dateFormat when off. The display layer always
-      // trusts _fmt, so a date keeps its original format until advanced past.
+      // trusts _fmt.
+      // Q1 (5/4/2026): on a Cat A unanswered untouched live date, format setting changes
+      // can trigger a fresh genDate call via regenDecisionFor (Random off→on always; Random
+      // on→off and dropdown changes regen only on _fmt mismatch with the now-active format).
+      // Wrong guesses defer format regen — the new format only applies on the next genDate.
       // _jul is the calendar system in effect when the date was generated; used by stack
       // entries (and deduction) so revisiting a past question shows codes consistent with
       // the system that was active when it was created. Live questions ignore _jul and use
@@ -2555,6 +2566,17 @@
         //                        change the answer on a Julian-eligible wrong-guessed date.
         // Reasons a–g all defer when hasWrong is true (julian carve-out aside) — finishing
         // the current question takes priority over re-shuffling its presentation.
+        // Note an asymmetry between reasons a–d and e–g:
+        //   a–d are "static condition on the live date" checks — leap chance fires
+        //     unconditionally; jan-feb/range/julian fire only when the date matches
+        //     a fixed property at the moment the setting changes. The triggering
+        //     setting either changed or it didn't.
+        //   e–g are "value comparison" checks — they don't just ask whether the format
+        //     setting changed, but whether the resulting effective format would now
+        //     differ from the date's stamped _fmt. This is what makes Random on→off
+        //     conditional (no regen if the format already matches) and what makes
+        //     dropdown changes during randomFormat=on a no-op (the dropdown isn't
+        //     the active format to compare against).
         //   a — leapChanceChanged: always
         //   b — forceJanFebChanged + setting just turned on + current date is leap non-Jan/Feb
         //   c — yearRangeChanged + current date out of new range
