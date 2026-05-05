@@ -16,7 +16,13 @@
     [data-theme="nebula"]{--bg1:#0b0714;--bg2:#0b0714;--tc:#0b0714}
     [data-theme="parchment"]{--bg1:#f0e8d5;--bg2:#f0e8d5;--tc:#f0e8d5;--card-bg:rgba(255,252,244,.95);--card-bd:rgba(120,53,175,.22);--panel-bg:rgba(120,53,175,.07);--panel-bd:rgba(120,53,175,.22);--thin-bd:rgba(120,53,175,.18);--sbtn-bg:rgba(120,53,175,.1);--sbtn-bd:rgba(120,53,175,.28);--sbtn-hov:rgba(120,53,175,.18);--stgl-bg:rgba(120,53,175,.07);--stgl-hov:rgba(120,53,175,.14);--chip-bg:rgba(120,53,175,.09);--chip-bd:rgba(120,53,175,.22);--bar-bg:rgba(120,53,175,.09);--bar-bd:rgba(120,53,175,.22);--body-color:#2e1065;--sec-color:rgba(46,16,101,.78);--mut-color:rgba(46,16,101,.62);--fnt-color:rgba(46,16,101,.5);--shadow-elev:rgba(46,16,101,.18)}
     [data-theme="light"]{--bg1:#f2f2f7;--bg2:#f2f2f7;--tc:#f2f2f7;--card-bg:rgba(255,255,255,.95);--card-bd:rgba(120,53,175,.22);--panel-bg:rgba(237,233,254,.48);--panel-bd:rgba(120,53,175,.22);--thin-bd:rgba(120,53,175,.18);--sbtn-bg:rgba(237,233,254,.65);--sbtn-bd:rgba(120,53,175,.28);--sbtn-hov:rgba(237,233,254,.88);--stgl-bg:rgba(237,233,254,.42);--stgl-hov:rgba(237,233,254,.65);--chip-bg:rgba(237,233,254,.75);--chip-bd:rgba(120,53,175,.22);--bar-bg:rgba(237,233,254,.75);--bar-bd:rgba(120,53,175,.22);--body-color:#1e1b4b;--sec-color:rgba(30,27,75,.78);--mut-color:rgba(30,27,75,.62);--fnt-color:rgba(30,27,75,.5);--shadow-elev:rgba(30,27,75,.15)}
-    html,body{overflow:hidden}
+    /* overscroll-behavior: none kills two iOS Safari behaviors at once: scroll-chain
+       bleed (e.g., reaching the bottom of the settings popover would otherwise scroll
+       the body / HtP underneath) and the rubber-band bounce at scroll boundaries.
+       Applied to html+body for the page-level body scroll (HtP); the inner scroll
+       containers (settings popover, Lookup history) get their own overscroll-none
+       Tailwind classes. */
+    html,body{overflow:hidden;overscroll-behavior:none}
     html{touch-action:manipulation}
     body{background:var(--bg1);color:var(--body-color)}
     /* Q10 utility classes — fade gradient + theme-aware elevation shadows.
@@ -28,6 +34,12 @@
     .fade-scroll-bottom{-webkit-mask-image:linear-gradient(to bottom,black calc(100% - 24px),transparent);mask-image:linear-gradient(to bottom,black calc(100% - 24px),transparent)}
     .elev-shadow-down{box-shadow:0 4px 6px -2px var(--shadow-elev)}
     .elev-shadow-up{box-shadow:0 -4px 6px -2px var(--shadow-elev)}
+    /* Q14: smooth shadow fade in/out. Selectors target the elements that conditionally
+       receive .elev-shadow-down/.elev-shadow-up so the transition is on a STABLE rule
+       (always present), letting the box-shadow animate both when the class is added AND
+       when it's removed. Putting transition inside .elev-shadow-down would only animate
+       on add, since the rule no longer applies once the class is removed. */
+    .htp-sticky-bar,.popover-sticky-footer{transition:box-shadow 0.2s ease}
     .htp-fade-overlay{position:fixed;left:0;right:0;bottom:0;height:32px;pointer-events:none;z-index:20;background:linear-gradient(to top,var(--bg1),transparent)}
     .card{background:var(--card-bg);border:1px solid var(--card-bd)}
     .panel{background:var(--panel-bg);border:1px solid var(--panel-bd)}
@@ -66,6 +78,16 @@
     .btn-wrong-persist{background:rgba(185,28,28,.95)}
     .btn-wrong-dim{background:rgba(185,28,28,.32)}
     .btn-correct-persist{background:rgba(21,128,61,.95)}
+    /* Q16: Diagonal-split background for stack entries that have been retroactively
+       overridden right→wrong (e.g., user got it correct, later flipped via Override on
+       a subsequent live unanswered question). Green-left/red-right tells the time-flow
+       story: originally correct, now counted wrong. Hard 50%/50% color stops produce
+       a sharp diagonal at ~30° from vertical (linear-gradient axis at 120° from up
+       = 30° past horizontal-right, perpendicular dividing line tilts 30° from vertical
+       with its top leaning right). Theme overrides below mirror the existing solid
+       persist-color values (light/parchment use the alpha-reduced variants). */
+    .btn-override-wrong{background:linear-gradient(120deg,rgba(21,128,61,.95) 50%,rgba(185,28,28,.95) 50%)}
+    [data-theme="light"] .btn-override-wrong,[data-theme="parchment"] .btn-override-wrong{background:linear-gradient(120deg,rgba(22,163,74,.82) 50%,rgba(220,38,38,.82) 50%)}
     [data-theme="light"] .btn-wrong-persist,[data-theme="parchment"] .btn-wrong-persist{background:rgba(220,38,38,.82)}
     [data-theme="light"] .btn-wrong-dim,[data-theme="parchment"] .btn-wrong-dim{background:rgba(220,38,38,.28)}
     [data-theme="light"] .btn-correct-persist,[data-theme="parchment"] .btn-correct-persist{background:rgba(22,163,74,.82)}
@@ -395,7 +417,7 @@
 
 
 
-    const DEPLOY_TS=new Date('2026-05-04T19:31:00Z');
+    const DEPLOY_TS=new Date('2026-05-05T01:42:00Z');
 
     function StatPanel({stats}){
       // For fractional values (Score, Streak as "X/Y"), shrink the value font
@@ -565,10 +587,31 @@
       const dateVisible=runPhase==="failed"||runPhase==="done"||(isRunning&&(!oneByOne||shown))||inBackMode;
       const revealLocked=!isRunning||isLocked||codesOpen||(oneByOne&&!shown)||inBackMode;
       const backDisabled=aoxStack.length===0||runPhase==="idle"||runPhase==="running";
+      // Q16: identifying when "retroactive override of most recent stack entry" path
+      // is available in AoX. Conditions: live Q is fully untouched (running, no buttons
+      // clicked, no codes open, no other override path armed), aoxStack is nonempty,
+      // most recent stack entry hasn't been overridden, and that entry's capsule has
+      // a snapshot (right-answer entries only — see note below).
+      // KNOWN LIMITATION: AoX's existing back-browse override architecture only handles
+      // right→wrong (entry's capsule.snapshot is the pre-Q times array, set only for
+      // correct answers). Wrong-answer entries have capsule.snapshot=null and would
+      // require parallel architecture work to support wrong→right retroactive override
+      // here. App supports both directions because its snapshot is structured. Backlog
+      // item tracks this asymmetry.
+      const aoxRetroOverrideEligible=(
+        isRunning && !inBackMode &&
+        Object.keys(aoxPersistBtns).length===0 &&
+        !codesOpen && !canOverrideCorrect &&
+        pendingWrongCredit==null &&
+        aoxStack.length>0 &&
+        !aoxStack[aoxStack.length-1].overrideUsed &&
+        aoxStack[aoxStack.length-1].capsule?.snapshot!=null
+      );
       const overrideAvail=!overrideUsedAox&&(
         (isRunning&&(Object.keys(aoxPersistBtns).length>0||codesOpen||canOverrideCorrect||pendingWrongCredit!=null))||
         (runPhase==="failed")||
-        (runPhase==="done"&&canOverrideCorrect)
+        (runPhase==="done"&&canOverrideCorrect)||
+        aoxRetroOverrideEligible
       );
       const codesDisabled=runPhase==="idle"||(oneByOne&&!shown&&!inBackMode&&!isLocked);
       const optionsDisabled=isLocked||codesOpen||(oneByOne&&!shown&&!inBackMode)||runPhase==="idle"||inBackMode;
@@ -581,10 +624,13 @@
       function reset(){setRunPhase("idle");setDisplayN(n);setShown(false);setInBackMode(false);setAoxStack([]);setAoxForwardStack([]);setTimes([]);setStreak(0);setBestStreak(0);setAttempts(0);setGuesses([]);setMsg("");setFlash(null);resetAoxPB();setCodesOpen(false);setCanOverrideCorrect(false);setQuestionCounted(false);setPendingWrongCredit(null);setOverrideUsedAox(false);setBestNew({});setDate(genDate(minY,maxY));tStartRef.current=null;wrongTimeRef.current=null;prevTimesSnapRef.current=null;prevStreakSnapRef.current=null;prevBestSnapRef.current=null;}
       useEffect(()=>{if(!visible&&runPhase==="running")reset();},[visible]);
       // Auto-reset/regen on popover setting change.
-      // Running: any setting change resets the round (Cat B).
+      // Running: any setting change resets the round (Cat B). Format changes still flow
+      //   through anyChanged to trigger this round-end correctly.
       // Done/failed: never auto-replace the displayed last-question date (Cat C).
       // Idle (Cat A): per-setting rules for the currently displayed date —
-      //   Date Format / Random Format / Leap Chance → always regen
+      //   Date Format / Random Format → Q12: NO regen. Format is stamped at generation
+      //     and trusted by display until the next advance. (See App's mirror for full notes.)
+      //   Leap Chance → always regen
       //   Force Jan/Feb → regen only if current date is leap-year non-Jan/Feb
       //   Year range → regen only if current date is out of new range
       //   Julian → keep date (idle has no wrong guesses; current useJulian flows naturally
@@ -602,8 +648,8 @@
         if(!anyChanged)return;
         if(runPhase==='running'){reset();return;}
         if(runPhase!=='idle')return;
-        const anyAlwaysRegen=dateFormatChanged||randomFormatChanged||leapChanceChanged;
-        if(anyAlwaysRegen){setDate(genDate(minY,maxY));return;}
+        // Q12: only leapChanceChanged remains as an always-regen Cat A trigger.
+        if(leapChanceChanged){setDate(genDate(minY,maxY));return;}
         const isLeapY=(useJulian&&isJulianDate(date.y,date.m,date.d))?isLeapJulian(date.y):isLeap(date.y);
         if(forceJanFebChanged&&forceJanFebOnLeap&&isLeapY&&date.m!==1&&date.m!==2){setDate(genDate(minY,maxY));return;}
         if(yearRangeChanged&&(date.y<minY||date.y>maxY)){setDate(genDate(minY,maxY));return;}
@@ -791,6 +837,40 @@
           return;
         }
         if(inBackMode)return;
+        // === Q16 PATH 5: RETROACTIVE OVERRIDE OF MOST RECENT AOX STACK ENTRY ===
+        // Right→wrong only (see KNOWN LIMITATION note at aoxRetroOverrideEligible
+        // declaration). Mirrors path 1's right→wrong logic (set times back to the
+        // pre-Q snapshot, recalc streak from full history including the now-flipped
+        // entry). Live Q stays untouched. Stack entry gets override-wrong btns state
+        // and overrideUsed:true so back-navigation locks the Override button.
+        if(aoxRetroOverrideEligible){
+          setOverrideUsedAox(true);
+          const targetEntry=aoxStack[aoxStack.length-1];
+          const cap=targetEntry.capsule||{};
+          const prevTimes=cap.snapshot;
+          // Roll back times to pre-Q snapshot (removes this entry's time contribution).
+          setTimes(prevTimes);
+          // Update Best if this entry's contribution is what set it.
+          if(prevBestSnapRef.current&&prevBestSnapRef.current.key===bestKey){
+            bestRef.current[bestKey]=prevBestSnapRef.current.best;
+            setBestNew(p=>{const n={...p};delete n[bestKey];return n;});
+            prevBestSnapRef.current=null;
+          }
+          // Update stack entry: replace correct-answer marking with override-wrong.
+          const wd=(useJulian&&isJulianDate(targetEntry.y,targetEntry.m,targetEntry.d))?wdayJulian(targetEntry.y,targetEntry.m,targetEntry.d):wday(targetEntry.y,targetEntry.m,targetEntry.d);
+          const newLastEntry={...targetEntry,btns:{[wd]:'override-wrong'},overrideUsed:true,hasCredit:false};
+          const newAoxStack=[...aoxStack.slice(0,-1),newLastEntry];
+          setAoxStack(newAoxStack);
+          // Inline streak recalc using the new stack value (mirrors path 1's pattern).
+          const history=[
+            ...newAoxStack.map(e=>!!e.hasCredit),
+            ...aoxForwardStack.slice().reverse().filter(e=>!e.isLive).map(e=>!!e.hasCredit)
+          ];
+          let cs=0;for(let i=history.length-1;i>=0;i--){if(history[i])cs++;else break;}
+          let bs=0,r=0;for(const h of history){if(h){r++;if(r>bs)bs=r;}else r=0;}
+          setStreak(cs);setBestStreak(bs);
+          return;
+        }
         setOverrideUsedAox(true);
         // Override after first-try correct: undo credit, reset streak, end run if !allowMistakes
         if(canOverrideCorrect&&prevTimesSnapRef.current!=null){
@@ -899,7 +979,7 @@
               <div className="text-3xl font-bold">{dateVisible?fmtDate(date.y,date.m,date.d,date._fmt):"—"}</div>
             </div>
             <div className="mt-4 grid grid-cols-2 gap-3" data-answer-grid="true">
-              {DAY.map((nm,i)=>{const last=i===DAY.length-1?"col-span-2":"";const ps=aoxPersistBtns[i];let bCls;if(ps==='correct')bCls='btn-correct-persist border-transparent';else if(ps==='wrong-latest')bCls='btn-wrong-persist border-transparent';else if(ps==='wrong-prev')bCls='btn-wrong-dim border-transparent';else if(flash&&flash.idx===i)bCls=(flash.type==="good"?"flash-good":"flash-bad")+' border-transparent';else bCls='surface-button';const perLocked=!!ps;const isFlashing=!!(flash&&flash.idx===i);const shouldDim=optionsDisabled&&!ps&&!isFlashing;return(<button key={nm} type="button" onClick={()=>{if(perLocked)return;submitDoW(i);}} className={`${baseBtn} ${bCls} ${(perLocked||optionsDisabled)?"pointer-events-none":""} ${shouldDim?"opacity-60":""} ${last}`}>{nm}</button>);})}
+              {DAY.map((nm,i)=>{const last=i===DAY.length-1?"col-span-2":"";const ps=aoxPersistBtns[i];let bCls;if(ps==='correct')bCls='btn-correct-persist border-transparent';else if(ps==='wrong-latest')bCls='btn-wrong-persist border-transparent';else if(ps==='wrong-prev')bCls='btn-wrong-dim border-transparent';else if(ps==='override-wrong')bCls='btn-override-wrong border-transparent';else if(flash&&flash.idx===i)bCls=(flash.type==="good"?"flash-good":"flash-bad")+' border-transparent';else bCls='surface-button';const perLocked=!!ps;const isFlashing=!!(flash&&flash.idx===i);const shouldDim=optionsDisabled&&!ps&&!isFlashing;return(<button key={nm} type="button" onClick={()=>{if(perLocked)return;submitDoW(i);}} className={`${baseBtn} ${bCls} ${(perLocked||optionsDisabled)?"pointer-events-none":""} ${shouldDim?"opacity-60":""} ${last}`}>{nm}</button>);})}
             </div>
           </div>
           <div className="mt-4 rounded-2xl panel p-3 space-y-3">
@@ -913,7 +993,7 @@
               <button type="button" data-key="O" className={`col-span-1 px-3 py-2 rounded-xl border surface-button text-sm font-medium text-center ${!overrideAvail?"opacity-60 pointer-events-none":""}`} onClick={handleOverride}>Override</button>
             </div>
             <button type="button" data-key="C" className={`w-full px-4 py-2 rounded-xl btn-solid text-sm font-medium ${codesDisabled&&!inBackMode?"opacity-60 pointer-events-none":""}`} onClick={openCodes}>{codesOpen?"Hide Codes":"Show Codes"}</button>
-            <Expander open={codesOpen}><div className="mt-3 rounded-2xl thin px-4 pt-[3px] pb-1.5"><MethodExplanation date={aoxFrozenDate} useJulian={inBackMode?(aoxFrozenDate?._jul??useJulian):useJulian} displayedFormat={(randomFormat&&aoxFrozenDate?._fmt)||dateFormat}/></div></Expander>
+            <Expander open={codesOpen}><div className="mt-3 rounded-2xl thin px-4 pt-[3px] pb-1.5"><MethodExplanation date={aoxFrozenDate} useJulian={inBackMode?(aoxFrozenDate?._jul??useJulian):useJulian} displayedFormat={aoxFrozenDate?._fmt||dateFormat}/></div></Expander>
           </div>
         </div>
       );
@@ -1007,12 +1087,14 @@
       const [minInputVal,setMinInputVal]=useState("1");
       const [maxInputVal,setMaxInputVal]=useState("10000");
       const minInputRef=useRef(null),maxInputRef=useRef(null);
-      // genDate isn't accessible here — it's declared later in the component and
-      // depends on state declared later (Babel hoists `const` as `var`, so calling
-      // genDate from this initializer would crash with "genDate is undefined").
-      // The literal `false` for _jul and unconditional rollFormat() call mirror
-      // the corresponding useState defaults (useJulian=false, randomFormat=true).
-      // If those defaults change, this initializer must be updated to match.
+      // Q12: every date carries a stamped _fmt — when randomFormat is on it's a random
+      // roll, when off it's the current dateFormat. The display layer always trusts
+      // _fmt, so a date keeps its original format until advanced past (toggling either
+      // setting mid-question doesn't re-render the live date).
+      // This lazy initializer can't reference randomFormat/dateFormat state because they
+      // are declared later in the component. Hardcoded values mirror those useState
+      // defaults (randomFormat=true → rollFormat(); useJulian=false). If those defaults
+      // change, update both.
       const [dateByMode,setDateByMode]=useState(()=>{
         const mk=()=>{const d=randomDate(1,10000);d._fmt=rollFormat();d._jul=false;return d;};
         return{classic:mk(),blitz:mk(),flash:mk()};
@@ -1141,7 +1223,13 @@
         if(lastAppliedScrollLockRef.current===desired)return;
         const el=document.documentElement;const body=document.body;const root=document.getElementById('root');
         if(desired==='guide'){
-          el.style.overflow='auto';body.style.overflow='auto';
+          // Q15: must be 'visible' (not 'auto') for the sticky title bar to pin correctly
+          // on iOS Safari. Setting overflow:auto on html+body creates two competing scroll
+          // containers and the sticky element binds to the inner one (body) which itself
+          // doesn't actually scroll, causing the bar to scroll out of view with content.
+          // overflow:visible lets the page scroll naturally via the viewport, making the
+          // viewport the sticky pinning context — sticky then works as expected.
+          el.style.overflow='visible';body.style.overflow='visible';
           if(root){root.style.position='';root.style.top='';root.style.left='';root.style.right='';root.style.bottom='';root.style.overflow='';}
         }else{
           el.style.overflow='hidden';body.style.overflow='hidden';
@@ -1433,7 +1521,7 @@
         }
         return{curStreak,bestStreak};
       }
-      // override() — the most complex function in the file. Handles 4 distinct paths:
+      // override() — the most complex function in the file. Handles 5 distinct paths:
       //   1. BROWSING-BACK override (backDepth>0 + canOverrideCorrect): delta-based stat adjustment
       //      using snapshot, then recalcStreak over full history
       //   2. LIVE canOverrideCorrect (pure first-try correct, now reversing): undo credit, either
@@ -1442,6 +1530,10 @@
       //      timer if applicable (Flash drops to idle instead of restarting flash-show)
       //   4. pendingWrongOverride (wrong on previous question, now correcting retroactively):
       //      give retroactive credit for the previous date, update stack entry to green-only
+      //   5. Q16: retroOverrideEligible (live Q untouched + most recent stack entry not yet
+      //      overridden): retroactively flip that stack entry both directions —
+      //      wrong→right (give credit, mark green) or right→wrong (roll back credit, mark
+      //      with diagonal-split override-wrong visual). Live Q stays unanswered.
       function override(){
         // Save Stats OFF for this question (Classic/Flash/Deduction with frozen-OFF):
         // no stats to update and no history to push (frozen-OFF questions never enter
@@ -1590,6 +1682,84 @@
           if(!avgVisOff){pushAndNext();if(mode==="deduction")setDedStack(s=>{if(!s.length)return s;return[...s.slice(0,-1),{...s[s.length-1],overrideUsed:true}];});else setStack(s=>{if(!s.length)return s;return[...s.slice(0,-1),{...s[s.length-1],overrideUsed:true}];});}
           return;
         }
+        // === Q16 PATH 5: RETROACTIVE OVERRIDE OF MOST RECENT STACK ENTRY ===
+        // Fires when the live Q is fully untouched and the user clicks Override to flip
+        // the most recent stack entry's right/wrong status. Both directions supported:
+        //   wrong → right: gives credit (mirrors path 1's u.wasWrong=true branch).
+        //   right → wrong: rolls back credit, removes time entry, updates Best Score
+        //                  if the entry's stat just set it (mirrors path 1's else branch).
+        // The live Q is NOT advanced — it stays as-is so the user can still answer it
+        // afterward. Stack entry's overrideUsed:true flag prevents re-override
+        // (back-browsing to it later sees the locked Override button via existing logic
+        // that propagates entry.overrideUsed → overrideUsedThisQ on goBack).
+        // Live state is not affected: prevStatsSnapshotRef remains null, canOverrideCorrect
+        // stays false, pendingWrongOverride stays null. Only stats and the stack entry change.
+        // Streak recalc is done inline (not via recalcStreak helper) because that helper
+        // reads the STALE mainStack from React state — by the time it runs, our setStack
+        // hasn't been applied yet. Inline version uses the just-updated stack value directly.
+        if(retroOverrideEligible){
+          const setTargetStack=mode==='deduction'?setDedStack:setStack;
+          const targetStack=mode==='deduction'?dedStack:stack;
+          const fwdStack=mode==='deduction'?dedForwardStack:forwardStack;
+          const targetEntry=targetStack[targetStack.length-1];
+          const u=targetEntry.capsule.snapshot;
+          const targetWrongTime=targetEntry.capsule.wrongTime;
+          const newEntryHasCredit=!!u.wasWrong; // post-override: true if was wrong (now correct), false if was correct (now wrong)
+          // Build the new stack value (used both for setTargetStack and the inline streak recalc).
+          let newLastEntry;
+          if(u.wasWrong){
+            // Wrong → right: give credit
+            updateStats(c=>{c.good+=1;if(targetWrongTime!=null&&trackingOn())c.times=[...c.times,targetWrongTime];});
+            if(mode==="blitz")setBlitzRoundStats(p=>({...p,good:p.good+1}));
+            // Stack entry: clear all wrong markings, mark only the correct button green
+            if(mode==="deduction"){
+              const ci=targetEntry.type==="year"?targetEntry.options.findIndex(y=>y===targetEntry.y):targetEntry.type==="month"?targetEntry.options.findIndex(m=>m===targetEntry.m):targetEntry.options.findIndex(d=>d===targetEntry.d);
+              newLastEntry={...targetEntry,btns:{[ci]:'correct'},overrideUsed:true,hasCredit:true};
+            }else{
+              const wd=activeWday(targetEntry.y,targetEntry.m,targetEntry.d);
+              newLastEntry={...targetEntry,btns:{[wd]:'correct'},overrideUsed:true,hasCredit:true};
+            }
+          }else{
+            // Right → wrong: roll back credit, remove time entry, update Best if this entry's good just set it
+            const tIdx=typeof u.timesLen==="number"?u.timesLen:null;
+            updateStats(c=>{c.good=Math.max(0,c.good-1);if(tIdx!=null&&tIdx<c.times.length)c.times=[...c.times.slice(0,tIdx),...c.times.slice(tIdx+1)];});
+            if(mode==="blitz")setBlitzRoundStats(p=>({...p,good:Math.max(0,p.good-1)}));
+            if(timerDone){
+              if(mode==='blitz'&&!perQ){const bk=`${allowMistakes?'m':'n'}${blitzSec}`;setBlitzBest(prev=>{const cur=prev[bk];if(!cur)return prev;const ng=Math.max(0,blitzRoundStats.good-1);return{...prev,[bk]:{...cur,score:cur.score===blitzRoundStats.good?ng:cur.score,streak:cur.streak}};});}
+              if(mode==='blitz'&&perQ)setSuddenBest(prev=>{const cur=prev[qSec];if(!cur)return prev;const ng=Math.max(0,S.good-1);return cur.score===S.good?{...prev,[qSec]:{score:ng}}:prev;});
+            }
+            // Stack entry: change btns to override-wrong state on the correct-answer button
+            // (replaces the existing 'correct' marking). Q16 visual: green-left/red-right
+            // diagonal split tells the time-flow story (originally correct, now flipped).
+            if(mode==="deduction"){
+              const ci=targetEntry.type==="year"?targetEntry.options.findIndex(y=>y===targetEntry.y):targetEntry.type==="month"?targetEntry.options.findIndex(m=>m===targetEntry.m):targetEntry.options.findIndex(d=>d===targetEntry.d);
+              newLastEntry={...targetEntry,btns:{[ci]:'override-wrong'},overrideUsed:true,hasCredit:false};
+            }else{
+              const wd=activeWday(targetEntry.y,targetEntry.m,targetEntry.d);
+              newLastEntry={...targetEntry,btns:{[wd]:'override-wrong'},overrideUsed:true,hasCredit:false};
+            }
+          }
+          const newStack=[...targetStack.slice(0,-1),newLastEntry];
+          setTargetStack(newStack);
+          // Inline streak recalc using the new stack value. The live Q is unanswered
+          // so it doesn't contribute to the streak history.
+          const history=[
+            ...newStack.map(e=>!!e.hasCredit),
+            ...fwdStack.slice().reverse().filter(e=>!e.isLive).map(e=>!!e.hasCredit)
+          ];
+          let curStreak=0;
+          for(let i=history.length-1;i>=0;i--){if(history[i])curStreak++;else break;}
+          let bestStreak=0,run=0;
+          for(const h of history){if(h){run++;if(run>bestStreak)bestStreak=run;}else run=0;}
+          updateStats(c=>{c.streak=curStreak;c.best=bestStreak;});
+          if(mode==="blitz"){setBlitzRoundStats(p=>({...p,streak:curStreak,best:bestStreak}));
+            if(timerDone){const bk=`${allowMistakes?'m':'n'}${blitzSec}`;setBlitzBest(prev=>{const cur=prev[bk]??{score:0,streak:0,scoreRoundId:null,streakRoundId:null};return{...prev,[bk]:{...cur,score:cur.score,streak:Math.max(cur.streak===blitzRoundStats.best?bestStreak:cur.streak,bestStreak)}};});}
+          }
+          // Note: overrideUsedThisQ was set true at top of override(); it stays true
+          // until the live Q advances (next New/correct answer) to prevent double-fire.
+          // The stack entry's own overrideUsed:true flag handles back-navigation lockout.
+          return;
+        }
       }
       function submitDoW(idx){
         if(isTimer(mode)&&!active)return;if(locked)return;
@@ -1641,12 +1811,14 @@
         // along through stack/forwardStack via spread (...ded) and survive Back/Forward
         // navigation. Per-mode-toggle fields (_abx, _julx, _m1582) are added by the sub-mode
         // branches themselves; attachFmt only handles the always-present pair (_fmt, _jul).
-        //   _fmt   — date format snapshot (only when randomFormat is on; see fmtDatePartial)
+        //   _fmt   — date format snapshot. Always stamped (Q12): random roll when randomFormat
+        //            is on, current dateFormat when off. Display layer always trusts _fmt,
+        //            so a puzzle keeps its original format until advanced past.
         //   _jul   — useJulian snapshot at generation time (used by codes panel + history)
         //   _abx   — abCrossOnly snapshot (Year sub-mode; informational, not used for replay)
         //   _julx  — julCrossOnly snapshot (Year sub-mode; informational)
         //   _m1582 — monthOnly1582 snapshot (Month sub-mode; informational)
-        const attachFmt=o=>{if(randomFormat)o._fmt=rollFormat();o._jul=useJulian;return o;};
+        const attachFmt=o=>{o._fmt=randomFormat?rollFormat():dateFormat;o._jul=useJulian;return o;};
         if(dedType==="year"){
           // ----------------------------------------------------------------------
           // YEAR sub-mode (B/C/G implementation):
@@ -2157,7 +2329,22 @@
       const timerBlocksReveal=isTimer(mode)&&(mode==="flash"?(!showTimerDate&&!flashHiding):!shouldShowTimerDate);
       const revealDisabled=(locked&&revealed)||calcOpen||calcPenaltyActive||timerBlocksReveal||timerDone;
       const timerBusy=isTimer(mode)&&active;
-      const overrideAvail=(countedWrong||canOverrideCorrect||pendingWrongOverride!=null)&&!overrideUsedThisQ;
+      // Q16: identifying when the new "retroactive override of most recent stack entry"
+      // path is available. Conditions: live Q is fully untouched (no buttons clicked,
+      // not locked, not revealed), no other override path is already armed, stack is
+      // nonempty, and the most recent stack entry hasn't already been overridden.
+      // The "stack entry's capsule.snapshot non-null" check ensures we have stat data
+      // to roll back/forward from — Save Stats OFF stack entries don't have snapshots
+      // and shouldn't be retroactively overridable (no stats to adjust).
+      const retroOverrideStack=mode==='deduction'?dedStack:stack;
+      const retroOverrideEligible=(
+        !locked && !revealed && !countedWrong && !canOverrideCorrect &&
+        pendingWrongOverride==null && guesses.length===0 &&
+        retroOverrideStack.length>0 &&
+        !retroOverrideStack[retroOverrideStack.length-1].overrideUsed &&
+        retroOverrideStack[retroOverrideStack.length-1].capsule?.snapshot!=null
+      );
+      const overrideAvail=(countedWrong||canOverrideCorrect||pendingWrongOverride!=null||retroOverrideEligible)&&!overrideUsedThisQ;
       const calcTarget=useMemo(()=>{if(mode==="lookup"||mode==="guide"||mode==="aox")return null;if(isTimer(mode)&&!shouldShowTimerDate)return null;if(mode==="deduction")return ded?{y:ded.y,m:ded.m,d:ded.d,_jul:ded._jul}:null;return date;},[mode,shouldShowTimerDate,date?.y,date?.m,date?.d,date?._jul,ded?.y,ded?.m,ded?.d,ded?._jul]);
       const calcTargetKey=calcTarget?`${calcTarget.y}-${calcTarget.m}-${calcTarget.d}`:"none";
       const lookupCalcTargetKey=lookupCalcDate?`${lookupCalcDate.y}-${lookupCalcDate.m}-${lookupCalcDate.d}`:"none";
@@ -2229,19 +2416,22 @@
       const [forceJanFebOnLeap,setForceJanFebOnLeap]=useState(false);
       // FORMAT_IDS and rollFormat are defined at module scope (see top of file)
       // so the dateByMode useState initializer can also use them.
-      // fmtDate: if Random Format is on AND date carries a stored _fmt (from per-date roll), use it; else use selected format.
-      // Toggling Random off makes already-displayed dates immediately fall back to the selected format.
-      const fmtDate=(y,m,d,storedFmt)=>fmt(y,m,d,(randomFormat&&storedFmt)||dateFormat);
-      const fmtDatePartial=(y,m,d,storedFmt,missing)=>fmtPartial(y,m,d,(randomFormat&&storedFmt)||dateFormat,missing);
+      // fmtDate: Q12: every date stamps _fmt (always present), so display always uses
+      // the date's stored format. Falls through to dateFormat only if a malformed
+      // legacy date without _fmt slips through (defensive).
+      const fmtDate=(y,m,d,storedFmt)=>fmt(y,m,d,storedFmt||dateFormat);
+      const fmtDatePartial=(y,m,d,storedFmt,missing)=>fmtPartial(y,m,d,storedFmt||dateFormat,missing);
       // Generate a new game-mode date with the current settings baked in.
-      // Stamps _fmt (if Random Format on) and _jul (calendar system snapshot) at generation.
+      // Stamps _fmt and _jul at generation. Q12: _fmt is always present — random roll
+      // when randomFormat is on, current dateFormat when off. The display layer always
+      // trusts _fmt, so a date keeps its original format until advanced past.
       // _jul is the calendar system in effect when the date was generated; used by stack
       // entries (and deduction) so revisiting a past question shows codes consistent with
       // the system that was active when it was created. Live questions ignore _jul and use
       // current useJulian, so toggling Julian on a live (un-guessed) date updates the answer.
       const genDate=(lo,hi)=>{
         const dt=randomDate(lo,hi,useJulian,leapChance,forceJanFebOnLeap);
-        if(randomFormat)dt._fmt=rollFormat();
+        dt._fmt=randomFormat?rollFormat():dateFormat;
         dt._jul=useJulian;
         return dt;
       };
@@ -2277,12 +2467,16 @@
       const prevPopRef=useRef({randomFormat,dateFormat,useJulian,minY,maxY,leapChance,forceJanFebOnLeap});
       // Unified popover-settings effect. Replaces the old Effect 1/Effect 2/refreshForRange split.
       // Per-setting rules in idle Cat A states (Classic, Deduction, Flash idle, Blitz pre-round):
-      //   Date Format / Random Format / Leap Chance — always regen
+      //   Date Format / Random Format — Q12: NO regen. Format is stamped at generation
+      //     and trusted by display until the next advance, so toggling either mid-question
+      //     doesn't re-render the live date. Format changes still flow through anyChanged
+      //     so Cat B (Blitz active) correctly ends the round on either change.
+      //   Leap Chance — always regen
       //   Force Jan/Feb — regen only if current date is leap-year non-Jan/Feb
       //   Year range — regen only if current date is out of new range
       //   Julian — keep date (answer/codes float to current useJulian) unless current date is
       //            Julian-eligible AND a wrong guess has been made → regen
-      // Cat B (Blitz active timer): always full reset on any popover change.
+      // Cat B (Blitz active timer): always full reset on any popover change (incl. format).
       // Cat C (Blitz timerDone): never auto-regen. Stale stored dates in non-current modes
       //   that are *permanently violating* (leap-100/jan-feb/range) are still cleaned up.
       // Flash mid-dash is Cat A: a regen tears down the dash + lands at idle with the new date.
@@ -2318,7 +2512,9 @@
         }
         const anyChanged=dateFormatChanged||randomFormatChanged||leapChanceChanged||forceJanFebChanged||yearRangeChanged||julianChanged;
         if(!anyChanged)return;
-        const anyAlwaysRegen=dateFormatChanged||randomFormatChanged||leapChanceChanged;
+        // Q12: After dropping format changes from the always-regen set, only leapChanceChanged
+        // remains as an "always regen Cat A" trigger, so the previous anyAlwaysRegen abstraction
+        // is just leapChanceChanged. Used directly below as aReason in regenDecisionFor.
         // regenDecisionFor inspects a candidate live date+wrong-status and returns one of:
         //   'none'             — no regen (either no rule fired, or defer because a wrong
         //                        guess was made and the change isn't the Julian carve-out)
@@ -2332,7 +2528,7 @@
         const regenDecisionFor=(dt,hasWrong)=>{
           if(!dt)return'none';
           const isLeapY=(useJulian&&isJulianDate(dt.y,dt.m,dt.d))?isLeapJulian(dt.y):isLeap(dt.y);
-          const aReason=anyAlwaysRegen;
+          const aReason=leapChanceChanged;
           const bReason=forceJanFebChanged&&forceJanFebOnLeap&&isLeapY&&dt.m!==1&&dt.m!==2;
           const cReason=yearRangeChanged&&(dt.y<minY||dt.y>maxY);
           const dReason=julianChanged&&isJulianDate(dt.y,dt.m,dt.d);
@@ -2555,24 +2751,24 @@
       const [settingsOpen,setSettingsOpen]=useState(false);
       const settingsRef=useRef(null);
       const settingsPopoverRef=useRef(null);
-      // Q10: scroll-state tracking for the settings popover inner scroll wrapper.
-      // popoverAtBottom controls the bottom fade gradient (no fade when at bottom OR
-      // content fits without overflow). popoverScrolledFromTop controls the elevation
-      // shadow on the sticky footer (Reset Settings section) — appears only once the
-      // user has scrolled past the very top, signaling content has scrolled behind
-      // the pinned footer. Both default to "at-rest" values (atBottom=true means no
-      // fade; scrolledFromTop=false means no shadow) so they're correct on initial
-      // open before any scroll event fires.
+      // Q10 + Q13: scroll-state tracking for the settings popover inner scroll wrapper.
+      // popoverAtBottom drives BOTH the bottom fade gradient (no fade when at bottom)
+      // AND the elevation shadow on the sticky footer (no shadow when at bottom). Both
+      // appear when there's still content scrollable below — the fade signals "more
+      // below," the shadow signals "footer is elevated above content sliding behind
+      // it." The two cues reinforce each other rather than compete. Mirrored from the
+      // HtP sticky-header shadow rule: shadow appears when content is sliding behind
+      // the sticky element (top header → scrolled-from-top; bottom footer → !at-bottom).
+      // Defaults to true (no fade, no shadow) so initial open before any scroll event
+      // fires is correct.
       const popoverInnerScrollRef=useRef(null);
       const [popoverAtBottom,setPopoverAtBottom]=useState(true);
-      const [popoverScrolledFromTop,setPopoverScrolledFromTop]=useState(false);
       useEffect(()=>{
-        if(!settingsOpen){setPopoverAtBottom(true);setPopoverScrolledFromTop(false);return;}
+        if(!settingsOpen){setPopoverAtBottom(true);return;}
         const el=popoverInnerScrollRef.current;if(!el)return;
         const evaluate=()=>{
           const noOverflow=el.scrollHeight<=el.clientHeight+1;
           setPopoverAtBottom(noOverflow||el.scrollTop+el.clientHeight>=el.scrollHeight-4);
-          setPopoverScrolledFromTop(!noOverflow&&el.scrollTop>0);
         };
         evaluate();
         el.addEventListener('scroll',evaluate,{passive:true});
@@ -2618,7 +2814,7 @@
       // the button active to clear it back to "1" / "10000".
       const settingsAtDefaults=randomFormat===true&&dateFormat==='written-mdy'&&useJulian===false&&minY===1&&maxY===10000&&minInputVal==="1"&&maxInputVal==="10000"&&leapChance==='random'&&forceJanFebOnLeap===false&&saveStats===true&&useSystem===true&&darkTheme==='dusk'&&lightTheme==='light'&&manualTheme==='dusk';
       const settingsJsx=settingsOpen&&(<div ref={settingsPopoverRef} className="absolute left-0 right-0 top-full mt-2 z-50 rounded-2xl card py-4 space-y-4 shadow-xl flex flex-col max-h-[calc(100dvh-80px)]">
-        <div ref={popoverInnerScrollRef} className={`overflow-y-auto flex-1 min-h-0 space-y-4 px-4${popoverAtBottom?"":" fade-scroll-bottom"}`}>
+        <div ref={popoverInnerScrollRef} className={`overflow-y-auto overscroll-none flex-1 min-h-0 space-y-4 px-4${popoverAtBottom?"":" fade-scroll-bottom"}`}>
         <div className="space-y-2">
           <div className="text-[10px] uppercase tracking-widest text-purple-300/60">Date Format</div>
           <div className="flex items-center justify-between"><span className="text-xs text-purple-200/80">Random Format</span><button type="button" onClick={()=>setRandomFormat(v=>!v)} className={`px-3 py-1 rounded-xl text-xs font-medium border ${randomFormat?"btn-solid border-transparent":"surface-toggle text-purple-100/80"}`}>{randomFormat?"On":"Off"}</button></div>
@@ -2669,7 +2865,7 @@
           {useSystem?(<><div className="flex items-center gap-3"><span className="text-xs text-purple-200/80 w-10 shrink-0">Dark:</span><CustomSelect value={darkTheme} onChange={setDarkTheme} options={DARK_THEMES} ariaLabel="Dark theme" wrapperClassName="flex-1" className="panel rounded-xl px-2 py-1 text-sm w-full focus:outline-none focus-ring text-left"/></div><div className="flex items-center gap-3"><span className="text-xs text-purple-200/80 w-10 shrink-0">Light:</span><CustomSelect value={lightTheme} onChange={setLightTheme} options={LIGHT_THEMES} ariaLabel="Light theme" wrapperClassName="flex-1" className="panel rounded-xl px-2 py-1 text-sm w-full focus:outline-none focus-ring text-left"/></div></>):(<div className="flex items-center gap-3"><span className="text-xs text-purple-200/80 w-10 shrink-0">Theme:</span><CustomSelect value={manualTheme} onChange={setManualTheme} options={ALL_THEMES_LABELED} ariaLabel="Theme" wrapperClassName="flex-1" className="panel rounded-xl px-2 py-1 text-sm w-full focus:outline-none focus-ring text-left"/></div>)}
         </div>
         </div>
-        <div className={`pt-3 px-4 border-t border-purple-500/20${popoverScrolledFromTop?" elev-shadow-up":""}`}>
+        <div className={`popover-sticky-footer pt-3 px-4 border-t border-purple-500/20${!popoverAtBottom?" elev-shadow-up":""}`}>
           <button type="button" onClick={resetSettings} className={`w-full px-3 py-2 rounded-xl bg-rose-600/90 text-white text-sm font-medium ${settingsAtDefaults?"opacity-60 pointer-events-none":""}`}>Reset Settings</button>
         </div>
         <div className="pt-2 px-4 border-t border-purple-500/20 text-[11px] text-purple-300/60 space-y-0.5">
@@ -2678,26 +2874,42 @@
         </div>
       </div>);
       return(
-        <div className="mx-auto px-4 py-5 w-full max-w-[480px]">
-        <div className={`flex items-center justify-between gap-2 relative sticky top-0 z-30 bg-[var(--bg1)]${htpScrolledFromTop?" elev-shadow-down":""}`}>
-            {/* header left: title */}
-            <h1 className="text-xl font-semibold leading-none shrink-0">Calendar Game</h1>
-            <div className="flex items-center gap-2 shrink-0">
-              {/* gear settings button */}
-              <div className="relative" ref={settingsRef}>
-                <button type="button" onClick={()=>setSettingsOpen(v=>!v)} className={`px-2.5 py-2 rounded-xl text-sm border ${settingsOpen?"btn-solid border-transparent":"surface-button text-purple-100/80"}`} aria-label="Settings">⚙</button>
+        <>
+        {/* Q15: sticky title bar uses a TWO-LEVEL wrapper:
+            - Outer (.htp-sticky-bar): position:sticky, full-width (no max-w), holds the
+              theme bg + elevation shadow so they extend edge-to-edge on screens wider
+              than 480px. Without this, the shadow would only span the centered 480px
+              column with awkward vertical edges where it ends.
+            - Inner: max-w-[480px] mx-auto px-4, relative (popover anchor). Keeps the
+              actual title/gear/mode-select row at the same 480px width as today.
+            The htp-sticky-bar class also carries the box-shadow transition (Q14) so the
+            shadow fades smoothly in/out as the elev-shadow-down class is added/removed.
+            Padding split: outer pt-5 above title bar, content wrapper pb-5 below — total
+            vertical spacing matches the original single py-5 wrapper exactly. */}
+        <div className={`htp-sticky-bar sticky top-0 z-30 bg-[var(--bg1)] w-full pt-5${htpScrolledFromTop?" elev-shadow-down":""}`}>
+          <div className="mx-auto px-4 w-full max-w-[480px] relative">
+            <div className="flex items-center justify-between gap-2">
+              {/* header left: title */}
+              <h1 className="text-xl font-semibold leading-none shrink-0">Calendar Game</h1>
+              <div className="flex items-center gap-2 shrink-0">
+                {/* gear settings button */}
+                <div className="relative" ref={settingsRef}>
+                  <button type="button" onClick={()=>setSettingsOpen(v=>!v)} className={`px-2.5 py-2 rounded-xl text-sm border ${settingsOpen?"btn-solid border-transparent":"surface-button text-purple-100/80"}`} aria-label="Settings">⚙</button>
+                </div>
+                {/* mode selector */}
+                {/* Mode CustomSelect. Replaced the original native <select> as part of the
+                    site-wide CustomSelect rollout that fixed iOS Safari's native picker
+                    auto-close bug — see the CustomSelect component for full context.
+                    wrapperRef={modeSelectRef} so the existing settings click-outside handler
+                    keeps treating taps inside the mode dropdown the same way it treated taps
+                    on the original <select>. showChevron renders the same ▲▼ indicator. */}
+                <CustomSelect wrapperRef={modeSelectRef} value={mode} onChange={(v)=>{setMode(v);setSettingsOpen(false);}} options={MODE_LABELS} ariaLabel="Mode" showChevron className="panel rounded-xl px-2.5 py-2 pr-9 text-sm focus:outline-none focus-ring text-left"/>
               </div>
-              {/* mode selector */}
-              {/* Mode CustomSelect. Replaced the original native <select> as part of the
-                  site-wide CustomSelect rollout that fixed iOS Safari's native picker
-                  auto-close bug — see the CustomSelect component for full context.
-                  wrapperRef={modeSelectRef} so the existing settings click-outside handler
-                  keeps treating taps inside the mode dropdown the same way it treated taps
-                  on the original <select>. showChevron renders the same ▲▼ indicator. */}
-              <CustomSelect wrapperRef={modeSelectRef} value={mode} onChange={(v)=>{setMode(v);setSettingsOpen(false);}} options={MODE_LABELS} ariaLabel="Mode" showChevron className="panel rounded-xl px-2.5 py-2 pr-9 text-sm focus:outline-none focus-ring text-left"/>
+              {settingsJsx}
             </div>
-            {settingsJsx}
           </div>
+        </div>
+        <div className="mx-auto px-4 pb-5 w-full max-w-[480px]">
           {showStats&&(<>
             <div className={saveStats?"":"opacity-50"}><StatPanel stats={[
               {label:"Score",value:(mode==="blitz"&&!perQ)?`${blitzRoundStats.good}/${blitzRoundStats.played}`:`${S.good}/${S.played}`,off:effectiveStatsOff,fn:canHideStats?toggleStatsOff:null},
@@ -2736,7 +2948,7 @@
                   <div className="text-3xl font-bold">{shouldShowTimerDate?((mode==="flash"&&active&&flashPhase==="hide")?"…":fmtDate(date.y,date.m,date.d,date._fmt)):"—"}</div>
                 </div>
                 <div className="mt-4 grid grid-cols-2 gap-3" data-answer-grid="true">
-                  {DAY.map((n,i)=>{const last=i===DAY.length-1?"col-span-2":"";const ps=persistBtns[i];let bCls;if(ps==='correct')bCls='btn-correct-persist border-transparent';else if(ps==='wrong-latest')bCls='btn-wrong-persist border-transparent';else if(ps==='wrong-prev')bCls='btn-wrong-dim border-transparent';else if(flash&&flash.idx===i)bCls=(flash.type==="good"?"flash-good":"flash-bad")+' border-transparent';else bCls=idleBtn;const perLocked=!!ps;const isFlashing=!!(flash&&flash.idx===i);const shouldDim=optionsDisabled&&!ps&&!isFlashing;return(<button key={n} type="button" onClick={()=>{if(perLocked)return;submitDoW(i);if(isTouch)document.activeElement?.blur();}} className={`${baseBtn} ${bCls} ${(perLocked||optionsDisabled)?"pointer-events-none":""} ${shouldDim?"opacity-60":""} ${last}`}>{n}</button>);})}
+                  {DAY.map((n,i)=>{const last=i===DAY.length-1?"col-span-2":"";const ps=persistBtns[i];let bCls;if(ps==='correct')bCls='btn-correct-persist border-transparent';else if(ps==='wrong-latest')bCls='btn-wrong-persist border-transparent';else if(ps==='wrong-prev')bCls='btn-wrong-dim border-transparent';else if(ps==='override-wrong')bCls='btn-override-wrong border-transparent';else if(flash&&flash.idx===i)bCls=(flash.type==="good"?"flash-good":"flash-bad")+' border-transparent';else bCls=idleBtn;const perLocked=!!ps;const isFlashing=!!(flash&&flash.idx===i);const shouldDim=optionsDisabled&&!ps&&!isFlashing;return(<button key={n} type="button" onClick={()=>{if(perLocked)return;submitDoW(i);if(isTouch)document.activeElement?.blur();}} className={`${baseBtn} ${bCls} ${(perLocked||optionsDisabled)?"pointer-events-none":""} ${shouldDim?"opacity-60":""} ${last}`}>{n}</button>);})}
                 </div>
               </div>
               <div className="mt-4 rounded-2xl panel p-3 space-y-3">
@@ -2749,7 +2961,7 @@
                   <button type="button" data-key="R" className={`col-span-1 px-3 py-2 rounded-xl border surface-button text-sm font-medium text-center ${revealDisabled?"opacity-60 pointer-events-none":""}`} onClick={reveal}>Reveal</button>
                   <button type="button" data-key="O" className={`col-span-1 px-3 py-2 rounded-xl border surface-button text-sm font-medium text-center ${!overrideAvail?"opacity-60 pointer-events-none":""}`} onClick={override}>Override</button>
                 </div>
-                <MethodBreakdownSection key={mode} date={calcTarget} open={calcOpen} onOpenChange={handleCalcOpenChange} className="" contentClassName="mt-3 rounded-2xl thin px-4 pt-[3px] pb-1.5" useJulian={backDepth>0?(calcTarget?._jul??useJulian):useJulian} displayedFormat={(randomFormat&&calcTarget?._fmt)||dateFormat}/>
+                <MethodBreakdownSection key={mode} date={calcTarget} open={calcOpen} onOpenChange={handleCalcOpenChange} className="" contentClassName="mt-3 rounded-2xl thin px-4 pt-[3px] pb-1.5" useJulian={backDepth>0?(calcTarget?._jul??useJulian):useJulian} displayedFormat={calcTarget?._fmt||dateFormat}/>
               </div>
             </div>
           )}
@@ -2818,9 +3030,9 @@
                         N=5 (default)    → grid-cols-6: top row 3 buttons (each col-span-2 = 1/3 width),
                                            bottom row 2 buttons (each col-span-3 = 1/2 width centered).
                         Other lengths (defensive fallback) → grid-cols-3 with no col-span. */}
-                  {ded&&ded.type==="year"&&(()=>{const N=ded.options.length;const gridCls=N===2?"grid-cols-2":N===5?"grid-cols-6":"grid-cols-3";const colSpanFor=idx=>N===5?(idx<3?"col-span-2":"col-span-3"):"";return(<div className={`grid gap-2 ${gridCls}`} data-answer-grid="true">{ded.options.map((y,idx)=>{const ps=persistBtns[idx];let bCls;if(ps==='correct')bCls='btn-correct-persist border-transparent';else if(ps==='wrong-latest')bCls='btn-wrong-persist border-transparent';else if(ps==='wrong-prev')bCls='btn-wrong-dim border-transparent';else if(dedFlash&&dedFlash.kind==="year"&&dedFlash.index===idx)bCls=(dedFlash.ok?"flash-good":"flash-bad")+' border-transparent';else bCls=idleBtn;const perLocked=!!ps;const isFlashing=!!(dedFlash&&dedFlash.kind==="year"&&dedFlash.index===idx);const shouldDim=(locked||calcOpen||calcPenaltyActive)&&!ps&&!isFlashing;return(<button key={idx} type="button" onClick={()=>submitDedAnswer(y,idx)} className={`${baseBtn} py-2 text-sm ${bCls} ${(perLocked||(locked||calcOpen||calcPenaltyActive))?"pointer-events-none":""} ${shouldDim?"opacity-60":""} ${colSpanFor(idx)}`}>{fmtYear(y)}</button>);})}</div>);})()}
-                  {ded&&ded.type==="month"&&(<div className="grid grid-cols-2 gap-3" data-answer-grid="true">{ded.options.map((mv,idx)=>{const last=idx===ded.options.length-1?"col-span-2":"";const ps=persistBtns[idx];let bCls;if(ps==='correct')bCls='btn-correct-persist border-transparent';else if(ps==='wrong-latest')bCls='btn-wrong-persist border-transparent';else if(ps==='wrong-prev')bCls='btn-wrong-dim border-transparent';else if(dedFlash&&dedFlash.kind==="month"&&dedFlash.index===idx)bCls=(dedFlash.ok?"flash-good":"flash-bad")+' border-transparent';else bCls=idleBtn;const perLocked=!!ps;const isFlashing=!!(dedFlash&&dedFlash.kind==="month"&&dedFlash.index===idx);const shouldDim=(locked||calcOpen||calcPenaltyActive)&&!ps&&!isFlashing;return(<button key={idx} type="button" onClick={()=>submitDedAnswer(mv,idx)} className={`${baseBtn} ${bCls} ${(perLocked||(locked||calcOpen||calcPenaltyActive))?"pointer-events-none":""} ${shouldDim?"opacity-60":""} ${last}`}>{mv}</button>);})}</div>)}
-                  {ded&&ded.type==="day"&&(<div className="grid grid-cols-3 gap-2" data-answer-grid="true">{ded.options.map((dv,idx)=>{const ps=persistBtns[idx];let bCls;if(ps==='correct')bCls='btn-correct-persist border-transparent';else if(ps==='wrong-latest')bCls='btn-wrong-persist border-transparent';else if(ps==='wrong-prev')bCls='btn-wrong-dim border-transparent';else if(dedFlash&&dedFlash.kind==="day"&&dedFlash.index===idx)bCls=(dedFlash.ok?"flash-good":"flash-bad")+' border-transparent';else bCls=idleBtn;const perLocked=!!ps;const isFlashing=!!(dedFlash&&dedFlash.kind==="day"&&dedFlash.index===idx);const shouldDim=(locked||calcOpen||calcPenaltyActive)&&!ps&&!isFlashing;return(<button key={idx} type="button" onClick={()=>submitDedAnswer(dv,idx)} className={`${baseBtn} py-2 text-sm ${bCls} ${(perLocked||(locked||calcOpen||calcPenaltyActive))?"pointer-events-none":""} ${shouldDim?"opacity-60":""} ${centerLastOpt(idx,ded.options.length)}`}>{dv}</button>);})}</div>)}
+                  {ded&&ded.type==="year"&&(()=>{const N=ded.options.length;const gridCls=N===2?"grid-cols-2":N===5?"grid-cols-6":"grid-cols-3";const colSpanFor=idx=>N===5?(idx<3?"col-span-2":"col-span-3"):"";return(<div className={`grid gap-2 ${gridCls}`} data-answer-grid="true">{ded.options.map((y,idx)=>{const ps=persistBtns[idx];let bCls;if(ps==='correct')bCls='btn-correct-persist border-transparent';else if(ps==='wrong-latest')bCls='btn-wrong-persist border-transparent';else if(ps==='wrong-prev')bCls='btn-wrong-dim border-transparent';else if(ps==='override-wrong')bCls='btn-override-wrong border-transparent';else if(dedFlash&&dedFlash.kind==="year"&&dedFlash.index===idx)bCls=(dedFlash.ok?"flash-good":"flash-bad")+' border-transparent';else bCls=idleBtn;const perLocked=!!ps;const isFlashing=!!(dedFlash&&dedFlash.kind==="year"&&dedFlash.index===idx);const shouldDim=(locked||calcOpen||calcPenaltyActive)&&!ps&&!isFlashing;return(<button key={idx} type="button" onClick={()=>submitDedAnswer(y,idx)} className={`${baseBtn} py-2 text-sm ${bCls} ${(perLocked||(locked||calcOpen||calcPenaltyActive))?"pointer-events-none":""} ${shouldDim?"opacity-60":""} ${colSpanFor(idx)}`}>{fmtYear(y)}</button>);})}</div>);})()}
+                  {ded&&ded.type==="month"&&(<div className="grid grid-cols-2 gap-3" data-answer-grid="true">{ded.options.map((mv,idx)=>{const last=idx===ded.options.length-1?"col-span-2":"";const ps=persistBtns[idx];let bCls;if(ps==='correct')bCls='btn-correct-persist border-transparent';else if(ps==='wrong-latest')bCls='btn-wrong-persist border-transparent';else if(ps==='wrong-prev')bCls='btn-wrong-dim border-transparent';else if(ps==='override-wrong')bCls='btn-override-wrong border-transparent';else if(dedFlash&&dedFlash.kind==="month"&&dedFlash.index===idx)bCls=(dedFlash.ok?"flash-good":"flash-bad")+' border-transparent';else bCls=idleBtn;const perLocked=!!ps;const isFlashing=!!(dedFlash&&dedFlash.kind==="month"&&dedFlash.index===idx);const shouldDim=(locked||calcOpen||calcPenaltyActive)&&!ps&&!isFlashing;return(<button key={idx} type="button" onClick={()=>submitDedAnswer(mv,idx)} className={`${baseBtn} ${bCls} ${(perLocked||(locked||calcOpen||calcPenaltyActive))?"pointer-events-none":""} ${shouldDim?"opacity-60":""} ${last}`}>{mv}</button>);})}</div>)}
+                  {ded&&ded.type==="day"&&(<div className="grid grid-cols-3 gap-2" data-answer-grid="true">{ded.options.map((dv,idx)=>{const ps=persistBtns[idx];let bCls;if(ps==='correct')bCls='btn-correct-persist border-transparent';else if(ps==='wrong-latest')bCls='btn-wrong-persist border-transparent';else if(ps==='wrong-prev')bCls='btn-wrong-dim border-transparent';else if(ps==='override-wrong')bCls='btn-override-wrong border-transparent';else if(dedFlash&&dedFlash.kind==="day"&&dedFlash.index===idx)bCls=(dedFlash.ok?"flash-good":"flash-bad")+' border-transparent';else bCls=idleBtn;const perLocked=!!ps;const isFlashing=!!(dedFlash&&dedFlash.kind==="day"&&dedFlash.index===idx);const shouldDim=(locked||calcOpen||calcPenaltyActive)&&!ps&&!isFlashing;return(<button key={idx} type="button" onClick={()=>submitDedAnswer(dv,idx)} className={`${baseBtn} py-2 text-sm ${bCls} ${(perLocked||(locked||calcOpen||calcPenaltyActive))?"pointer-events-none":""} ${shouldDim?"opacity-60":""} ${centerLastOpt(idx,ded.options.length)}`}>{dv}</button>);})}</div>)}
                 </div>
               </div>
               <div className="mt-4 rounded-2xl panel p-3 space-y-3">
@@ -2845,13 +3057,14 @@
                       cellDates=box.months.map(m=>({y:ded.y,m,d:ded.d}));
                     }
                   }
-                  return(<MethodBreakdownSection date={calcTarget} open={calcOpen} onOpenChange={handleCalcOpenChange} className="" contentClassName="mt-3 rounded-2xl thin px-4 pt-[3px] pb-1.5" useJulian={calcTarget?._jul??useJulian} displayedFormat={(randomFormat&&calcTarget?._fmt)||dateFormat} cellDates={cellDates}/>);
+                  return(<MethodBreakdownSection date={calcTarget} open={calcOpen} onOpenChange={handleCalcOpenChange} className="" contentClassName="mt-3 rounded-2xl thin px-4 pt-[3px] pb-1.5" useJulian={calcTarget?._jul??useJulian} displayedFormat={calcTarget?._fmt||dateFormat} cellDates={cellDates}/>);
                 })()}
               </div>
             </div>
           )}
-          {mode==='guide'&&!htpAtBottom&&(<div className="htp-fade-overlay"/>)}
         </div>
+        {mode==='guide'&&!htpAtBottom&&(<div className="htp-fade-overlay"/>)}
+        </>
       );
     }
 
@@ -2875,7 +3088,7 @@
             <p><b>Back (&lt;)</b> — return to the previous date. The answer is shown and the card is locked. No stat penalty. You can go back through your entire history in Classic, Flash, and Deduction; in Blitz and AoX, you can browse the current round or run. Every entry in your history shows the correct answer in green; if you got it wrong, your wrong guess(es) appear as dimmed red alongside the green. While browsing back, a small <b>Q#</b> label appears at the top-right of the date card showing your position in history (e.g. Q3 means you're on the third question viewed).</p>
             <p><b>Forward (&gt;)</b> — move forward through dates you've browsed past with Back. The forward history clears whenever you answer a new question, press New/Begin/Reset, or take any action that advances the date. Overriding while browsing back does not clear the forward history. Each entry remembers its date format and calendar system, so a back-then-forward round trip never alters how a date was originally shown.</p>
             <p><b>Reveal</b> — show the correct answer without guessing. Counts as a wrong attempt. No penalty on unanswered dates while browsing back.</p>
-            <p><b>Override</b> — fix a mistake. You can override any date in your history by browsing to it with Back/Forward. After a wrong answer: gives you credit and adjusts your score. After a correct answer: undoes the credit and adjusts your score. You can only override once per question. Overriding a wrong answer while browsing back clears any wrong highlights; only the correct answer is shown. In Blitz, you can override past dates after the round ends to adjust your score and saved bests. In AoX without Allow Mistakes, overriding a correct answer ends the run.</p>
+            <p><b>Override</b> — fix a mistake. You can override any date in your history by browsing to it with Back/Forward. After a wrong answer: gives you credit and adjusts your score. After a correct answer: undoes the credit and adjusts your score. You can also override the most recent past date directly from a fresh, untouched live question (in any mode) — Override is enabled when the live date hasn't been answered yet, and tapping it flips your previous date's right/wrong status. A previously correct date that's been retroactively flipped to wrong shows up with a green-and-red diagonal split (originally correct, now counted wrong). You can only override each date once. Overriding a wrong answer (regardless of how) clears any wrong highlights; only the correct answer is shown. In Blitz, you can override past dates after the round ends to adjust your score and saved bests. In AoX without Allow Mistakes, overriding a correct answer ends the run.</p>
             <p><b>Show Codes</b> — reveals the calculation codes for the current date. Counts as wrong if you haven't already answered incorrectly. No penalty on unanswered dates while browsing back. In AoX without Allow Mistakes, opening Show Codes ends the run.</p>
           </GuideSection>
           <GuideSection id="stats" title="Stats" openId={open} onToggle={toggle}>
@@ -2886,7 +3099,7 @@
             <p className="text-purple-300/70 text-[12px]">In modes designed for casual practice (Classic, Deduction, Flash), you can tap any stat to hide it. Tapping Score, Accuracy, or Streak hides all three; tapping any timing stat hides all three. Stats always track in the background regardless of visibility. Enabling timing stats resets all stats so the score and timing always reflect the same set of questions. When timing stats are off, leaving and returning to a mode preserves the current question exactly as you left it — same date, same answers, codes panel in the same state. In all other modes, stats are always visible.</p>
           </GuideSection>
           <Divider label="Settings"/>
-          <GuideSection id="dateformat" title="Date Format" openId={open} onToggle={toggle}><p>Set via the ⚙ settings menu. Choose one of five real-world formats: <b>Written MDY</b> (April 27, 1828), <b>Written DMY</b> (27 April 1828), <b>Numeric MDY</b> (4/27/1828), <b>Numeric DMY</b> (27.4.1828), or <b>Numeric YMD</b> (1828-4-27). Numeric formats use a fixed separator convention: MDY uses '/', DMY uses '.', YMD uses '-'. Years always show in full, never abbreviated.</p><p>Only DMY, MDY, and YMD orderings are offered because those are the only orderings actually used in real life — orderings like YDM aren't standard anywhere.</p><p><b>Random Format</b>, when on, rolls one of the five formats per date in game modes only — your selected format is preserved underneath (the panels just lock visually). Lookup and the Last Updated timestamp ignore Random and always use the selected format. The Last Updated timestamp uses the numeric version of whichever format you've selected. In Classic, Deduction, and Flash, changing the format or toggling Random Format regenerates the displayed date — unless you've already made a wrong guess, in which case the change is deferred so the wrong-state is preserved; the new format applies to the next date. In active Blitz rounds and AoX runs, either change ends the round.</p><p>In game modes' Show Codes, codes appear in the order the date is read (left to right), with Leap shown once you've seen both the year and month.</p></GuideSection>
+          <GuideSection id="dateformat" title="Date Format" openId={open} onToggle={toggle}><p>Set via the ⚙ settings menu. Choose one of five real-world formats: <b>Written MDY</b> (April 27, 1828), <b>Written DMY</b> (27 April 1828), <b>Numeric MDY</b> (4/27/1828), <b>Numeric DMY</b> (27.4.1828), or <b>Numeric YMD</b> (1828-4-27). Numeric formats use a fixed separator convention: MDY uses '/', DMY uses '.', YMD uses '-'. Years always show in full, never abbreviated.</p><p>Only DMY, MDY, and YMD orderings are offered because those are the only orderings actually used in real life — orderings like YDM aren't standard anywhere.</p><p><b>Random Format</b>, when on, rolls one of the five formats per date in game modes only — your selected format is preserved underneath (the panels just lock visually). Lookup and the Last Updated timestamp ignore Random and always use the selected format. The Last Updated timestamp uses the numeric version of whichever format you've selected. In Classic, Deduction, Flash, and AoX, changing the selected format or toggling Random Format leaves the displayed date in its original format until you advance — the new format only applies to the next date. In active Blitz rounds and AoX runs, either change ends the round.</p><p>In game modes' Show Codes, codes appear in the order the date is read (left to right), with Leap shown once you've seen both the year and month.</p></GuideSection>
           <GuideSection id="julian" title="Julian Calendar" openId={open} onToggle={toggle}><p>Toggle via the ⚙ settings menu under Calendar System. Off by default. When on, dates on or before October 4, 1582 are treated as Julian calendar dates, which have different leap year rules — every year divisible by 4 is a leap year, with no century exception. This affects weekday calculation and the codes shown in Show Codes. October 5–14, 1582 are always excluded since those dates never existed; the Gregorian calendar skipped them to correct accumulated calendar drift.</p><p>Toggling Julian doesn't necessarily regenerate the current date. For dates after October 4, 1582, Julian has no effect. For Julian-eligible dates (October 4, 1582 or earlier), the date stays if you haven't made a wrong guess yet — the answer and codes simply update. If you've already wrong-guessed, the date regenerates and is added to your history with both your red guess and a green for the day that was correct under the calendar system in effect when the date was first generated. Each date snapshots its calendar system at generation, so revisiting an earlier question via Back shows the highlights and codes that were correct under the system in effect when that date was generated. In active Blitz rounds and AoX runs, any Julian toggle ends the round.</p></GuideSection>
           <GuideSection id="range" title="Year Range" openId={open} onToggle={toggle}><p>Set via the ⚙ settings menu. Controls which years dates are drawn from. Defaults to 1–10000 AD. Changing the range regenerates the current date only if it falls outside the new range — and even then, if you've already made a wrong guess on the current date, the change is deferred so the wrong-state is preserved; the new range applies to the next date. While browsing back, settings-driven regen always preserves your history: the date you were viewing and any forward entries are pushed back to history before the live slot is regenerated. In active Blitz rounds and AoX runs, any range change ends the round.</p><p><b>Year sub-mode auto-disable:</b> Deduction's Year sub-mode requires either a year range of at least 5 years (so a 5-year window can be built) or, with Julian on, a range that contains October 15, 1582 (so a 2-year Jul Cross window can be built). When neither condition holds, the Year sub-type button greys out, and if you were already in Year mode when the range changed, you're auto-switched to Day mode. Day and Month sub-modes work for any valid range.</p></GuideSection>
           <GuideSection id="leap" title="Leap Year Settings" openId={open} onToggle={toggle}><p>Two settings in the ⚙ menu control how often leap years appear and what months they're paired with. <b>Leap Year Chance</b> sets how often a generated date lands on a leap year — Random uses the natural rate (~24%); 50%, 75%, and 100% force higher rates. <b>Force Jan/Feb on Leap Years</b>, when on, restricts the month to January or February whenever a leap year is generated. These settings apply to all game modes' date generation; Lookup is unaffected. If your year range happens to contain no leap years and the chance is set to 50/75/100%, the chance is silently ignored per date — the setting itself is preserved. Changing <b>Leap Year Chance</b> always regenerates the displayed date. Toggling <b>Force Jan/Feb on Leap Years</b> regenerates only if the current date is a leap year with a month other than January or February. If you've already made a wrong guess on the current date, either change is deferred so the wrong-state is preserved; the new setting applies to the next date. In active Blitz rounds and AoX runs, any leap setting change ends the round.</p></GuideSection>
@@ -3157,7 +3370,7 @@
           </div>
           <div className="rounded-2xl panel p-4 space-y-4">
             <div className="flex items-center justify-between text-[11px] uppercase tracking-wide text-purple-200/70"><span>History</span>{entries.length>0&&(<button type="button" onClick={clearHist} className="text-purple-200/70 font-medium">Clear History</button>)}</div>
-            {renderedEntries.length>0?(<ul ref={lookupHistoryRef} className={`space-y-2 overflow-y-auto max-h-[440px]${lookupHistoryAtBottom?"":" fade-scroll-bottom"}`}>{renderedEntries.map(e=>(<li key={e.id}><button type="button" onClick={()=>selEntry(e)} className={`w-full text-left px-3 py-2 rounded-xl panel flex items-center justify-between gap-3 text-xs transition ${sid===e.id?"border-l-2 border-l-purple-400 bg-purple-500/35":"hist-unsel hover:bg-purple-500/15"}`}><span className="block text-[13px] font-medium text-purple-100/90">{e.label}</span><span className="text-[12px] font-semibold text-purple-200/80">{getEntryWeekday(e)}</span></button></li>))}</ul>):(<p className="text-sm text-purple-200/70">No lookups yet</p>)}
+            {renderedEntries.length>0?(<ul ref={lookupHistoryRef} className={`space-y-2 overflow-y-auto overscroll-none max-h-[440px]${lookupHistoryAtBottom?"":" fade-scroll-bottom"}`}>{renderedEntries.map(e=>(<li key={e.id}><button type="button" onClick={()=>selEntry(e)} className={`w-full text-left px-3 py-2 rounded-xl panel flex items-center justify-between gap-3 text-xs transition ${sid===e.id?"border-l-2 border-l-purple-400 bg-purple-500/35":"hist-unsel hover:bg-purple-500/15"}`}><span className="block text-[13px] font-medium text-purple-100/90">{e.label}</span><span className="text-[12px] font-semibold text-purple-200/80">{getEntryWeekday(e)}</span></button></li>))}</ul>):(<p className="text-sm text-purple-200/70">No lookups yet</p>)}
             <MethodBreakdownSection date={cdv} className="pt-4 border-t border-purple-500/40" contentClassName="mt-3 rounded-2xl panel px-4 pt-[3px] pb-1.5" open={cov} onOpenChange={sco} useJulian={useJulian} displayedFormat={dateFormat}/>
           </div>
         </div>
