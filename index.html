@@ -25,7 +25,7 @@
     html,body{overflow:hidden;overscroll-behavior:none}
     html{touch-action:manipulation}
     body{background:var(--bg1);color:var(--body-color)}
-    /* Q10 utility classes — fade gradient + theme-aware elevation shadows.
+    /* Utility classes — fade gradient + theme-aware elevation shadows.
        fade-scroll-bottom is applied conditionally to bounded scroll regions
        (settings popover inner, Lookup history) via state, signaling more content below.
        elev-shadow-down/up cast theme-aware shadows from sticky elements over scrolled
@@ -34,7 +34,7 @@
     .fade-scroll-bottom{-webkit-mask-image:linear-gradient(to bottom,black calc(100% - 24px),transparent);mask-image:linear-gradient(to bottom,black calc(100% - 24px),transparent)}
     .elev-shadow-down{box-shadow:0 4px 6px -2px var(--shadow-elev)}
     .elev-shadow-up{box-shadow:0 -4px 6px -2px var(--shadow-elev)}
-    /* Q14: smooth shadow fade in/out. Selectors target the elements that conditionally
+    /* Smooth shadow fade in/out. Selectors target the elements that conditionally
        receive .elev-shadow-down/.elev-shadow-up so the transition is on a STABLE rule
        (always present), letting the box-shadow animate both when the class is added AND
        when it's removed. Putting transition inside .elev-shadow-down would only animate
@@ -78,7 +78,7 @@
     .btn-wrong-persist{background:rgba(185,28,28,.95)}
     .btn-wrong-dim{background:rgba(185,28,28,.32)}
     .btn-correct-persist{background:rgba(21,128,61,.95)}
-    /* Q16: Diagonal-split background for stack entries that have been retroactively
+    /* Diagonal-split background for stack entries that have been retroactively
        overridden right→wrong (e.g., user got it correct, later flipped via Override on
        a subsequent live unanswered question). Green-upper-left/red-lower-right tells the
        time-flow story: originally correct (past, upper-left), now counted wrong (present,
@@ -121,6 +121,7 @@
     [data-theme="parchment"] .text-white\/90,[data-theme="light"] .text-white\/90{color:var(--mut-color)!important}
     [data-theme="parchment"] .bg-purple-500\/20,[data-theme="light"] .bg-purple-500\/20{background-color:rgba(120,53,175,.2)!important}
     [data-theme="parchment"] .border-purple-500\/40,[data-theme="light"] .border-purple-500\/40{border-color:rgba(120,53,175,.3)!important}
+    [data-theme="parchment"] .border-purple-500\/20,[data-theme="light"] .border-purple-500\/20{border-color:rgba(120,53,175,.15)!important}
     input[type="range"]{-webkit-appearance:none;appearance:none;height:5px;border-radius:3px;border:none;outline:none;background:linear-gradient(to right,#a855f7 0%,#7c3aed var(--rng-fill,50%),var(--panel-bd) var(--rng-fill,50%));}
     input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;height:14px;border-radius:7px;background:#fff;cursor:pointer;border:none;box-shadow:0 0.5px 4px rgba(0,0,0,.3);margin-top:-4.5px;}
     input[type="range"]::-moz-range-thumb{width:22px;height:14px;border-radius:7px;background:#fff;cursor:pointer;border:none;box-shadow:0 0.5px 4px rgba(0,0,0,.3);}
@@ -136,6 +137,61 @@
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script type="text/babel" data-presets="env,react">
     const {useEffect,useMemo,useRef,useState,useCallback,useLayoutEffect} = React;
+    // ─────────────────────────────────────────────────────────────────────────
+    // Date snapshot fields. Every generated date object carries these stamps
+    // so that back-browse and codes display always reflect the system that was
+    // active when the date was generated, not the current setting:
+    //   y, m, d   — year, month, day (1-indexed month)
+    //   _fmt      — date format ID at generation (e.g. 'written-mdy', 'numeric-dmy').
+    //               Random Format on → random roll per date; off → current dateFormat.
+    //               Display layer always trusts _fmt over the live dateFormat setting.
+    //   _jul      — useJulian boolean at generation. Used by codes panel + history
+    //               so revisiting a Julian-era date via Back keeps Julian highlights/
+    //               codes even if the user has since toggled Julian off.
+    // Deduction puzzles additionally carry: _abx (abCrossOnly), _julx (julCrossOnly),
+    // _m1582 (monthOnly1582) — informational snapshots of per-mode toggles at spawn.
+    // ─────────────────────────────────────────────────────────────────────────
+    // Reset-style button shared className. Used by Reset Stats (Classic/Deduction/Flash),
+    // Round Reset (Blitz active), AoX Reset, Settings Reset.
+    const RESET_BTN_CLASS="px-3 py-2 rounded-xl bg-rose-600/90 text-white text-sm font-medium";
+    // Compact Reset Stats button variant (smaller py + col-span fit for stats panel).
+    const RESET_STATS_BTN_CLASS="w-full px-3 py-1.5 rounded-xl btn-solid border border-transparent text-sm font-medium";
+    // ★ "new best" star className — appears next to a stat value when a new best was set.
+    const NEW_BEST_STAR_CLASS="text-purple-400 font-bold ml-0.5 text-[8px]";
+    // Settings popover section label className (small uppercase tracking-widest).
+    const SECTION_LABEL_CLASS="text-[10px] uppercase tracking-widest text-purple-300/60";
+    // <kbd> styling used by the keyboard shortcut rows in HtP.
+    const KBD_CLASS="inline-block panel rounded px-1.5 py-0.5 text-[11px] font-mono min-w-[1.5rem] text-center shrink-0";
+    // Tiny presentational components for repeated patterns. Pure visual, no state.
+    const NewBestStar=()=>(<sup className={NEW_BEST_STAR_CLASS}>★</sup>);
+    const SectionLabel=({children,className=""})=>(<div className={`${SECTION_LABEL_CLASS}${className?" "+className:""}`}>{children}</div>);
+    const Kbd=({children})=>(<kbd className={KBD_CLASS}>{children}</kbd>);
+    // buttonStateClass — picks the className for an answer-grid button based on its
+    // persistent state (correct/wrong-latest/wrong-prev/override-wrong) and any active
+    // flash animation. Returns just the state-class portion; the caller composes the
+    // full className (base + state + lock/dim).
+    //   ps        — persistBtns[idx] value or undefined
+    //   isFlashing — whether a flash is active for this button index
+    //   flashGood — when flashing, whether it's a good or bad flash
+    //   idleClass — fallback for idle state (varies between AoX 'surface-button' and App's idleBtn)
+    const buttonStateClass=(ps,isFlashing,flashGood,idleClass)=>{
+      if(ps==='correct')return'btn-correct-persist border-transparent';
+      if(ps==='wrong-latest')return'btn-wrong-persist border-transparent';
+      if(ps==='wrong-prev')return'btn-wrong-dim border-transparent';
+      if(ps==='override-wrong')return'btn-override-wrong border-transparent';
+      if(isFlashing)return(flashGood?"flash-good":"flash-bad")+' border-transparent';
+      return idleClass;
+    };
+    // AnswerButton — answer-grid button wrapper. Composes base + state + lock/dim
+    // classes consistently across all 5 grid render sites (App day, AoX day, Deduction
+    // year/month/day). Caller passes baseBtn (per-grid layout-related base classes) and
+    // optional extraClass for site-specific extras (col-span, py, text-sm, etc.).
+    const AnswerButton=({label,onClick,ps,isFlashing,flashGood,locked,dimmed,baseBtn,idleClass,extraClass=""})=>{
+      const stateCls=buttonStateClass(ps,isFlashing,flashGood,idleClass);
+      const lockCls=locked?"pointer-events-none":"";
+      const dimCls=dimmed?"opacity-60":"";
+      return(<button type="button" onClick={onClick} className={`${baseBtn} ${stateCls} ${lockCls} ${dimCls}${extraClass?" "+extraClass:""}`}>{label}</button>);
+    };
     const MONTH=["January","February","March","April","May","June","July","August","September","October","November","December"];
     const DAY=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
     // MODE_LABELS drives the header mode CustomSelect (the customSelect dropdown
@@ -210,7 +266,13 @@
     ];
     const toAstro=y=>y>0?y:1-Math.abs(y);
     const isLeap=y=>{y=toAstro(y);return y%400===0||(y%4===0&&y%100!==0);};
-    const dim=(y,m)=>m===2?(isLeap(y)?29:28):[4,6,9,11].includes(m)?30:31;
+    // dim — days-in-month. Optional julian param switches leap-year rule:
+    // off (default) uses Gregorian leap rule (isLeap); on uses Julian (every y%4===0).
+    // All non-Julian callers can omit the param and behavior is unchanged.
+    const dim=(y,m,julian=false)=>{
+      const leap=julian?isLeapJulian(y):isLeap(y);
+      return m===2?(leap?29:28):[4,6,9,11].includes(m)?30:31;
+    };
     function jdnGregorian(y,m,d){const a=Math.floor((14-m)/12),y2=y+4800-a,m2=m-3+12*a;return d+Math.floor((153*m2+2)/5)+365*y2+Math.floor(y2/4)-Math.floor(y2/100)+Math.floor(y2/400)-32045;}
     const wday=(y,m,d)=>((jdnGregorian(toAstro(y),m,d)+1)%7+7)%7;
     const fmtYear=y=>y>0?String(y):`${Math.abs(y)} BC`;
@@ -317,6 +379,11 @@
     const isTimer=m=>m==="blitz"||m==="flash";
     const fmtBlitzT=s=>{const sec=Math.ceil(s);if(sec<60)return sec+"s";const m=Math.floor(sec/60),r=sec%60;return m+"m "+r+"s";};
     const fmtFlashT=ms=>(ms/1000).toFixed(1)+"s";
+    // Time display follows WCA convention (regulation 9f1): individual single times
+    // (Last) are truncated to hundredths — the third decimal is dropped, never rounded.
+    // Averages, medians, and bests are rounded to nearest hundredth (toFixed(2)).
+    // truncTime drops the third decimal; fmtTime rounds via toFixed(2).
+    const truncTime=t=>(t==null||t>=60)?"—":`${(Math.floor(t*100)/100).toFixed(2)}s`;
     const fmtTime=t=>(t==null||t>=60)?"—":`${t.toFixed(2)}s`;
     const calcAvg=t=>t.length?t.reduce((a,b)=>a+b,0)/t.length:null;
     const calcLast=t=>t.length?t[t.length-1]:null;
@@ -425,7 +492,7 @@
 
 
 
-    const DEPLOY_TS=new Date('2026-05-05T06:14:00Z');
+    const DEPLOY_TS=new Date('2026-05-06T07:00:00Z');
 
     function StatPanel({stats}){
       // For fractional values (Score, Streak as "X/Y"), shrink the value font
@@ -559,8 +626,6 @@
       const [streak,setStreak]=useState(0);
       const [bestStreak,setBestStreak]=useState(0);
       const [attempts,setAttempts]=useState(0);
-      const [guesses,setGuesses]=useState([]);
-      const [msg,setMsg]=useState("");
       const [flash,setFlash]=useState(null);
       const [aoxPersistBtns,setAoxPersistBtns]=useState({});
       const markAoxWrong=idx=>setAoxPersistBtns(prev=>markBtns(prev,idx,'wrong-latest'));
@@ -586,7 +651,13 @@
       const [questionCounted,setQuestionCounted]=useState(false);
       const correct=useMemo(()=>(useJulian&&isJulianDate(date.y,date.m,date.d))?wdayJulian(date.y,date.m,date.d):wday(date.y,date.m,date.d),[date,useJulian]);
       const n=Math.max(2,Math.min(1000,parseInt(aoxN)||10));
-      const bestKey=`${n}|${allowMistakes}`;
+      // Best keying: bests are siloed per difficulty configuration so a Best Average
+      // achieved at one config doesn't compare against runs at a different config.
+      // Dimensions: n (Ao size), allowMistakes, format (random→'random' bucket, otherwise
+      // the specific format ID), leapChance, forceJanFebOnLeap, year range, useJulian.
+      // Changing any of these creates a fresh bucket; the previous bests remain stored
+      // and reappear when the user switches back to that exact config.
+      const bestKey=`${n}|${allowMistakes}|${randomFormat?'random':dateFormat}|${leapChance}|${forceJanFebOnLeap}|${minY}-${maxY}|${useJulian}`;
       const bestData=bestRef.current[bestKey]||{avg:null,avgMed:null,avgRoundId:null,med:null,medAvg:null,medRoundId:null};
       const aoLabel=`Ao${n}`;
       const doneCount=times.length;
@@ -595,17 +666,18 @@
       const dateVisible=runPhase==="failed"||runPhase==="done"||(isRunning&&(!oneByOne||shown))||inBackMode;
       const revealLocked=!isRunning||isLocked||codesOpen||(oneByOne&&!shown)||inBackMode;
       const backDisabled=aoxStack.length===0||runPhase==="idle"||runPhase==="running";
-      // Q16: identifying when "retroactive override of most recent stack entry" path
+      // Identifying when "retroactive override of most recent stack entry" path
       // is available in AoX. Conditions: live Q is fully untouched (running, no buttons
       // clicked, no codes open, no other override path armed), aoxStack is nonempty,
       // most recent stack entry hasn't been overridden, and that entry's capsule has
       // a snapshot (right-answer entries only — see note below).
-      // KNOWN LIMITATION: AoX's existing back-browse override architecture only handles
-      // right→wrong (entry's capsule.snapshot is the pre-Q times array, set only for
-      // correct answers). Wrong-answer entries have capsule.snapshot=null and would
-      // require parallel architecture work to support wrong→right retroactive override
-      // here. App supports both directions because its snapshot is structured. Backlog
-      // item tracks this asymmetry.
+      // BY DESIGN: AoX's back-browse override only handles right→wrong (entry's
+      // capsule.snapshot is the pre-Q times array, set only for correct answers).
+      // Wrong-answer entries have capsule.snapshot=null. The wrong→right retroactive
+      // override path is unreachable here because back-browse is locked while runs
+      // are active in both AoX and Blitz — so any code path that would hit a
+      // wrong-stack-entry retro-override never fires. App supports both directions
+      // because its snapshot is structured.
       const aoxRetroOverrideEligible=(
         isRunning && !inBackMode &&
         Object.keys(aoxPersistBtns).length===0 &&
@@ -629,7 +701,7 @@
       // targeted 200ms bg-only transition (see <style> block at top of file).
       const baseBtn="w-full rounded-2xl border px-4 py-3 text-base shadow-sm select-none";
 
-      function reset(){setRunPhase("idle");setDisplayN(n);setShown(false);setInBackMode(false);setAoxStack([]);setAoxForwardStack([]);setTimes([]);setStreak(0);setBestStreak(0);setAttempts(0);setGuesses([]);setMsg("");setFlash(null);resetAoxPB();setCodesOpen(false);setCanOverrideCorrect(false);setQuestionCounted(false);setPendingWrongCredit(null);setOverrideUsedAox(false);setBestNew({});setDate(genDate(minY,maxY));tStartRef.current=null;wrongTimeRef.current=null;prevTimesSnapRef.current=null;prevStreakSnapRef.current=null;prevBestSnapRef.current=null;}
+      function reset(){setRunPhase("idle");setDisplayN(n);setShown(false);setInBackMode(false);setAoxStack([]);setAoxForwardStack([]);setTimes([]);setStreak(0);setBestStreak(0);setAttempts(0);setFlash(null);resetAoxPB();setCodesOpen(false);setCanOverrideCorrect(false);setQuestionCounted(false);setPendingWrongCredit(null);setOverrideUsedAox(false);setBestNew({});setDate(genDate(minY,maxY));tStartRef.current=null;wrongTimeRef.current=null;prevTimesSnapRef.current=null;prevStreakSnapRef.current=null;prevBestSnapRef.current=null;}
       useEffect(()=>{if(!visible&&runPhase==="running")reset();},[visible]);
       // Auto-reset/regen on popover setting change.
       // Running: any setting change resets the round (Cat B). Format changes still flow
@@ -715,14 +787,14 @@
           setAoxStack(s=>[...s,...insertions]);
           setInBackMode(false);setAoxForwardStack([]);
           const nd=genDate(minY,maxY);setDate(nd);
-          setMsg("");setGuesses([]);resetAoxPB();setCodesOpen(false);
+          resetAoxPB();setCodesOpen(false);
           wrongTimeRef.current=null;
           setCanOverrideCorrect(false);setQuestionCounted(false);setPendingWrongCredit(null);
           setOverrideUsedAox(false);
           if(oneByOne){setShown(false);tStartRef.current=null;}
           else{setShown(true);tStartRef.current=performance.now();}
         }
-        else if(isRunning&&!shown){setShown(true);setGuesses([]);setMsg("");tStartRef.current=performance.now();wrongTimeRef.current=null;setCanOverrideCorrect(false);setQuestionCounted(false);setPendingWrongCredit(null);}
+        else if(isRunning&&!shown){setShown(true);tStartRef.current=performance.now();wrongTimeRef.current=null;setCanOverrideCorrect(false);setQuestionCounted(false);setPendingWrongCredit(null);}
       }
       function goBackAox(){if(backDisabled)return;const prevEntry=aoxStack[aoxStack.length-1];
         if(codesOpen)setCodesOpen(false);
@@ -737,7 +809,7 @@
         setCanOverrideCorrect(cap.snapshot!=null&&!(prevEntry.overrideUsed||false));
         setOverrideUsedAox(prevEntry.overrideUsed||false);
         const prevWday=(useJulian&&isJulianDate(prevEntry.y,prevEntry.m,prevEntry.d))?wdayJulian(prevEntry.y,prevEntry.m,prevEntry.d):wday(prevEntry.y,prevEntry.m,prevEntry.d);
-        setAoxPersistBtns(prevEntry.btns??{[prevWday]:'correct'});setGuesses([]);setCodesOpen(false);setPendingWrongCredit(null);setQuestionCounted(false);
+        setAoxPersistBtns(prevEntry.btns??{[prevWday]:'correct'});setCodesOpen(false);setPendingWrongCredit(null);setQuestionCounted(false);
         setAoxBrowseHasCredit(prevEntry.hasCredit??computeHasCredit(prevEntry.btns));
       }
       function goForwardAox(){
@@ -753,13 +825,13 @@
           setCanOverrideCorrect(!!fwd.capsule?.canOverrideCorrect);
           setQuestionCounted(!!fwd.capsule?.questionCounted);
           setPendingWrongCredit(fwd.capsule?.pendingWrongCredit||null);
-          setCodesOpen(false);setGuesses([]);
+          setCodesOpen(false);
           const fc=fwd.capsule||{};
           prevTimesSnapRef.current=fc.snapshot||null;prevStreakSnapRef.current=fc.streakSnap||null;wrongTimeRef.current=fc.wrongTime??null;
           setInBackMode(false);setAoxBrowseHasCredit(fwd.hasCredit??false);
         }else{
           setDate({y:fwd.y,m:fwd.m,d:fwd.d,_fmt:fwd._fmt,_jul:fwd._jul});setAoxPersistBtns(fwd.btns||{});
-          setGuesses([]);setCodesOpen(false);setPendingWrongCredit(null);setQuestionCounted(false);
+          setCodesOpen(false);setPendingWrongCredit(null);setQuestionCounted(false);
           const cap=fwd.capsule||{};
           prevTimesSnapRef.current=cap.snapshot||null;prevStreakSnapRef.current=cap.streakSnap||null;wrongTimeRef.current=cap.wrongTime??null;
           setCanOverrideCorrect(cap.snapshot!=null&&!(fwd.overrideUsed||false));
@@ -772,7 +844,7 @@
         const completing=newTimes.length>=displayN;
         wrongTimeRef.current=null;
         // do NOT clear prevTimesSnapRef/prevStreakSnapRef here — they must survive to next date for override-after-correct
-        setGuesses([]);setMsg("");setCodesOpen(false);
+        setCodesOpen(false);
         setQuestionCounted(false);
         setStreak(newStreak);setBestStreak(newBest);
         if(!completing){
@@ -834,7 +906,7 @@
         prevTimesSnapRef.current=null;setPendingWrongCredit(null);
         markAoxWrong(idx);
         if(!allowMistakes){markAoxCorrect(correct);setRunPhase("failed");}
-        else setGuesses(g=>g.includes(DAY[idx])?g:[...g,DAY[idx]]);
+        else 
       }
       function submitDoW(idx){if(!isRunning||isLocked||codesOpen||inBackMode)return;if(oneByOne&&!shown)return;if(idx===correct)handleCorrect(idx);else handleWrong(idx);}
       function revealAnswer(){if(revealLocked)return;wrongTimeRef.current=(performance.now()-(tStartRef.current??performance.now()))/1000;markAoxCorrect(correct);setStreak(0);setCanOverrideCorrect(false);prevTimesSnapRef.current=null;prevStreakSnapRef.current=null;setPendingWrongCredit(null);if(!questionCounted)setAttempts(a=>a+1);setQuestionCounted(true);if(!allowMistakes)setRunPhase("failed");}
@@ -862,7 +934,7 @@
           return;
         }
         if(inBackMode)return;
-        // === Q16 PATH 5: RETROACTIVE OVERRIDE OF MOST RECENT AOX STACK ENTRY ===
+        // === PATH 5: RETROACTIVE OVERRIDE OF MOST RECENT AOX STACK ENTRY ===
         // Right→wrong only (see KNOWN LIMITATION note at aoxRetroOverrideEligible
         // declaration). Mirrors path 1's right→wrong logic (set times back to the
         // pre-Q snapshot, recalc streak from full history including the now-flipped
@@ -907,10 +979,10 @@
           if(prevBestSnapRef.current&&prevBestSnapRef.current.key===bestKey){bestRef.current[bestKey]=prevBestSnapRef.current.best;setBestNew(p=>{const n={...p};delete n[bestKey];return n;});prevBestSnapRef.current=null;}
           prevTimesSnapRef.current=null;prevStreakSnapRef.current=null;setCanOverrideCorrect(false);setQuestionCounted(true);setPendingWrongCredit(null);
           setAoxStack(s=>s.slice(0,-1));
-          setGuesses([]);setCodesOpen(false);wrongTimeRef.current=null;
+          setCodesOpen(false);wrongTimeRef.current=null;
           if(!allowMistakes){setRunPhase("failed");}
-          else if(wasLastQ){resetAoxPB();setRunPhase("running");setMsg("");setGuesses([]);setCodesOpen(false);setQuestionCounted(false);setOverrideUsedAox(false);setDate(genDate(minY,maxY));if(oneByOne){setShown(false);tStartRef.current=null;}else tStartRef.current=performance.now();}
-          else{resetAoxPB();setRunPhase("running");setMsg("");tStartRef.current=performance.now();}
+          else if(wasLastQ){resetAoxPB();setRunPhase("running");setCodesOpen(false);setQuestionCounted(false);setOverrideUsedAox(false);setDate(genDate(minY,maxY));if(oneByOne){setShown(false);tStartRef.current=null;}else tStartRef.current=performance.now();}
+          else{resetAoxPB();setRunPhase("running");tStartRef.current=performance.now();}
           return;
         }
         // Override after wrong→correct (pendingWrongCredit): give retroactive credit, restore streak
@@ -954,7 +1026,7 @@
           wrongTimeRef.current=null;prevTimesSnapRef.current=null;prevStreakSnapRef.current=null;
           const newTimes=[...times,dt];setTimes(newTimes);
           const ns=preStreak+1,nb=Math.max(bestStreak,ns);
-          setCodesOpen(false);setGuesses([]);setMsg("");setCanOverrideCorrect(false);setPendingWrongCredit(null);
+          setCodesOpen(false);setCanOverrideCorrect(false);setPendingWrongCredit(null);
           setAoxStack(s=>[...s,{...date,btns:{[correct]:'correct'},overrideUsed:true,capsule:{snapshot:null,streakSnap:null,wrongTime:null},hasCredit:true}]);
           if(runPhase==="failed")setRunPhase("running");
           const completing=newTimes.length>=displayN;
@@ -976,18 +1048,18 @@
             {label:"Score",value:scoreDisplay,off:false,fn:null},
             {label:"Accuracy",value:accuracyDisplay,off:false,fn:null},
             {label:"Streak",value:`${streak}/${bestStreak}`,off:false,fn:null},
-            {label:"Last",value:fmtTime(calcLast(times)),off:false,fn:null},
+            {label:"Last",value:truncTime(calcLast(times)),off:false,fn:null},
             {label:"Average",value:fmtTime(calcAvg(times)),off:false,fn:null},
             {label:"Median",value:fmtTime(calcMed(times)),off:false,fn:null},
           ]}/></div>
           <div className="mt-3 text-xs text-purple-300/60">
             <div className="flex flex-wrap items-start gap-4">
               <div className="min-w-[125px]">
-                <div>Best Average: {fmtTime(bestData.avg)}{bestNew[bestKey]?.avg&&<sup className="text-purple-400 font-bold ml-0.5 text-[8px]">★</sup>}</div>
+                <div>Best Average: {fmtTime(bestData.avg)}{bestNew[bestKey]?.avg&&<NewBestStar/>}</div>
                 <div className="text-[11px] opacity-70">Median: {fmtTime(bestData.avgMed)}</div>
               </div>
               <div className="min-w-[125px]">
-                <div>Best Median: {fmtTime(bestData.med)}{bestNew[bestKey]?.med&&<sup className="text-purple-400 font-bold ml-0.5 text-[8px]">★</sup>}</div>
+                <div>Best Median: {fmtTime(bestData.med)}{bestNew[bestKey]?.med&&<NewBestStar/>}</div>
                 <div className="text-[11px] opacity-70">Average: {fmtTime(bestData.medAvg)}</div>
               </div>
               {bestData.avgRoundId!=null&&bestData.medRoundId!=null&&<span className="shrink-0 ml-auto">{bestData.avgRoundId===bestData.medRoundId?"Same Round":"Different Rounds"}</span>}
@@ -1041,7 +1113,7 @@
       // mode changes for codes-freeze logic.
       const prevNonGuideModeRef=useRef('classic');
       useEffect(()=>{if(mode!=='guide')prevNonGuideModeRef.current=mode;},[mode]);
-      // Q10: scroll-state tracking for guide-mode body scroll. htpAtBottom controls
+      // Scroll-state tracking for guide-mode body scroll. htpAtBottom controls
       // the fixed-position bottom fade overlay (no overlay when at bottom OR when
       // content fits without scrolling). htpScrolledFromTop controls the elevation
       // shadow on the sticky title-row header (appears once user scrolls past top).
@@ -1098,8 +1170,8 @@
           timesAtTimingOffRef.current=null;
           if(calcsWhileOff){
             resetStatsCurrent();
-            setStack([]);setForwardStack([]);setDedStack([]);setDedForwardStack([]);setBackDepth(0);
-            resetPB();setGuesses([]);setMsg("");
+            setStack([]);setForwardStack([]);setDedStack(blankDedStacks());setDedForwardStack(blankDedStacks());setBackDepth(0);
+            resetPB();
             setLocked(false);setRevealed(false);setCountedWrong(false);setCanOverrideCorrect(false);
             setPendingWrongOverride(null);setOverrideUsedThisQ(false);
             setCalcPenalty(false);setCalcOpen(false);
@@ -1112,28 +1184,38 @@
       const [minInputVal,setMinInputVal]=useState("1");
       const [maxInputVal,setMaxInputVal]=useState("10000");
       const minInputRef=useRef(null),maxInputRef=useRef(null);
-      // Q12: every date carries a stamped _fmt — when randomFormat is on it's a random
+      // Every date carries a stamped _fmt — when randomFormat is on it's a random
       // roll, when off it's the current dateFormat. The display layer always trusts
       // _fmt (so the visible format on a live date is whatever was stamped at generation,
       // not the current setting).
-      // Q1 (5/4/2026): on a Cat A unanswered untouched live date, format setting changes
-      // CAN regen — Random off→on always regens; Random on→off and dropdown changes regen
-      // only when the displayed _fmt would no longer match the now-active format. A wrong
+      // On a Cat A unanswered untouched live date, format setting changes CAN regen —
+      // Random off→on always regens; Random on→off and dropdown changes regen only
+      // when the displayed _fmt would no longer match the now-active format. A wrong
       // guess on the live date defers any format regen until the next generated date.
       // See regenDecisionFor in the App popover effect for the full set of rules.
       // This lazy initializer can't reference randomFormat/dateFormat state because they
       // are declared later in the component. Hardcoded values mirror those useState
       // defaults (randomFormat=true → rollFormat(); useJulian=false). If those defaults
       // change, update both.
+      // dateByMode intentionally only holds entries for classic/blitz/flash. Deduction
+      // tracks its puzzle in a separate `ded` state (Year/Month/Day sub-modes have
+      // distinct layouts); AoX is its own component with its own date state; Lookup
+      // has no current-date concept. setDateByMode callers fall back defensively via
+      // `prev[mode]??prev.classic`. Don't add entries for those modes here — they
+      // would create dead state that's never read.
       const [dateByMode,setDateByMode]=useState(()=>{
         const mk=()=>{const d=randomDate(1,10000);d._fmt=rollFormat();d._jul=false;return d;};
         return{classic:mk(),blitz:mk(),flash:mk()};
       });
       const date=dateByMode[mode]??dateByMode.classic;
       const setDate=valOrFn=>setDateByMode(prev=>({...prev,[mode]:typeof valOrFn==='function'?valOrFn(prev[mode]??prev.classic):valOrFn}));
-      const [stack,setStack]=useState([]),[dedStack,setDedStack]=useState([]);
+      // dedStack and dedForwardStack are keyed by sub-type ('day'|'month'|'year') so each
+      // sub-type has its own independent history. Back/Forward only walks the current
+      // sub-type's entries, and Reset Stats clears only the current sub-type's stack.
+      const blankDedStacks=()=>({day:[],month:[],year:[]});
+      const [stack,setStack]=useState([]),[dedStack,setDedStack]=useState(blankDedStacks);
       const [forwardStack,setForwardStack]=useState([]);
-      const [dedForwardStack,setDedForwardStack]=useState([]);
+      const [dedForwardStack,setDedForwardStack]=useState(blankDedStacks);
       const [useJulian,setUseJulian]=useState(false);
       const [saveStats,setSaveStats]=useState(true);
       // Per-question freeze: captures the saveStats value at the moment of the
@@ -1154,8 +1236,6 @@
       const activeWday=(y,m,d)=>(useJulian&&isJulianDate(y,m,d))?wdayJulian(y,m,d):wday(y,m,d);
       const dimFn=(y,m)=>{const leap=(useJulian&&isJulianDate(y,m,1))?isLeapJulian(y):isLeap(y);return m===2?(leap?29:28):([4,6,9,11].includes(m)?30:31);};
       const correct=useMemo(()=>activeWday(date.y,date.m,date.d),[date,useJulian]);const correctRef=useRef(correct);correctRef.current=correct;
-      const [guesses,setGuesses]=useState([]);
-      const [msg,setMsg]=useState("");
       const [locked,setLocked]=useState(false);
       const [revealed,setRevealed]=useState(false);
       const [countedWrong,setCountedWrong]=useState(false);
@@ -1169,8 +1249,7 @@
       const prevStatsSnapshotRef=useRef(null);
       const [savedDedByType,setSavedDedByType]=useState(()=>blankDedTypeStore());
       const blankStats=()=>({played:0,good:0,streak:0,best:0,times:[]});
-      const blankStatsByEra=()=>({AD:blankStats()});
-      const [statsByMode,setStatsByMode]=useState({classic:blankStatsByEra(),blitz:blankStatsByEra(),flash:blankStatsByEra(),"deduction-day":blankStatsByEra(),"deduction-month":blankStatsByEra(),"deduction-year":blankStatsByEra()});
+      const [statsByMode,setStatsByMode]=useState({classic:blankStats(),blitz:blankStats(),flash:blankStats(),"deduction-day":blankStats(),"deduction-month":blankStats(),"deduction-year":blankStats()});
       const [blitzRoundStats,setBlitzRoundStats]=useState(()=>blankStats());
       const [dedType,setDedType]=useState("day");
       // Per-mode Deduction toggles — NOT in settings popover, mode-specific to Deduction
@@ -1178,7 +1257,7 @@
       const [julCrossOnly,setJulCrossOnly]=useState(false); // Year sub-mode: force window to cross Oct 15, 1582 boundary (Julian only, N=2)
       const [monthOnly1582,setMonthOnly1582]=useState(false);// Month sub-mode: force yc=1582 (Julian only)
       const statKey=mode==="deduction"?`deduction-${dedType}`:mode;
-      const S=(statsByMode[statKey]?.AD)||blankStats();
+      const S=statsByMode[statKey]||blankStats();
       const tStartRef=useRef(null);
       const wrongTimeRef=useRef(null);
       const [flash,setFlash]=useState(null);
@@ -1253,7 +1332,7 @@
         if(lastAppliedScrollLockRef.current===desired)return;
         const el=document.documentElement;const body=document.body;const root=document.getElementById('root');
         if(desired==='guide'){
-          // Q15: must be 'visible' (not 'auto') for the sticky title bar to pin correctly
+          // Must be 'visible' (not 'auto') for the sticky title bar to pin correctly
           // on iOS Safari. Setting overflow:auto on html+body creates two competing scroll
           // containers and the sticky element binds to the inner one (body) which itself
           // doesn't actually scroll, causing the bar to scroll out of view with content.
@@ -1337,8 +1416,8 @@
           return;
         }
       };window.addEventListener('keydown',onKey);return()=>window.removeEventListener('keydown',onKey);},[]);
-      const updateStats=mutator=>{if(isPerQGated()){freezeSaveStatsForQ();if(!saveStatsThisQRef.current)return;}const sk=mode==="deduction"?`deduction-${dedType}`:mode;setStatsByMode(prev=>{const ms={...(prev[sk]||blankStatsByEra())};const es={...(ms.AD||blankStats())};mutator(es);return{...prev,[sk]:{...ms,AD:es}};});};
-      const resetStatsCurrent=()=>{const sk=mode==="deduction"?`deduction-${dedType}`:mode;setStatsByMode(prev=>{const ms={...(prev[sk]||blankStatsByEra())};return{...prev,[sk]:{...ms,AD:blankStats()}};});};
+      const updateStats=mutator=>{if(isPerQGated()){freezeSaveStatsForQ();if(!saveStatsThisQRef.current)return;}const sk=mode==="deduction"?`deduction-${dedType}`:mode;setStatsByMode(prev=>{const es={...(prev[sk]||blankStats())};mutator(es);return{...prev,[sk]:es};});};
+      const resetStatsCurrent=()=>{const sk=mode==="deduction"?`deduction-${dedType}`:mode;setStatsByMode(prev=>({...prev,[sk]:blankStats()}));};
       const setCalcPenalty=v=>setCalcPenaltyActive(v);
       function applyMinValue(val){if(val!==minY)setMinY(val);}
       function applyMaxValue(val){if(val!==maxY)setMaxY(val);}
@@ -1364,16 +1443,16 @@
       const trackingOn=()=>["classic","blitz","flash","deduction"].includes(mode);
       // arm() is the canonical mode-arrival reset for Classic/Flash/Deduction/Blitz state.
       // Resets every transient question-state value: locked, revealed, countedWrong,
-      // calcPenaltyActive, guesses, msg, flash, etc. If a new piece of question state is
+      // calcPenaltyActive, flash, etc. If a new piece of question state is
       // added that should not survive a mode change, reset it here.
-      const arm=()=>{resetPB();setActive(false);setShowTimerDate(false);setMsg("");setGuesses([]);setFlash(null);setLocked(false);setRevealed(false);setCountedWrong(false);setCanOverrideCorrect(false);setPendingWrongOverride(null);setOverrideUsedThisQ(false);setCalcPenalty(false);setBackDepth(0);setTimerDone(false);setStack([]);setForwardStack([]);setDedStack([]);setDedForwardStack([]);if(mode==="blitz")resetStatsCurrent();if(mode==="blitz"){setBlitzBestNew({});setSuddenBestNew({});}setBlitzRemain(blitzSec);blitzRemainRef.current=blitzSec;blitzStartRef.current=null;blitzPausedAtRef.current=null;blitzPausedAccRef.current=0;setBlitzRunning(false);if(mode==="blitz")setBlitzRoundStats(blankStats());qDeadlineRef.current=null;qPausedAtRef.current=null;qPausedAccRef.current=0;setQRemain(qSec);clearTimeout(flashTimerRef.current);flashTimerRef.current=null;setFlashPhase("dash");flashDeadlineRef.current=null;setFlashRemainMs(flashMs);resetFlashBar();tStartRef.current=null;wrongTimeRef.current=null;prevStatsSnapshotRef.current=null;if(blitzBarRef.current)blitzBarRef.current.style.width="100%";if(blitzTimeRef.current)blitzTimeRef.current.textContent=fmtBlitzT(blitzSec);if(suddenBarRef.current)suddenBarRef.current.style.width="100%";if(suddenTimeRef.current)suddenTimeRef.current.textContent=qSec+"s";};
+      const arm=()=>{resetPB();setActive(false);setShowTimerDate(false);setFlash(null);setLocked(false);setRevealed(false);setCountedWrong(false);setCanOverrideCorrect(false);setPendingWrongOverride(null);setOverrideUsedThisQ(false);setCalcPenalty(false);setBackDepth(0);setTimerDone(false);setStack([]);setForwardStack([]);setDedStack(blankDedStacks());setDedForwardStack(blankDedStacks());if(mode==="blitz")resetStatsCurrent();if(mode==="blitz"){setBlitzBestNew({});setSuddenBestNew({});}setBlitzRemain(blitzSec);blitzRemainRef.current=blitzSec;blitzStartRef.current=null;blitzPausedAtRef.current=null;blitzPausedAccRef.current=0;setBlitzRunning(false);if(mode==="blitz")setBlitzRoundStats(blankStats());qDeadlineRef.current=null;qPausedAtRef.current=null;qPausedAccRef.current=0;setQRemain(qSec);clearTimeout(flashTimerRef.current);flashTimerRef.current=null;setFlashPhase("dash");flashDeadlineRef.current=null;setFlashRemainMs(flashMs);resetFlashBar();tStartRef.current=null;wrongTimeRef.current=null;prevStatsSnapshotRef.current=null;if(blitzBarRef.current)blitzBarRef.current.style.width="100%";if(blitzTimeRef.current)blitzTimeRef.current.textContent=fmtBlitzT(blitzSec);if(suddenBarRef.current)suddenBarRef.current.style.width="100%";if(suddenTimeRef.current)suddenTimeRef.current.textContent=qSec+"s";};
       const begin=()=>{
-        setActive(true);setShowTimerDate(false);setMsg("");setLocked(false);setRevealed(false);setCountedWrong(false);setCanOverrideCorrect(false);if(mode==="blitz")resetStatsCurrent();if(mode==="blitz"&&!perQ){blitzStartRef.current=performance.now();blitzPausedAccRef.current=0;blitzPausedAtRef.current=null;setBlitzRunning(true);setBlitzRemain(blitzSec);blitzRemainRef.current=blitzSec;setBlitzRoundStats(blankStats());}if(mode==="blitz"&&perQ){const now=performance.now();qDeadlineRef.current=now+qSec*1000;qPausedAccRef.current=0;qPausedAtRef.current=null;setQRemain(qSec);}if(mode==="flash"){setFlashPhase("show");clearTimeout(flashTimerRef.current);const now=performance.now();flashDeadlineRef.current=now+flashMs;setFlashRemainMs(flashMs);flashTimerRef.current=setTimeout(endFlashPhase,Math.max(50,flashMs));startFlashBar(flashMs);}tStartRef.current=performance.now();pushAndNext();
+        setActive(true);setShowTimerDate(false);setLocked(false);setRevealed(false);setCountedWrong(false);setCanOverrideCorrect(false);if(mode==="blitz")resetStatsCurrent();if(mode==="blitz"&&!perQ){blitzStartRef.current=performance.now();blitzPausedAccRef.current=0;blitzPausedAtRef.current=null;setBlitzRunning(true);setBlitzRemain(blitzSec);blitzRemainRef.current=blitzSec;setBlitzRoundStats(blankStats());}if(mode==="blitz"&&perQ){const now=performance.now();qDeadlineRef.current=now+qSec*1000;qPausedAccRef.current=0;qPausedAtRef.current=null;setQRemain(qSec);}if(mode==="flash"){setFlashPhase("show");clearTimeout(flashTimerRef.current);const now=performance.now();flashDeadlineRef.current=now+flashMs;setFlashRemainMs(flashMs);flashTimerRef.current=setTimeout(endFlashPhase,Math.max(50,flashMs));startFlashBar(flashMs);}tStartRef.current=performance.now();pushAndNext();
       };
       // setCalcOpen(false) is included in the batch so the date change (via spawnDed) lands
       // in the same React update as the panel close — required by the freeze contract in
       // MethodBreakdownSection. Mirrors pushAndNext's pattern for Classic/Flash/Blitz.
-      function runDeductionRound(btnsForStack){const finalBtns=btnsForStack??{...persistBtns};const wasAnswered=Object.keys(finalBtns).length>0;const wasSaved=effectiveSaveStats();if(wasAnswered&&wasSaved){const capsule={snapshot:prevStatsSnapshotRef.current?{...prevStatsSnapshotRef.current}:null,wrongTime:wrongTimeRef.current};setDedStack(s=>ded?[...s,entryWithGreen({...ded,btns:finalBtns,overrideUsed:false,capsule,hasCredit:computeHasCredit(finalBtns)},useJulian)]:s);}setDedForwardStack([]);spawnDed();setMsg("");setRevealed(false);setLocked(false);setGuesses([]);setCountedWrong(false);setCanOverrideCorrect(false);setOverrideUsedThisQ(false);setBackDepth(0);setCalcPenalty(false);setCalcOpen(false);wrongTimeRef.current=null;prevStatsSnapshotRef.current=null;saveStatsThisQRef.current=null;resetPB();}
+      function runDeductionRound(btnsForStack){const finalBtns=btnsForStack??{...persistBtns};const wasAnswered=Object.keys(finalBtns).length>0;const wasSaved=effectiveSaveStats();if(wasAnswered&&wasSaved){const capsule={snapshot:prevStatsSnapshotRef.current?{...prevStatsSnapshotRef.current}:null,wrongTime:wrongTimeRef.current};setDedStack(s=>ded?({...s,[dedType]:[...(s[dedType]||[]),entryWithGreen({...ded,btns:finalBtns,overrideUsed:false,capsule,hasCredit:computeHasCredit(finalBtns)},useJulian)]}):s);}setDedForwardStack(s=>({...s,[dedType]:[]}));spawnDed();setRevealed(false);setLocked(false);setCountedWrong(false);setCanOverrideCorrect(false);setOverrideUsedThisQ(false);setBackDepth(0);setCalcPenalty(false);setCalcOpen(false);wrongTimeRef.current=null;prevStatsSnapshotRef.current=null;saveStatsThisQRef.current=null;resetPB();}
       function pushAndNext(btnsForStack){
         if(["classic","flash","blitz"].includes(mode)){
           const finalBtns=btnsForStack??{...persistBtns};
@@ -1383,7 +1462,7 @@
           const wasSaved=mode==="blitz"||effectiveSaveStats();
           if(wasAnswered&&wasSaved){const capsule={snapshot:prevStatsSnapshotRef.current?{...prevStatsSnapshotRef.current}:null,wrongTime:wrongTimeRef.current};setStack(s=>[...s,entryWithGreen({...date,btns:finalBtns,overrideUsed:false,capsule,hasCredit:computeHasCredit(finalBtns)},useJulian)]);}
           setForwardStack([]);setDate(genDate(minY,maxY));
-          setGuesses([]);setRevealed(false);setLocked(false);setMsg("");setCalcPenalty(false);
+          setRevealed(false);setLocked(false);setCalcPenalty(false);
           setCalcOpen(false);resetPB();
           setOverrideUsedThisQ(false);setBackDepth(0);
           if(countedWrong){setPendingWrongOverride({wrongTime:wrongTimeRef.current,snapshot:preCalcPenaltySnapshotRef.current});}
@@ -1391,12 +1470,13 @@
           setCountedWrong(false);
           wrongTimeRef.current=null;
           // Per-Q state must not leak past advance. The snapshot was already
-          // captured into the stack entry's capsule above (line 920); the live
-          // refs and canOverrideCorrect must be reset so the next question
-          // doesn't see stale Override-eligible state. Without this, a Q1
-          // wrong-then-right-then-Q2-Override sequence enters Override Block 1
-          // ("undo a correct answer") using Q1's stale snapshot, rewriting Q2
-          // stats based on Q1 — visible as "score stays 1/1 after next correct."
+          // captured into the stack entry's capsule above (in the wasAnswered
+          // branch); the live refs and canOverrideCorrect must be reset so the
+          // next question doesn't see stale Override-eligible state. Without
+          // this, a Q1 wrong-then-right-then-Q2-Override sequence enters
+          // Override Block 1 ("undo a correct answer") using Q1's stale
+          // snapshot, rewriting Q2 stats based on Q1 — visible as "score stays
+          // 1/1 after next correct."
           prevStatsSnapshotRef.current=null;
           preCalcPenaltySnapshotRef.current=null;
           setCanOverrideCorrect(false);
@@ -1428,19 +1508,20 @@
       }
       function goBack(){
         if(mode==="deduction"){
-          const prev=dedStack[dedStack.length-1];if(!prev)return;
+          const curStack=dedStack[dedType]||[];
+          const prev=curStack[curStack.length-1];if(!prev)return;
           if(calcOpen)setCalcOpen(false);
           // Save current view to forward stack
           const fwdCapsule={snapshot:prevStatsSnapshotRef.current?{...prevStatsSnapshotRef.current}:null,wrongTime:wrongTimeRef.current};
           const fwdHC=backDepth===0?computeHasCredit(persistBtns):browseHasCredit;
           const fwdEntry=backDepth===0
-            ?{isLive:true,...(ded||{}),btns:{...persistBtns},overrideUsed:overrideUsedThisQ,capsule:fwdCapsule,liveState:{locked,revealed,countedWrong,canOverrideCorrect,guesses:[...guesses],msg,calcPenaltyActive,saveStatsFrozen:saveStatsThisQRef.current},hasCredit:fwdHC}
+            ?{isLive:true,...(ded||{}),btns:{...persistBtns},overrideUsed:overrideUsedThisQ,capsule:fwdCapsule,liveState:{locked,revealed,countedWrong,canOverrideCorrect,calcPenaltyActive,saveStatsFrozen:saveStatsThisQRef.current},hasCredit:fwdHC}
             :{...(ded||{}),btns:{...persistBtns},overrideUsed:overrideUsedThisQ,capsule:fwdCapsule,hasCredit:fwdHC};
-          setDedForwardStack(s=>[...s,fwdEntry]);
-          setDedStack(s=>s.slice(0,-1));setDed(prev);
+          setDedForwardStack(s=>({...s,[dedType]:[...(s[dedType]||[]),fwdEntry]}));
+          setDedStack(s=>({...s,[dedType]:(s[dedType]||[]).slice(0,-1)}));setDed(prev);
           const wasAnswered=prev.btns&&Object.keys(prev.btns).length>0;
           const wasRevealed=!!(prev.btns&&Object.values(prev.btns).includes('correct'));
-          setPersistBtns(wasAnswered?prev.btns:{});setLocked(true);setRevealed(wasRevealed);setGuesses([]);setMsg("");
+          setPersistBtns(wasAnswered?prev.btns:{});setLocked(true);setRevealed(wasRevealed);
           setCountedWrong(false);setPendingWrongOverride(null);setCalcPenalty(false);
           const cap=prev.capsule||{};
           prevStatsSnapshotRef.current=cap.snapshot||null;wrongTimeRef.current=cap.wrongTime??null;
@@ -1457,13 +1538,13 @@
         const fwdCapsule={snapshot:prevStatsSnapshotRef.current?{...prevStatsSnapshotRef.current}:null,wrongTime:wrongTimeRef.current};
         const fwdHC=backDepth===0?computeHasCredit(persistBtns):browseHasCredit;
         const fwdEntry=backDepth===0
-          ?{isLive:true,...date,btns:{...persistBtns},overrideUsed:overrideUsedThisQ,capsule:fwdCapsule,liveState:{locked,revealed,countedWrong,canOverrideCorrect,guesses:[...guesses],msg,pendingWrongOverride,calcPenaltyActive,preCalcPenaltySnapshot:preCalcPenaltySnapshotRef.current?{...preCalcPenaltySnapshotRef.current}:null,saveStatsFrozen:saveStatsThisQRef.current},hasCredit:fwdHC}
+          ?{isLive:true,...date,btns:{...persistBtns},overrideUsed:overrideUsedThisQ,capsule:fwdCapsule,liveState:{locked,revealed,countedWrong,canOverrideCorrect,pendingWrongOverride,calcPenaltyActive,preCalcPenaltySnapshot:preCalcPenaltySnapshotRef.current?{...preCalcPenaltySnapshotRef.current}:null,saveStatsFrozen:saveStatsThisQRef.current},hasCredit:fwdHC}
           :{...date,btns:{...persistBtns},overrideUsed:overrideUsedThisQ,capsule:fwdCapsule,hasCredit:fwdHC};
         setForwardStack(s=>[...s,fwdEntry]);
         setStack(s=>s.slice(0,-1));setDate(prev);
         const wasAnswered=prev.btns&&Object.keys(prev.btns).length>0;
         const wasRevealed=!!(prev.btns&&Object.values(prev.btns).includes('correct'));
-        setPersistBtns(wasAnswered?prev.btns:{});setGuesses([]);setLocked(true);setRevealed(wasRevealed);setMsg("");
+        setPersistBtns(wasAnswered?prev.btns:{});setLocked(true);setRevealed(wasRevealed);
         setCountedWrong(false);setPendingWrongOverride(null);setCalcPenalty(false);
         const cap=prev.capsule||{};
         prevStatsSnapshotRef.current=cap.snapshot||null;wrongTimeRef.current=cap.wrongTime??null;preCalcPenaltySnapshotRef.current=null;
@@ -1473,17 +1554,18 @@
       }
       function goForward(){
         if(mode==="deduction"){
-          const fwd=dedForwardStack[dedForwardStack.length-1];if(!fwd)return;
+          const curFwd=dedForwardStack[dedType]||[];
+          const fwd=curFwd[curFwd.length-1];if(!fwd)return;
           if(calcOpen)setCalcOpen(false);
-          setDedForwardStack(s=>s.slice(0,-1));
+          setDedForwardStack(s=>({...s,[dedType]:(s[dedType]||[]).slice(0,-1)}));
           // Push current browsed entry back to dedStack
           const capsule={snapshot:prevStatsSnapshotRef.current?{...prevStatsSnapshotRef.current}:null,wrongTime:wrongTimeRef.current};
-          setDedStack(s=>[...s,entryWithGreen({...(ded||{}),btns:{...persistBtns},overrideUsed:overrideUsedThisQ,capsule,hasCredit:browseHasCredit},useJulian)]);
+          setDedStack(s=>({...s,[dedType]:[...(s[dedType]||[]),entryWithGreen({...(ded||{}),btns:{...persistBtns},overrideUsed:overrideUsedThisQ,capsule,hasCredit:browseHasCredit},useJulian)]}));
           if(fwd.isLive){
             setDed(fwd);const ls=fwd.liveState||{};
             setPersistBtns(fwd.btns||{});setLocked(!!ls.locked);setRevealed(!!ls.revealed);
             setCountedWrong(!!ls.countedWrong);setCanOverrideCorrect(!!ls.canOverrideCorrect);
-            setGuesses(ls.guesses||[]);setMsg(ls.msg||"");setCalcPenalty(!!ls.calcPenaltyActive);
+            setCalcPenalty(!!ls.calcPenaltyActive);
             setOverrideUsedThisQ(fwd.overrideUsed||false);
             const fc=fwd.capsule||{};prevStatsSnapshotRef.current=fc.snapshot||null;wrongTimeRef.current=fc.wrongTime??null;
             setBrowseHasCredit(fwd.hasCredit??false);
@@ -1492,7 +1574,7 @@
             setDed(fwd);const fwdAnswered=fwd.btns&&Object.keys(fwd.btns).length>0;
             const fwdRevealed=!!(fwd.btns&&Object.values(fwd.btns).includes('correct'));
             setPersistBtns(fwdAnswered?fwd.btns:{});
-            setLocked(true);setRevealed(fwdRevealed);setGuesses([]);setMsg("");
+            setLocked(true);setRevealed(fwdRevealed);
             setCountedWrong(false);setCalcPenalty(false);
             const cap=fwd.capsule||{};prevStatsSnapshotRef.current=cap.snapshot||null;wrongTimeRef.current=cap.wrongTime??null;
             setCanOverrideCorrect(cap.snapshot!=null&&!(fwd.overrideUsed||false));
@@ -1512,7 +1594,7 @@
           setDate({y:fwd.y,m:fwd.m,d:fwd.d,_fmt:fwd._fmt,_jul:fwd._jul});const ls=fwd.liveState||{};
           setPersistBtns(fwd.btns||{});setLocked(!!ls.locked);setRevealed(!!ls.revealed);
           setCountedWrong(!!ls.countedWrong);setCanOverrideCorrect(!!ls.canOverrideCorrect);
-          setGuesses(ls.guesses||[]);setMsg(ls.msg||"");
+          
           setPendingWrongOverride(ls.pendingWrongOverride||null);
           setCalcPenalty(!!ls.calcPenaltyActive);preCalcPenaltySnapshotRef.current=ls.preCalcPenaltySnapshot||null;
           setOverrideUsedThisQ(fwd.overrideUsed||false);
@@ -1523,7 +1605,7 @@
           setDate({y:fwd.y,m:fwd.m,d:fwd.d,_fmt:fwd._fmt,_jul:fwd._jul});const fwdAnswered=fwd.btns&&Object.keys(fwd.btns).length>0;
           const fwdRevealed=!!(fwd.btns&&Object.values(fwd.btns).includes('correct'));
           setPersistBtns(fwdAnswered?fwd.btns:{});
-          setLocked(true);setRevealed(fwdRevealed);setGuesses([]);setMsg("");
+          setLocked(true);setRevealed(fwdRevealed);
           setCountedWrong(false);setPendingWrongOverride(null);setCalcPenalty(false);preCalcPenaltySnapshotRef.current=null;
           const cap=fwd.capsule||{};prevStatsSnapshotRef.current=cap.snapshot||null;wrongTimeRef.current=cap.wrongTime??null;
           setCanOverrideCorrect(cap.snapshot!=null&&!(fwd.overrideUsed||false));
@@ -1534,8 +1616,8 @@
         setBackDepth(d=>Math.max(0,d-1));
       }
       function recalcStreak(newCurHasCredit){
-        const mainStack=mode==="deduction"?dedStack:stack;
-        const fwdStack=mode==="deduction"?dedForwardStack:forwardStack;
+        const mainStack=mode==="deduction"?(dedStack[dedType]||[]):stack;
+        const fwdStack=mode==="deduction"?(dedForwardStack[dedType]||[]):forwardStack;
         const history=[
           ...mainStack.map(e=>!!e.hasCredit),
           newCurHasCredit,
@@ -1547,7 +1629,7 @@
         for(const h of history){if(h){run++;if(run>bestStreak)bestStreak=run;}else run=0;}
         updateStats(c=>{c.streak=curStreak;c.best=bestStreak;});
         if(mode==="blitz"){setBlitzRoundStats(p=>({...p,streak:curStreak,best:bestStreak}));
-          if(timerDone){const bk=`${allowMistakes?'m':'n'}${blitzSec}`;setBlitzBest(prev=>{const cur=prev[bk]??{score:0,streak:0,scoreRoundId:null,streakRoundId:null};return{...prev,[bk]:{...cur,score:cur.score,streak:Math.max(cur.streak===blitzRoundStats.best?bestStreak:cur.streak,bestStreak)}};});}
+          if(timerDone){const bk=getBlitzBk();setBlitzBest(prev=>{const cur=prev[bk]??{score:0,streak:0,scoreRoundId:null,streakRoundId:null};return{...prev,[bk]:{...cur,score:cur.score,streak:Math.max(cur.streak===blitzRoundStats.best?bestStreak:cur.streak,bestStreak)}};});}
         }
         return{curStreak,bestStreak};
       }
@@ -1560,10 +1642,23 @@
       //      timer if applicable (Flash drops to idle instead of restarting flash-show)
       //   4. pendingWrongOverride (wrong on previous question, now correcting retroactively):
       //      give retroactive credit for the previous date, update stack entry to green-only
-      //   5. Q16: retroOverrideEligible (live Q untouched + most recent stack entry not yet
+      //   5. retroOverrideEligible (live Q untouched + most recent stack entry not yet
       //      overridden): retroactively flip that stack entry both directions —
       //      wrong→right (give credit, mark green) or right→wrong (roll back credit, mark
       //      with diagonal-split override-wrong visual). Live Q stays unanswered.
+      // Path-dispatch state table — which combination of state triggers which path:
+      //   ┌─────────────┬─────────────────────┬──────────────┬──────────────────────┬───────────────────────┬──────┐
+      //   │ backDepth   │ canOverrideCorrect  │ countedWrong │ pendingWrongOverride │ retroOverrideEligible │ Path │
+      //   ├─────────────┼─────────────────────┼──────────────┼──────────────────────┼───────────────────────┼──────┤
+      //   │   > 0       │      true           │      —       │          —           │          —            │  1   │
+      //   │   = 0       │      true           │      —       │          —           │          —            │  2   │
+      //   │   = 0       │      false          │     true     │          —           │          —            │  3   │
+      //   │   = 0       │      false          │     false    │       not null       │          —            │  4   │
+      //   │   = 0       │      false          │     false    │        null          │        true           │  5   │
+      //   └─────────────┴─────────────────────┴──────────────┴──────────────────────┴───────────────────────┴──────┘
+      // Streak restoration is uniform across all paths: full-history recalc (recalcStreak
+      // helper or its inline equivalent when stale-state concerns exist). Snapshot refs
+      // are still used to roll back played/good/times — only streak is now snapshot-free.
       function override(){
         // Save Stats OFF for this question (Classic/Flash/Deduction with frozen-OFF):
         // no stats to update and no history to push (frozen-OFF questions never enter
@@ -1588,14 +1683,14 @@
               setPendingWrongOverride(null);
             }else{
               setCountedWrong(false);
-              setGuesses([]);setMsg("");setLocked(false);setRevealed(false);setCalcPenalty(false);setCalcOpen(false);
+              setLocked(false);setRevealed(false);setCalcPenalty(false);setCalcOpen(false);
             }
           }else if(countedWrong){
             // Mirrors path 3 (countedWrong → give credit after wrong/reveal). With stats
             // off there's nothing to credit — just advance and clean up. Always advances
             // (matches path 3's unconditional pushAndNext).
             setCountedWrong(false);setCanOverrideCorrect(false);
-            setGuesses([]);setMsg("");setLocked(false);setRevealed(false);setCalcPenalty(false);setCalcOpen(false);
+            setLocked(false);setRevealed(false);setCalcPenalty(false);setCalcOpen(false);
             // Flash is the only timer mode in isPerQGated; drop it back to idle so the
             // next date appears as a fresh dash awaiting Begin (matches path 3 Flash).
             if(mode==="flash"){
@@ -1639,8 +1734,8 @@
             updateStats(c=>{c.good=Math.max(0,c.good-1);if(tIdx!=null&&tIdx<c.times.length)c.times=[...c.times.slice(0,tIdx),...c.times.slice(tIdx+1)];});
             if(mode==="blitz")setBlitzRoundStats(p=>({...p,good:Math.max(0,p.good-1)}));
             if(timerDone){
-              if(mode==='blitz'&&!perQ){const bk=`${allowMistakes?'m':'n'}${blitzSec}`;setBlitzBest(prev=>{const cur=prev[bk];if(!cur)return prev;const ng=Math.max(0,blitzRoundStats.good-1);return{...prev,[bk]:{...cur,score:cur.score===blitzRoundStats.good?ng:cur.score,streak:cur.streak}};});}
-              if(mode==='blitz'&&perQ)setSuddenBest(prev=>{const cur=prev[qSec];if(!cur)return prev;const ng=Math.max(0,S.good-1);return cur.score===S.good?{...prev,[qSec]:{score:ng}}:prev;});
+              if(mode==='blitz'&&!perQ){const bk=getBlitzBk();setBlitzBest(prev=>{const cur=prev[bk];if(!cur)return prev;const ng=Math.max(0,blitzRoundStats.good-1);return{...prev,[bk]:{...cur,score:cur.score===blitzRoundStats.good?ng:cur.score,streak:cur.streak}};});}
+              if(mode==='blitz'&&perQ)setSuddenBest(prev=>{const cur=prev[getSuddenBk()];if(!cur)return prev;const ng=Math.max(0,S.good-1);return cur.score===S.good?{...prev,[getSuddenBk()]:{score:ng}}:prev;});
             }
           }
           recalcStreak(newHC);
@@ -1658,18 +1753,21 @@
             if(mode==="blitz")setBlitzRoundStats(p=>({...p,played:u.blitzPlayed+1,good:u.blitzGood}));
           }
           prevStatsSnapshotRef.current=null;wrongTimeRef.current=null;setCanOverrideCorrect(false);setCountedWrong(true);
-          if(u.wasWrong){if(mode==="deduction"){setDedStack(s=>{if(!s.length)return s;const last=s[s.length-1];const ci=last.type==="year"?last.options.findIndex(y=>y===last.y):last.type==="month"?last.options.findIndex(m=>m===last.m):last.options.findIndex(d=>d===last.d);return[...s.slice(0,-1),{...last,btns:{[ci]:'correct'},overrideUsed:true}];});}else{setStack(s=>{if(!s.length)return s;const last=s[s.length-1];const wd=activeWday(last.y,last.m,last.d);return[...s.slice(0,-1),{...last,btns:{[wd]:'correct'},overrideUsed:true}];});}}
-          if(!avgVisOff){pushAndNext();if(mode==="deduction")setDedStack(s=>{if(!s.length)return s;return[...s.slice(0,-1),{...s[s.length-1],overrideUsed:true}];});else setStack(s=>{if(!s.length)return s;return[...s.slice(0,-1),{...s[s.length-1],overrideUsed:true}];});}
-          else{setGuesses([]);setMsg("");setLocked(false);setRevealed(false);setCalcPenalty(false);setCalcOpen(false);}
+          if(u.wasWrong){if(mode==="deduction"){setDedStack(s=>{const arr=s[dedType]||[];if(!arr.length)return s;const last=arr[arr.length-1];const ci=last.type==="year"?last.options.findIndex(y=>y===last.y):last.type==="month"?last.options.findIndex(m=>m===last.m):last.options.findIndex(d=>d===last.d);return{...s,[dedType]:[...arr.slice(0,-1),{...last,btns:{[ci]:'correct'},overrideUsed:true}]};});}else{setStack(s=>{if(!s.length)return s;const last=s[s.length-1];const wd=activeWday(last.y,last.m,last.d);return[...s.slice(0,-1),{...last,btns:{[wd]:'correct'},overrideUsed:true}];});}}
+          if(!avgVisOff){pushAndNext();if(mode==="deduction")setDedStack(s=>{const arr=s[dedType]||[];if(!arr.length)return s;return{...s,[dedType]:[...arr.slice(0,-1),{...arr[arr.length-1],overrideUsed:true}]};});else setStack(s=>{if(!s.length)return s;return[...s.slice(0,-1),{...s[s.length-1],overrideUsed:true}];});}
+          else{setLocked(false);setRevealed(false);setCalcPenalty(false);setCalcOpen(false);}
           return;
         }
         if(countedWrong){
-          const snap=prevStatsSnapshotRef.current;
-          const restoredStreak=snap?snap.streak:S.streak;
-          updateStats(c=>{c.good+=1;c.streak=restoredStreak+1;if(c.streak>c.best)c.best=c.streak;if(wrongTimeRef.current!=null&&trackingOn())c.times=[...c.times,wrongTimeRef.current];});
+          // Streak consolidation: all override paths now use recalcStreak() over the
+          // full history rather than snapshot arithmetic. This makes streak restoration
+          // consistent regardless of how the question reached its current state
+          // (Reveal/Show Codes used to null the snapshot, which silently degraded streak).
+          updateStats(c=>{c.good+=1;if(wrongTimeRef.current!=null&&trackingOn())c.times=[...c.times,wrongTimeRef.current];});
           wrongTimeRef.current=null;prevStatsSnapshotRef.current=null;
           if(mode==="blitz")setBlitzRoundStats(p=>({...p,good:p.good+1}));
-          setCountedWrong(false);setCanOverrideCorrect(false);setGuesses([]);setMsg("");setLocked(false);setRevealed(false);setCalcPenalty(false);setCalcOpen(false);
+          setCountedWrong(false);setCanOverrideCorrect(false);setLocked(false);setRevealed(false);setCalcPenalty(false);setCalcOpen(false);
+          recalcStreak(true);
           // Deduction renders flash from dedFlash (shape: {kind, index, ok}) — `flash`
           // state is for Classic/Flash buttons only. Without this branch, override-after-wrong
           // would set the wrong state variable in Deduction and no green would appear.
@@ -1691,28 +1789,60 @@
             }else{
               setActive(true);setShowTimerDate(false);
               if(mode==="blitz"&&!perQ){blitzStartRef.current=performance.now()-((blitzSec-blitzRemainRef.current)*1000);blitzPausedAccRef.current=0;setBlitzRunning(true);}
-              if(mode==="blitz"&&perQ){setTimerDone(false);if(suddenBestSnapRef.current&&suddenBestSnapRef.current.key===qSec){const revertBest=suddenBestSnapRef.current.prev;setSuddenBest(prev=>({...prev,[qSec]:revertBest}));setSuddenBestNew(p=>{const n={...p};delete n[qSec];return n;});suddenBestSnapRef.current=null;}const now=performance.now();qDeadlineRef.current=now+qSec*1000;qPausedAccRef.current=0;qPausedAtRef.current=null;setQRemain(qSec);}
+              if(mode==="blitz"&&perQ){setTimerDone(false);const sk=getSuddenBk();if(suddenBestSnapRef.current&&suddenBestSnapRef.current.key===sk){const revertBest=suddenBestSnapRef.current.prev;setSuddenBest(prev=>({...prev,[sk]:revertBest}));setSuddenBestNew(p=>{const n={...p};delete n[sk];return n;});suddenBestSnapRef.current=null;}const now=performance.now();qDeadlineRef.current=now+qSec*1000;qPausedAccRef.current=0;qPausedAtRef.current=null;setQRemain(qSec);}
             }
           }
-          const overrideBtns=mode==="deduction"?{[getDedCorrectIdx()]:'correct'}:{[correct]:'correct'};pushAndNext(overrideBtns);if(mode==="deduction")setDedStack(s=>{if(!s.length)return s;return[...s.slice(0,-1),{...s[s.length-1],overrideUsed:true}];});else setStack(s=>{if(!s.length)return s;return[...s.slice(0,-1),{...s[s.length-1],overrideUsed:true}];});setPendingWrongOverride(null);return;
+          const overrideBtns=mode==="deduction"?{[getDedCorrectIdx()]:'correct'}:{[correct]:'correct'};pushAndNext(overrideBtns);if(mode==="deduction")setDedStack(s=>{const arr=s[dedType]||[];if(!arr.length)return s;return{...s,[dedType]:[...arr.slice(0,-1),{...arr[arr.length-1],overrideUsed:true}]};});else setStack(s=>{if(!s.length)return s;return[...s.slice(0,-1),{...s[s.length-1],overrideUsed:true}];});setPendingWrongOverride(null);return;
         }
         if(pendingWrongOverride!=null){
           const {wrongTime,snapshot}=pendingWrongOverride;
+          // Streak consolidation: roll back played/good via snapshot when available
+          // (snapshot may be null if Reveal/Show Codes nulled it after the wrong was
+          // captured), but always recompute streak from the NEW stack value below.
           if(snapshot){
-            updateStats(c=>{c.played=snapshot.played+1;c.good=snapshot.good+1;c.streak=snapshot.streak+1;if(c.streak>c.best)c.best=c.streak;c.times=c.times.slice(0,snapshot.timesLen);if(wrongTime!=null&&trackingOn())c.times=[...c.times,wrongTime];});
+            updateStats(c=>{c.played=snapshot.played+1;c.good=snapshot.good+1;c.times=c.times.slice(0,snapshot.timesLen);if(wrongTime!=null&&trackingOn())c.times=[...c.times,wrongTime];});
             if(mode==="blitz")setBlitzRoundStats(p=>({...p,played:snapshot.blitzPlayed+1,good:snapshot.blitzGood+1}));
           }else{
-            updateStats(c=>{c.good+=1;c.streak+=1;if(c.streak>c.best)c.best=c.streak;if(wrongTime!=null&&trackingOn())c.times=[...c.times,wrongTime];});
+            updateStats(c=>{c.good+=1;if(wrongTime!=null&&trackingOn())c.times=[...c.times,wrongTime];});
             if(mode==="blitz")setBlitzRoundStats(p=>({...p,good:p.good+1}));
           }
-          // green-only: update the last stack entry (wrong→correct date)
-          if(mode==="deduction"){setDedStack(s=>{if(!s.length)return s;const last=s[s.length-1];const ci=last.type==="year"?last.options.findIndex(y=>y===last.y):last.type==="month"?last.options.findIndex(m=>m===last.m):last.options.findIndex(d=>d===last.d);return[...s.slice(0,-1),{...last,btns:{[ci]:'correct'},overrideUsed:true}];});}
-          else{setStack(s=>{if(!s.length)return s;const last=s[s.length-1];const wd=activeWday(last.y,last.m,last.d);return[...s.slice(0,-1),{...last,btns:{[wd]:'correct'},overrideUsed:true}];});}
+          // Build the new (post-override) stack value, used both for setStack and
+          // the inline streak recalc that follows.
+          const setTargetStack=mode==="deduction"?setDedStack:setStack;
+          const targetStack=mode==="deduction"?(dedStack[dedType]||[]):stack;
+          const fwdStack=mode==="deduction"?(dedForwardStack[dedType]||[]):forwardStack;
+          let newLastEntry;
+          if(mode==="deduction"){
+            const last=targetStack[targetStack.length-1];if(!last){setPendingWrongOverride(null);preCalcPenaltySnapshotRef.current=null;return;}
+            const ci=last.type==="year"?last.options.findIndex(y=>y===last.y):last.type==="month"?last.options.findIndex(m=>m===last.m):last.options.findIndex(d=>d===last.d);
+            newLastEntry={...last,btns:{[ci]:'correct'},overrideUsed:true,hasCredit:true};
+          }else{
+            const last=targetStack[targetStack.length-1];if(!last){setPendingWrongOverride(null);preCalcPenaltySnapshotRef.current=null;return;}
+            const wd=activeWday(last.y,last.m,last.d);
+            newLastEntry={...last,btns:{[wd]:'correct'},overrideUsed:true,hasCredit:true};
+          }
+          const newStack=[...targetStack.slice(0,-1),newLastEntry];
+          if(mode==="deduction")setDedStack(s=>({...s,[dedType]:newStack}));
+          else setStack(newStack);
+          // Inline streak recalc using the post-override stack. Live Q is unanswered
+          // (newCurHasCredit=false) so it doesn't contribute to the streak.
+          const history=[
+            ...newStack.map(e=>!!e.hasCredit),
+            ...fwdStack.slice().reverse().filter(e=>!e.isLive).map(e=>!!e.hasCredit)
+          ];
+          let curStreak=0;
+          for(let i=history.length-1;i>=0;i--){if(history[i])curStreak++;else break;}
+          let bestStreak=0,run=0;
+          for(const h of history){if(h){run++;if(run>bestStreak)bestStreak=run;}else run=0;}
+          updateStats(c=>{c.streak=curStreak;c.best=bestStreak;});
+          if(mode==="blitz"){setBlitzRoundStats(p=>({...p,streak:curStreak,best:bestStreak}));
+            if(timerDone){const bk=getBlitzBk();setBlitzBest(prev=>{const cur=prev[bk]??{score:0,streak:0,scoreRoundId:null,streakRoundId:null};return{...prev,[bk]:{...cur,score:cur.score,streak:Math.max(cur.streak===blitzRoundStats.best?bestStreak:cur.streak,bestStreak)}};});}
+          }
           setPendingWrongOverride(null);preCalcPenaltySnapshotRef.current=null;
-          if(!avgVisOff){pushAndNext();if(mode==="deduction")setDedStack(s=>{if(!s.length)return s;return[...s.slice(0,-1),{...s[s.length-1],overrideUsed:true}];});else setStack(s=>{if(!s.length)return s;return[...s.slice(0,-1),{...s[s.length-1],overrideUsed:true}];});}
+          if(!avgVisOff){pushAndNext();if(mode==="deduction")setDedStack(s=>{const arr=s[dedType]||[];if(!arr.length)return s;return{...s,[dedType]:[...arr.slice(0,-1),{...arr[arr.length-1],overrideUsed:true}]};});else setStack(s=>{if(!s.length)return s;return[...s.slice(0,-1),{...s[s.length-1],overrideUsed:true}];});}
           return;
         }
-        // === Q16 PATH 5: RETROACTIVE OVERRIDE OF MOST RECENT STACK ENTRY ===
+        // === PATH 5: RETROACTIVE OVERRIDE OF MOST RECENT STACK ENTRY ===
         // Fires when the live Q is fully untouched and the user clicks Override to flip
         // the most recent stack entry's right/wrong status. Both directions supported:
         //   wrong → right: gives credit (mirrors path 1's u.wasWrong=true branch).
@@ -1728,9 +1858,8 @@
         // reads the STALE mainStack from React state — by the time it runs, our setStack
         // hasn't been applied yet. Inline version uses the just-updated stack value directly.
         if(retroOverrideEligible){
-          const setTargetStack=mode==='deduction'?setDedStack:setStack;
-          const targetStack=mode==='deduction'?dedStack:stack;
-          const fwdStack=mode==='deduction'?dedForwardStack:forwardStack;
+          const targetStack=mode==='deduction'?(dedStack[dedType]||[]):stack;
+          const fwdStack=mode==='deduction'?(dedForwardStack[dedType]||[]):forwardStack;
           const targetEntry=targetStack[targetStack.length-1];
           const u=targetEntry.capsule.snapshot;
           const targetWrongTime=targetEntry.capsule.wrongTime;
@@ -1755,12 +1884,13 @@
             updateStats(c=>{c.good=Math.max(0,c.good-1);if(tIdx!=null&&tIdx<c.times.length)c.times=[...c.times.slice(0,tIdx),...c.times.slice(tIdx+1)];});
             if(mode==="blitz")setBlitzRoundStats(p=>({...p,good:Math.max(0,p.good-1)}));
             if(timerDone){
-              if(mode==='blitz'&&!perQ){const bk=`${allowMistakes?'m':'n'}${blitzSec}`;setBlitzBest(prev=>{const cur=prev[bk];if(!cur)return prev;const ng=Math.max(0,blitzRoundStats.good-1);return{...prev,[bk]:{...cur,score:cur.score===blitzRoundStats.good?ng:cur.score,streak:cur.streak}};});}
-              if(mode==='blitz'&&perQ)setSuddenBest(prev=>{const cur=prev[qSec];if(!cur)return prev;const ng=Math.max(0,S.good-1);return cur.score===S.good?{...prev,[qSec]:{score:ng}}:prev;});
+              if(mode==='blitz'&&!perQ){const bk=getBlitzBk();setBlitzBest(prev=>{const cur=prev[bk];if(!cur)return prev;const ng=Math.max(0,blitzRoundStats.good-1);return{...prev,[bk]:{...cur,score:cur.score===blitzRoundStats.good?ng:cur.score,streak:cur.streak}};});}
+              if(mode==='blitz'&&perQ)setSuddenBest(prev=>{const cur=prev[getSuddenBk()];if(!cur)return prev;const ng=Math.max(0,S.good-1);return cur.score===S.good?{...prev,[getSuddenBk()]:{score:ng}}:prev;});
             }
             // Stack entry: change btns to override-wrong state on the correct-answer button
-            // (replaces the existing 'correct' marking). Q16 visual: green-left/red-right
-            // diagonal split tells the time-flow story (originally correct, now flipped).
+            // (replaces the existing 'correct' marking). Override visual: green-upper-left/
+            // red-lower-right diagonal split tells the time-flow story (originally correct,
+            // now flipped).
             if(mode==="deduction"){
               const ci=targetEntry.type==="year"?targetEntry.options.findIndex(y=>y===targetEntry.y):targetEntry.type==="month"?targetEntry.options.findIndex(m=>m===targetEntry.m):targetEntry.options.findIndex(d=>d===targetEntry.d);
               newLastEntry={...targetEntry,btns:{[ci]:'override-wrong'},overrideUsed:true,hasCredit:false};
@@ -1770,7 +1900,8 @@
             }
           }
           const newStack=[...targetStack.slice(0,-1),newLastEntry];
-          setTargetStack(newStack);
+          if(mode==='deduction')setDedStack(s=>({...s,[dedType]:newStack}));
+          else setStack(newStack);
           // Inline streak recalc using the new stack value. The live Q is unanswered
           // so it doesn't contribute to the streak history.
           const history=[
@@ -1783,7 +1914,7 @@
           for(const h of history){if(h){run++;if(run>bestStreak)bestStreak=run;}else run=0;}
           updateStats(c=>{c.streak=curStreak;c.best=bestStreak;});
           if(mode==="blitz"){setBlitzRoundStats(p=>({...p,streak:curStreak,best:bestStreak}));
-            if(timerDone){const bk=`${allowMistakes?'m':'n'}${blitzSec}`;setBlitzBest(prev=>{const cur=prev[bk]??{score:0,streak:0,scoreRoundId:null,streakRoundId:null};return{...prev,[bk]:{...cur,score:cur.score,streak:Math.max(cur.streak===blitzRoundStats.best?bestStreak:cur.streak,bestStreak)}};});}
+            if(timerDone){const bk=getBlitzBk();setBlitzBest(prev=>{const cur=prev[bk]??{score:0,streak:0,scoreRoundId:null,streakRoundId:null};return{...prev,[bk]:{...cur,score:cur.score,streak:Math.max(cur.streak===blitzRoundStats.best?bestStreak:cur.streak,bestStreak)}};});}
           }
           // Note: overrideUsedThisQ was set true at top of override(); it stays true
           // until the live Q advances (next New/correct answer) to prevent double-fire.
@@ -1841,9 +1972,9 @@
         // along through stack/forwardStack via spread (...ded) and survive Back/Forward
         // navigation. Per-mode-toggle fields (_abx, _julx, _m1582) are added by the sub-mode
         // branches themselves; attachFmt only handles the always-present pair (_fmt, _jul).
-        //   _fmt   — date format snapshot. Always stamped (Q12): random roll when randomFormat
+        //   _fmt   — date format snapshot. Always stamped: random roll when randomFormat
         //            is on, current dateFormat when off. Display layer always trusts _fmt.
-        //            Q1 (5/4/2026): on a Cat A unanswered untouched live puzzle, format setting
+        //            On a Cat A unanswered untouched live puzzle, format setting
         //            changes can regen the live date (see regenDecisionFor); wrong guesses
         //            on the live puzzle defer any format regen until the next puzzle.
         //   _jul   — useJulian snapshot at generation time (used by codes panel + history)
@@ -2018,10 +2149,11 @@
             }
             return false;
           };
-          // No fallback needed: queue item E ensures spawnDed is never called for Year sub-mode
-          // when the range can't support a buildable puzzle (Year button auto-disables, and the
-          // popover effect auto-switches to Day if the user is mid-session in Year when range
-          // becomes too narrow). If trySpawn somehow fails despite that contract, ded retains
+          // No fallback needed: the Year sub-mode playability contract ensures spawnDed is
+          // never called for Year sub-mode when the range can't support a buildable puzzle
+          // (Year button auto-disables, and the popover effect auto-switches to Day if the
+          // user is mid-session in Year when range becomes too narrow). If trySpawn somehow
+          // fails despite that contract, ded retains
           // its previous value rather than being replaced with a degenerate 1-button puzzle.
           trySpawn();
           return;
@@ -2181,15 +2313,15 @@
           return;
         }
       }
-      const captureDedSnap=()=>ded?({ded,guesses:[...guesses],countedWrong,msg,locked,revealed,calcPenaltyActive}):null;
+      const captureDedSnap=()=>ded?({ded,countedWrong,locked,revealed,calcPenaltyActive}):null;
       function changeDedType(next){if(next===dedType)return;resetPB();const cs=captureDedSnap();const ns=savedDedByType[next]||null;pendingDedSwitchRef.current={snap:ns};setSavedDedByType(prev=>({...prev,[dedType]:cs}));setDedType(next);}
       function flashDed(kind,index,ok){setDedFlash({kind,index,ok});setTimeout(()=>setDedFlash(null),FLASH_MS);}
       function submitDedAnswer(val,index){
         if(!ded||locked)return;
         // sctn auto-advances after a correct Deduction answer. setCalcOpen(false) is in the
         // batch so the ded change (via spawnDed) lands with the panel close — freeze contract.
-        const sctn=()=>{const ci=getDedCorrectIdx();const dedBtns=mkBtnsWithCorrect(persistBtns,ci);const capsule={snapshot:prevStatsSnapshotRef.current?{...prevStatsSnapshotRef.current}:null,wrongTime:wrongTimeRef.current};setDedStack(s=>ded?[...s,{...ded,btns:dedBtns,overrideUsed:false,capsule,hasCredit:computeHasCredit(dedBtns)}]:s);setDedForwardStack([]);spawnDed();setMsg("");setGuesses([]);setCountedWrong(false);setCanOverrideCorrect(false);setLocked(false);setRevealed(false);setOverrideUsedThisQ(false);setBackDepth(0);setCalcOpen(false);wrongTimeRef.current=null;prevStatsSnapshotRef.current=null;resetPB();};
-        const sw=(label,idx)=>{if(!countedWrong){wrongTimeRef.current=tStartRef.current?(performance.now()-tStartRef.current)/1000:null;prevStatsSnapshotRef.current={played:S.played,good:S.good,streak:S.streak,best:S.best,timesLen:S.times.length,blitzPlayed:blitzRoundStats.played,blitzGood:blitzRoundStats.good,wasWrong:true};}markWrong(idx);setGuesses(g=>g.includes(label)?g:[...g,label]);setCountedWrong(true);setCanOverrideCorrect(false);};
+        const sctn=()=>{const ci=getDedCorrectIdx();const dedBtns=mkBtnsWithCorrect(persistBtns,ci);const capsule={snapshot:prevStatsSnapshotRef.current?{...prevStatsSnapshotRef.current}:null,wrongTime:wrongTimeRef.current};setDedStack(s=>ded?({...s,[dedType]:[...(s[dedType]||[]),{...ded,btns:dedBtns,overrideUsed:false,capsule,hasCredit:computeHasCredit(dedBtns)}]}):s);setDedForwardStack(s=>({...s,[dedType]:[]}));spawnDed();setCountedWrong(false);setCanOverrideCorrect(false);setLocked(false);setRevealed(false);setOverrideUsedThisQ(false);setBackDepth(0);setCalcOpen(false);wrongTimeRef.current=null;prevStatsSnapshotRef.current=null;resetPB();};
+        const sw=(label,idx)=>{if(!countedWrong){wrongTimeRef.current=tStartRef.current?(performance.now()-tStartRef.current)/1000:null;prevStatsSnapshotRef.current={played:S.played,good:S.good,streak:S.streak,best:S.best,timesLen:S.times.length,blitzPlayed:blitzRoundStats.played,blitzGood:blitzRoundStats.good,wasWrong:true};}markWrong(idx);setCountedWrong(true);setCanOverrideCorrect(false);};
         if(ded.type==="year"){const ok=(+val)===ded.y;flashDed("year",index,ok);if(ok){if(!countedWrong){prevStatsSnapshotRef.current={played:S.played,good:S.good,streak:S.streak,best:S.best,timesLen:S.times.length,blitzPlayed:blitzRoundStats.played,blitzGood:blitzRoundStats.good,wasWrong:false};setCanOverrideCorrect(true);if(tStartRef.current){const dt=(performance.now()-tStartRef.current)/1000;updateStats(c=>{c.times=[...c.times,dt];});}}else if(countedWrong&&prevStatsSnapshotRef.current){setCanOverrideCorrect(true);}if(!countedWrong)updateStats(c=>{c.played+=1;c.good+=1;c.streak+=1;if(c.streak>c.best)c.best=c.streak;});sctn();}else{if(!countedWrong)updateStats(c=>{c.played+=1;c.streak=0;});sw(fmtYear(+val),index);}}
         if(ded.type==="month"){const ok=ded.boxes?ded.boxes[index]?.months.includes(ded.m):((+val)===ded.m);flashDed("month",index,ok);if(ok){if(!countedWrong){prevStatsSnapshotRef.current={played:S.played,good:S.good,streak:S.streak,best:S.best,timesLen:S.times.length,blitzPlayed:blitzRoundStats.played,blitzGood:blitzRoundStats.good,wasWrong:false};setCanOverrideCorrect(true);if(tStartRef.current){const dt=(performance.now()-tStartRef.current)/1000;updateStats(c=>{c.times=[...c.times,dt];});}}else if(countedWrong&&prevStatsSnapshotRef.current){setCanOverrideCorrect(true);}if(!countedWrong)updateStats(c=>{c.played+=1;c.good+=1;c.streak+=1;if(c.streak>c.best)c.best=c.streak;});sctn();}else{if(!countedWrong)updateStats(c=>{c.played+=1;c.streak=0;});sw(String(val),index);}}
         if(ded.type==="day"){const ok=(+val)===ded.d;flashDed("day",index,ok);if(ok){if(!countedWrong){prevStatsSnapshotRef.current={played:S.played,good:S.good,streak:S.streak,best:S.best,timesLen:S.times.length,blitzPlayed:blitzRoundStats.played,blitzGood:blitzRoundStats.good,wasWrong:false};setCanOverrideCorrect(true);if(tStartRef.current){const dt=(performance.now()-tStartRef.current)/1000;updateStats(c=>{c.times=[...c.times,dt];});}}else if(countedWrong&&prevStatsSnapshotRef.current){setCanOverrideCorrect(true);}if(!countedWrong)updateStats(c=>{c.played+=1;c.good+=1;c.streak+=1;if(c.streak>c.best)c.best=c.streak;});sctn();}else{if(!countedWrong)updateStats(c=>{c.played+=1;c.streak=0;});sw(String(+val),index);}}
@@ -2208,7 +2340,7 @@
         // Blitz: mid-round (active) resets on return; timerDone preserves on return
         const blitzLeavingMidRound=(prevMode==="blitz")&&active;
         const blitzLeavingDone=(prevMode==="blitz")&&!active&&timerDone;
-        if(!blitzLeavingMidRound){stacksByModeRef.current[prevMode]={stack:[...stack],forwardStack:[...forwardStack],dedStack:[...dedStack],dedForwardStack:[...dedForwardStack],backDepth};}
+        if(!blitzLeavingMidRound){stacksByModeRef.current[prevMode]={stack:[...stack],forwardStack:[...forwardStack],dedStack:{...dedStack},dedForwardStack:{...dedForwardStack},backDepth};}
         else{delete stacksByModeRef.current[prevMode];}
         // Blitz: save full snap when leaving in timerDone state; null it when leaving mid-round
         if(prevMode==="blitz"){
@@ -2224,8 +2356,7 @@
               pendingWrongOverride,
               overrideUsedThisQ,
               browseHasCredit,
-              guesses:[...guesses],
-              msg,
+
               locked,
               revealed,
               countedWrong,
@@ -2243,7 +2374,7 @@
         // Preserve question state whenever leaving a timing-off mode (no interaction gate)
         const leavingTimingOff=["classic","deduction","flash"].includes(prevMode)&&(avgVisOffByMode[prevMode]??false);
         if(leavingTimingOff){
-          preservedByModeRef.current[prevMode]={persistBtns:{...persistBtns},locked,revealed,countedWrong,guesses:[...guesses],msg,date:{...(dateByMode[prevMode]??dateByMode.classic)},calcOpen:prevCalcOpen};
+          preservedByModeRef.current[prevMode]={persistBtns:{...persistBtns},locked,revealed,countedWrong,date:{...(dateByMode[prevMode]??dateByMode.classic)},calcOpen:prevCalcOpen};
           if(prevMode==="deduction"&&ded)setSavedDedByType(prev=>({...prev,[dedType]:captureDedSnap()}));
         } else if(["classic","deduction","flash"].includes(prevMode)){
           delete preservedByModeRef.current[prevMode];
@@ -2265,14 +2396,14 @@
           tStartRef.current=null;
           // Restore stacks
           if(savedStacks){setStack(savedStacks.stack);setForwardStack(savedStacks.forwardStack);setDedStack(savedStacks.dedStack);setDedForwardStack(savedStacks.dedForwardStack);setBackDepth(savedStacks.backDepth);}
-          else{setStack([]);setDedStack([]);setForwardStack([]);setDedForwardStack([]);setBackDepth(0);}
+          else{setStack([]);setDedStack(blankDedStacks());setForwardStack([]);setDedForwardStack(blankDedStacks());setBackDepth(0);}
           // Restore full done-state snapshot
           setTimerDone(true);
           setBlitzRoundStats({...snap.blitzRoundStats});
-          setStatsByMode(prev=>({...prev,[mode]:{...(prev[mode]||blankStatsByEra()),AD:{...snap.S}}}));
+          setStatsByMode(prev=>({...prev,[mode]:{...snap.S}}));
           setPersistBtns({...snap.persistBtns});
           setDate({...snap.date});
-          setGuesses([...snap.guesses]);setMsg(snap.msg);
+          
           setLocked(snap.locked);setRevealed(snap.revealed);setCountedWrong(snap.countedWrong);
           setCanOverrideCorrect(snap.canOverrideCorrect);
           setPendingWrongOverride(snap.pendingWrongOverride);
@@ -2298,8 +2429,8 @@
           arm();
           // Restore stacks from saved, or clear
           if(savedStacks){setStack(savedStacks.stack);setForwardStack(savedStacks.forwardStack);setDedStack(savedStacks.dedStack);setDedForwardStack(savedStacks.dedForwardStack);setBackDepth(savedStacks.backDepth);}
-          else{setStack([]);setForwardStack([]);setDedStack([]);setDedForwardStack([]);}
-          setGuesses([]);setMsg("");
+          else{setStack([]);setForwardStack([]);setDedStack(blankDedStacks());setDedForwardStack(blankDedStacks());}
+          
           setLocked(false);setRevealed(false);setCanOverrideCorrect(false);
           wrongTimeRef.current=null;prevStatsSnapshotRef.current=null;
           if(mode==="deduction"){
@@ -2311,7 +2442,7 @@
             setLocked(preservedQ.locked);setRevealed(preservedQ.revealed);
             setCountedWrong(preservedQ.countedWrong);
             if(preservedQ.countedWrong)setOverrideUsedThisQ(true);
-            setGuesses([...preservedQ.guesses]);setMsg(preservedQ.msg);
+            
             if(preservedQ.date)setDate({...preservedQ.date});
             if(preservedQ.calcOpen)setCalcOpen(true);
           } else if(["classic","flash","deduction"].includes(mode)){
@@ -2321,7 +2452,7 @@
               setDate(genDate(minY,maxY));
               tStartRef.current=performance.now();
             }
-            // If codes were showing, close with animation. wasOpenRef freeze keeps old codes visible during the 310ms close.
+            // If codes were showing, close with animation. MethodBreakdownSection's freeze contract keeps old codes visible during the 310ms close.
             if(calcOpen)setCalcOpen(false);
           }
         }
@@ -2332,8 +2463,8 @@
         if(mode!=="deduction")return;setDedFlash(null);
         const pending=pendingDedSwitchRef.current;pendingDedSwitchRef.current=null;
         const snap=pending?.snap||savedDedByType[dedType]||null;
-        if(snap&&snap.ded){setDed(snap.ded);setGuesses(snap.guesses||[]);setCountedWrong(!!snap.countedWrong);setMsg(snap.msg||"");setLocked(!!snap.locked);setRevealed(!!snap.revealed);setCalcPenalty(!!snap.calcPenaltyActive);setCalcOpen(false);return;}
-        setMsg("");setGuesses([]);setLocked(false);setRevealed(false);setCountedWrong(false);setCalcOpen(false);spawnDed();
+        if(snap&&snap.ded){setDed(snap.ded);setCountedWrong(!!snap.countedWrong);setLocked(!!snap.locked);setRevealed(!!snap.revealed);setCalcPenalty(!!snap.calcPenaltyActive);setCalcOpen(false);return;}
+        setLocked(false);setRevealed(false);setCountedWrong(false);setCalcOpen(false);spawnDed();
       },[dedType,mode,savedDedByType]);
       // Tailwind's `transition` utility intentionally omitted — it would re-introduce
       // a 150ms multi-property fade on persist (red on wrong) and on flash border-color.
@@ -2344,7 +2475,7 @@
       const optionsDisabled=(isTimer(mode)&&!active)||locked||calcOpen||calcPenaltyActive;
       // Layout helper for option grids in 3-col mode. Used by Day sub-mode (N=7 → last button
       // alone gets col-span-3 → full row; N=4 → same handling). Year sub-mode does NOT use this
-      // helper anymore — it has its own grid-cols-6 layout (queue item D) for N=5 and grid-cols-2
+      // helper anymore — it has its own grid-cols-6 layout for N=5 and grid-cols-2
       // for N=2 Jul Cross.
       const centerLastOpt=(index,total)=>{if(total<=0)return"";if(index===total-1&&total%3===1)return"col-span-3";return"";};
       const timerSettingControl=(()=>{
@@ -2361,17 +2492,17 @@
       const timerBlocksReveal=isTimer(mode)&&(mode==="flash"?(!showTimerDate&&!flashHiding):!shouldShowTimerDate);
       const revealDisabled=(locked&&revealed)||calcOpen||calcPenaltyActive||timerBlocksReveal||timerDone;
       const timerBusy=isTimer(mode)&&active;
-      // Q16: identifying when the new "retroactive override of most recent stack entry"
+      // Identifying when the new "retroactive override of most recent stack entry"
       // path is available. Conditions: live Q is fully untouched (no buttons clicked,
       // not locked, not revealed), no other override path is already armed, stack is
       // nonempty, and the most recent stack entry hasn't already been overridden.
       // The "stack entry's capsule.snapshot non-null" check ensures we have stat data
       // to roll back/forward from — Save Stats OFF stack entries don't have snapshots
       // and shouldn't be retroactively overridable (no stats to adjust).
-      const retroOverrideStack=mode==='deduction'?dedStack:stack;
+      const retroOverrideStack=mode==='deduction'?(dedStack[dedType]||[]):stack;
       const retroOverrideEligible=(
         !locked && !revealed && !countedWrong && !canOverrideCorrect &&
-        pendingWrongOverride==null && guesses.length===0 &&
+        pendingWrongOverride==null &&
         retroOverrideStack.length>0 &&
         !retroOverrideStack[retroOverrideStack.length-1].overrideUsed &&
         retroOverrideStack[retroOverrideStack.length-1].capsule?.snapshot!=null
@@ -2381,7 +2512,7 @@
       const calcTargetKey=calcTarget?`${calcTarget.y}-${calcTarget.m}-${calcTarget.d}`:"none";
       const lookupCalcTargetKey=lookupCalcDate?`${lookupCalcDate.y}-${lookupCalcDate.m}-${lookupCalcDate.d}`:"none";
       useEffect(()=>{const pm=prevModeRef.current;if(pm!==mode){prevModeRef.current=mode;return;}setCalcOpen(false);prevModeRef.current=mode;},[calcTargetKey,mode]);
-      const handleResetStats=()=>{resetStatsCurrent();if(mode==='blitz'){setBlitzBest({});setSuddenBest({});setBlitzBestNew({});setSuddenBestNew({});}setStack([]);setForwardStack([]);setDedStack([]);setDedForwardStack([]);setBackDepth(0);resetPB();setGuesses([]);setMsg("");setLocked(false);setRevealed(false);setCountedWrong(false);setCanOverrideCorrect(false);setPendingWrongOverride(null);setOverrideUsedThisQ(false);setCalcPenalty(false);setCalcOpen(false);wrongTimeRef.current=null;prevStatsSnapshotRef.current=null;preCalcPenaltySnapshotRef.current=null;saveStatsThisQRef.current=null;if(!avgVisOff||backDepth>0){setDate(genDate(minY,maxY));if(mode==="deduction")spawnDed();}tStartRef.current=performance.now();};
+      const handleResetStats=()=>{resetStatsCurrent();if(mode==='blitz'){setBlitzBest({});setSuddenBest({});setBlitzBestNew({});setSuddenBestNew({});}setStack([]);setForwardStack([]);if(mode==='deduction'){setDedStack(s=>({...s,[dedType]:[]}));setDedForwardStack(s=>({...s,[dedType]:[]}));}else{setDedStack(blankDedStacks());setDedForwardStack(blankDedStacks());}setBackDepth(0);resetPB();setLocked(false);setRevealed(false);setCountedWrong(false);setCanOverrideCorrect(false);setPendingWrongOverride(null);setOverrideUsedThisQ(false);setCalcPenalty(false);setCalcOpen(false);wrongTimeRef.current=null;prevStatsSnapshotRef.current=null;preCalcPenaltySnapshotRef.current=null;saveStatsThisQRef.current=null;setDate(genDate(minY,maxY));if(mode==="deduction")spawnDed();tStartRef.current=performance.now();};
       const togglePerQBtn=()=>{if(active||timerDone)return;const newPerQ=!perQ;if(newPerQ&&allowMistakes)setAllowMistakes(false);setPerQ(newPerQ);};
       const toggleAllowMistakesBtn=()=>{if(active||timerDone)return;const newAM=!allowMistakes;if(newAM&&perQ)setPerQ(false);setAllowMistakes(newAM);};
       const canHideStats=["classic","deduction","flash"].includes(mode);
@@ -2393,8 +2524,8 @@
         if(!active&&!timerDone&&(prev.perQ!==perQ||prev.allowMistakes!==allowMistakes)){
           resetStatsCurrent();
           setBlitzRoundStats(blankStats());
-          setStack([]);setForwardStack([]);setDedStack([]);setDedForwardStack([]);setBackDepth(0);
-          resetPB();setGuesses([]);setMsg("");setLocked(false);setRevealed(false);
+          setStack([]);setForwardStack([]);setDedStack(blankDedStacks());setDedForwardStack(blankDedStacks());setBackDepth(0);
+          resetPB();setLocked(false);setRevealed(false);
           setCountedWrong(false);setCanOverrideCorrect(false);setPendingWrongOverride(null);setOverrideUsedThisQ(false);
           setCalcPenalty(false);setCalcOpen(false);
           wrongTimeRef.current=null;prevStatsSnapshotRef.current=null;preCalcPenaltySnapshotRef.current=null;
@@ -2407,7 +2538,7 @@
         // Save Stats: when off at round end, skip best update entirely.
         if(!saveStats)return;
         if(!perQ){
-          const bk=`${allowMistakes?'m':'n'}${blitzSec}`;
+          const bk=getBlitzBk();
           const thisRoundId=blitzRoundIdRef.current++;
           setBlitzBest(prev=>{
             const cur=prev[bk]??{score:0,streak:0,scoreRoundId:null,streakRoundId:null};
@@ -2426,15 +2557,16 @@
           });
         }else{
           setSuddenBest(prev=>{
-            const cur=prev[qSec]??{score:0};
-            suddenBestSnapRef.current={key:qSec,prev:{...cur}};
+            const sk=getSuddenBk();
+            const cur=prev[sk]??{score:0};
+            suddenBestSnapRef.current={key:sk,prev:{...cur}};
             const newScore=Math.max(cur.score,S.good);
-            if(newScore>cur.score)setSuddenBestNew(p=>({...p,[qSec]:true}));
+            if(newScore>cur.score)setSuddenBestNew(p=>({...p,[sk]:true}));
             if(newScore===cur.score)return prev;
-            return{...prev,[qSec]:{score:newScore}};
+            return{...prev,[sk]:{score:newScore}};
           });
         }
-      },[mode,timerDone,perQ,allowMistakes,blitzSec,qSec]);
+      },[mode,timerDone,perQ,allowMistakes,blitzSec,qSec,randomFormat,dateFormat,leapChance,forceJanFebOnLeap,minY,maxY,useJulian]);
       const applyCalcPenalty=()=>{setCalcPenalty(true);const roundOver=(mode==="blitz")&&!active;const fp=!countedWrong&&!revealed;if(fp&&!roundOver){wrongTimeRef.current=tStartRef.current?(performance.now()-tStartRef.current)/1000:null;prevStatsSnapshotRef.current=null;preCalcPenaltySnapshotRef.current={played:S.played,good:S.good,streak:S.streak,best:S.best,timesLen:S.times.length,blitzPlayed:blitzRoundStats.played,blitzGood:blitzRoundStats.good};updateStats(c=>{c.played+=1;c.streak=0;});if(mode==="blitz"&&!perQ)setBlitzRoundStats(p=>({...p,played:p.played+1,streak:0}));}/* When back-browsing, skip markCorrect: history entries already have the correct day stamped via entryWithGreen using the date's original _jul snapshot. Re-stamping with live `correct` (which uses live useJulian) would add a second green if the live calendar setting differs from the snapshot. */if(backDepth===0){if(mode==="deduction"&&ded){markCorrect(getDedCorrectIdx());}else if(mode!=="deduction")markCorrect(correct);}if(isTimer(mode)&&active){setActive(false);setShowTimerDate(true);if(mode==="blitz"&&!perQ){setBlitzRunning(false);blitzStartRef.current=null;blitzPausedAtRef.current=null;blitzPausedAccRef.current=0;setTimerDone(true);}if(mode==="blitz"&&perQ){qDeadlineRef.current=null;qPausedAtRef.current=null;qPausedAccRef.current=0;setTimerDone(true);}if(mode==="flash"){clearTimeout(flashTimerRef.current);flashTimerRef.current=null;setFlashPhase("dash");flashDeadlineRef.current=null;}}if(!revealed)setRevealed(true);if(!countedWrong){setCountedWrong(true);setCanOverrideCorrect(false);}};
       const handleCalcOpenChange=next=>{if(next&&!(locked&&!revealed&&backDepth>0))applyCalcPenalty();setCalcOpen(next);};
       const showStats=mode!=="lookup"&&mode!=="guide"&&mode!=="aox";
@@ -2446,18 +2578,27 @@
       // Leap-year date generation settings (apply to all game modes; Lookup unaffected).
       const [leapChance,setLeapChance]=useState('random');
       const [forceJanFebOnLeap,setForceJanFebOnLeap]=useState(false);
+      // Blitz best keying: bests are siloed per difficulty configuration so a Best Score
+      // achieved at one config doesn't compare against rounds at a different config.
+      // Dimensions: duration (blitzSec for Per Round, qSec for Per Question), allowMistakes,
+      // format (random→'random' bucket, otherwise the specific format ID), leapChance,
+      // forceJanFebOnLeap, year range, useJulian. Changing any of these creates a fresh
+      // bucket; previous bests remain stored and reappear when the user switches back to
+      // that exact config. (perQ keys omit allowMistakes since perQ forces it false.)
+      const getBlitzBk=()=>`${allowMistakes?'m':'n'}${blitzSec}|${randomFormat?'random':dateFormat}|${leapChance}|${forceJanFebOnLeap}|${minY}-${maxY}|${useJulian}`;
+      const getSuddenBk=()=>`${qSec}|${randomFormat?'random':dateFormat}|${leapChance}|${forceJanFebOnLeap}|${minY}-${maxY}|${useJulian}`;
       // FORMAT_IDS and rollFormat are defined at module scope (see top of file)
       // so the dateByMode useState initializer can also use them.
-      // fmtDate: Q12: every date stamps _fmt (always present), so display always uses
+      // fmtDate: every date stamps _fmt (always present), so display always uses
       // the date's stored format. Falls through to dateFormat only if a malformed
       // legacy date without _fmt slips through (defensive).
       const fmtDate=(y,m,d,storedFmt)=>fmt(y,m,d,storedFmt||dateFormat);
       const fmtDatePartial=(y,m,d,storedFmt,missing)=>fmtPartial(y,m,d,storedFmt||dateFormat,missing);
       // Generate a new game-mode date with the current settings baked in.
-      // Stamps _fmt and _jul at generation. Q12: _fmt is always present — random roll
+      // Stamps _fmt and _jul at generation. _fmt is always present — random roll
       // when randomFormat is on, current dateFormat when off. The display layer always
       // trusts _fmt.
-      // Q1 (5/4/2026): on a Cat A unanswered untouched live date, format setting changes
+      // On a Cat A unanswered untouched live date, format setting changes
       // can trigger a fresh genDate call via regenDecisionFor (Random off→on always; Random
       // on→off and dropdown changes regen only on _fmt mismatch with the now-active format).
       // Wrong guesses defer format regen — the new format only applies on the next genDate.
@@ -2482,7 +2623,7 @@
         if(dt.y<minY||dt.y>maxY)return true;
         return false;
       };
-      // Year sub-mode playability check (queue item E). Year requires either:
+      // Year sub-mode playability check. Year requires either:
       //   (a) a year-range size of at least 5 (so a normal N=5 window can be built within
       //       a single calendar system), OR
       //   (b) a Jul Cross window (N=2) — Julian on AND the range contains a boundary pair
@@ -2501,7 +2642,7 @@
       })();
       // Track previous popover values so the unified effect can tell which setting changed.
       const prevPopRef=useRef({randomFormat,dateFormat,useJulian,minY,maxY,leapChance,forceJanFebOnLeap});
-      // Unified popover-settings effect. Replaces the old Effect 1/Effect 2/refreshForRange split.
+      // Unified popover-settings effect.
       // Per-setting rules in idle Cat A states (Classic, Deduction, Flash idle, Blitz pre-round):
       //   Random Format — off→on always regens (fresh random format wanted). on→off regens
       //     only when the date's stored _fmt differs from the now-active dateFormat dropdown
@@ -2642,7 +2783,7 @@
         // currently-displayed date is a historical entry that survives via
         // history-reconstruction. When not back-browsing, live == displayed.
         const isBackBrowsing=backDepth>0;
-        const fwdStack=mode==='deduction'?dedForwardStack:forwardStack;
+        const fwdStack=mode==='deduction'?(dedForwardStack[dedType]||[]):forwardStack;
         let liveDt=null,liveHasWrong=false,liveEntry=null,liveBtns={};
         if(isBackBrowsing&&fwdStack[0]&&fwdStack[0].isLive){
           liveEntry=fwdStack[0];
@@ -2721,14 +2862,14 @@
         }
         // Apply stack/forward changes
         if(mode==='deduction'){
-          if(insertions.length>0)setDedStack(s=>[...s,...insertions]);
-          setDedForwardStack([]);
+          if(insertions.length>0)setDedStack(s=>({...s,[dedType]:[...(s[dedType]||[]),...insertions]}));
+          setDedForwardStack(s=>({...s,[dedType]:[]}));
         }else{
           if(insertions.length>0)setStack(s=>[...s,...insertions]);
           setForwardStack([]);
         }
         // Full per-question state reset (matches "New" semantics)
-        resetPB();setMsg("");setGuesses([]);setLocked(false);setRevealed(false);
+        resetPB();setLocked(false);setRevealed(false);
         setCountedWrong(false);setCanOverrideCorrect(false);setOverrideUsedThisQ(false);
         setPendingWrongOverride(null);setCalcPenalty(false);setCalcOpen(false);
         setBackDepth(0);
@@ -2784,8 +2925,9 @@
         if(!yearRelevant&&!monthRelevant)return;
         // Determine if there's a wrong on the live entry; if so, defer.
         const isBackBrowsing=backDepth>0;
+        const fwdForType=dedForwardStack[dedType]||[];
         const liveHasWrong=isBackBrowsing
-          ?!!(dedForwardStack[0]&&dedForwardStack[0].isLive&&dedForwardStack[0].liveState&&dedForwardStack[0].liveState.countedWrong)
+          ?!!(fwdForType[0]&&fwdForType[0].isLive&&fwdForType[0].liveState&&fwdForType[0].liveState.countedWrong)
           :countedWrong;
         if(liveHasWrong)return;
         // Push current displayed entry + non-live forwards to history (mirror popover effect)
@@ -2793,16 +2935,16 @@
           const insertions=[];
           const dispCapsule={snapshot:prevStatsSnapshotRef.current?{...prevStatsSnapshotRef.current}:null,wrongTime:wrongTimeRef.current};
           insertions.push(entryWithGreen({...(ded||{}),btns:{...persistBtns},overrideUsed:overrideUsedThisQ,capsule:dispCapsule,hasCredit:browseHasCredit},useJulian));
-          for(let i=dedForwardStack.length-1;i>=1;i--){
-            const e=dedForwardStack[i];
+          for(let i=fwdForType.length-1;i>=1;i--){
+            const e=fwdForType[i];
             const{isLive:_il,liveState:_ls,...rest}=e;
             insertions.push(rest);
           }
-          if(insertions.length>0)setDedStack(s=>[...s,...insertions]);
-          setDedForwardStack([]);
+          if(insertions.length>0)setDedStack(s=>({...s,[dedType]:[...(s[dedType]||[]),...insertions]}));
+          setDedForwardStack(s=>({...s,[dedType]:[]}));
         }
         // Full per-question state reset
-        resetPB();setMsg("");setGuesses([]);setLocked(false);setRevealed(false);
+        resetPB();setLocked(false);setRevealed(false);
         setCountedWrong(false);setCanOverrideCorrect(false);setOverrideUsedThisQ(false);
         setPendingWrongOverride(null);setCalcPenalty(false);setCalcOpen(false);
         setBackDepth(0);
@@ -2816,7 +2958,7 @@
       const [settingsOpen,setSettingsOpen]=useState(false);
       const settingsRef=useRef(null);
       const settingsPopoverRef=useRef(null);
-      // Q10 + Q13: scroll-state tracking for the settings popover inner scroll wrapper.
+      // Scroll-state tracking for the settings popover inner scroll wrapper.
       // popoverAtBottom drives BOTH the bottom fade gradient (no fade when at bottom)
       // AND the elevation shadow on the sticky footer (no shadow when at bottom). Both
       // appear when there's still content scrollable below — the fade signals "more
@@ -2878,7 +3020,7 @@
       // Includes year range *input text* values so a dirty (uncommitted) input keeps
       // the button active to clear it back to "1" / "10000".
       const settingsAtDefaults=randomFormat===true&&dateFormat==='written-mdy'&&useJulian===false&&minY===1&&maxY===10000&&minInputVal==="1"&&maxInputVal==="10000"&&leapChance==='random'&&forceJanFebOnLeap===false&&saveStats===true&&useSystem===true&&darkTheme==='dusk'&&lightTheme==='light'&&manualTheme==='dusk';
-      const settingsJsx=settingsOpen&&(<div ref={settingsPopoverRef} className="absolute left-0 right-0 top-full mt-2 z-50 rounded-2xl card py-4 space-y-4 shadow-xl flex flex-col max-h-[calc(100dvh-80px)]">
+      const settingsJsx=settingsOpen&&(<div ref={settingsPopoverRef} className="absolute left-4 right-4 top-full mt-2 z-50 rounded-2xl card py-4 space-y-4 shadow-xl flex flex-col max-h-[calc(100dvh-80px)]">
         <div ref={popoverInnerScrollRef} className={`overflow-y-auto overscroll-none flex-1 min-h-0 space-y-4 px-4${popoverAtBottom?"":" fade-scroll-bottom"}`}>
         <div className="space-y-2">
           <div className="text-[10px] uppercase tracking-widest text-purple-300/60">Date Format</div>
@@ -2940,14 +3082,14 @@
       </div>);
       return(
         <>
-        {/* Q15: sticky title bar uses a TWO-LEVEL wrapper:
+        {/* Sticky title bar uses a TWO-LEVEL wrapper:
             - Outer (.htp-sticky-bar): position:sticky, full-width (no max-w), holds the
               theme bg + elevation shadow so they extend edge-to-edge on screens wider
               than 480px. Without this, the shadow would only span the centered 480px
               column with awkward vertical edges where it ends.
             - Inner: max-w-[480px] mx-auto px-4, relative (popover anchor). Keeps the
               actual title/gear/mode-select row at the same 480px width as today.
-            The htp-sticky-bar class also carries the box-shadow transition (Q14) so the
+            The htp-sticky-bar class also carries the box-shadow transition so the
             shadow fades smoothly in/out as the elev-shadow-down class is added/removed.
             Padding split: outer pt-5 above title bar, content wrapper pb-5 below — total
             vertical spacing matches the original single py-5 wrapper exactly.
@@ -2987,24 +3129,21 @@
               {label:"Score",value:(mode==="blitz"&&!perQ)?`${blitzRoundStats.good}/${blitzRoundStats.played}`:`${S.good}/${S.played}`,off:effectiveStatsOff,fn:canHideStats?toggleStatsOff:null},
               {label:"Accuracy",value:S.played?`${(S.good/S.played*100).toFixed(1)}%`:"—",off:effectiveStatsOff,fn:canHideStats?toggleStatsOff:null},
               ...(!(mode==="blitz"&&perQ)?[{label:"Streak",value:`${S.streak}/${S.best}`,off:effectiveStatsOff,fn:canHideStats?toggleStatsOff:null}]:[]),
-              {label:"Last",value:fmtTime(sLast),off:effectiveAvgVisOff,fn:canHideStats?toggleTimingVis:null},
+              {label:"Last",value:truncTime(sLast),off:effectiveAvgVisOff,fn:canHideStats?toggleTimingVis:null},
               {label:"Average",value:fmtTime(sAvg),off:effectiveAvgVisOff,fn:canHideStats?toggleTimingVis:null},
               {label:"Median",value:fmtTime(sMed),off:effectiveAvgVisOff,fn:canHideStats?toggleTimingVis:null},
             ]}/></div>
-            {["classic","deduction"].includes(mode)&&(<div className="mt-3"><button type="button" data-key="S" className="w-full px-3 py-1.5 rounded-xl btn-solid border border-transparent text-sm font-medium" onClick={handleResetStats}>Reset Stats</button></div>)}
-            {mode==='blitz'&&!perQ&&(()=>{const bk=`${allowMistakes?'m':'n'}${blitzSec}`;const newF=blitzBestNew[bk]||{score:false,streak:false};const b=blitzBest[bk];const showTag=b&&b.scoreRoundId!=null&&b.streakRoundId!=null;return(<div className="mt-3 text-xs text-purple-300/60"><div className="flex flex-wrap items-start gap-4"><div className="min-w-[125px]">Best Score: {b?.score??'—'}{newF.score&&<sup className="text-purple-400 font-bold ml-0.5 text-[8px]">★</sup>}</div><div className="min-w-[125px]">Best Streak: {b?.streak??'—'}{newF.streak&&<sup className="text-purple-400 font-bold ml-0.5 text-[8px]">★</sup>}</div>{showTag&&<span className="shrink-0 ml-auto">{b.scoreRoundId===b.streakRoundId?"Same Round":"Different Rounds"}</span>}</div></div>);})()}
-            {mode==='blitz'&&perQ&&(<div className="mt-3 text-xs text-purple-300/60"><div className="flex flex-wrap items-start gap-4"><div className="min-w-[125px]">Best Score: {suddenBest[qSec]?.score??'—'}{suddenBestNew[qSec]&&<sup className="text-purple-400 font-bold ml-0.5 text-[8px]">★</sup>}</div></div></div>)}
-            {mode==='blitz'&&(<div className="mt-3 rounded-2xl panel p-3 space-y-2">
-              <div className="flex gap-2">
+            {["classic","deduction","flash"].includes(mode)&&(<div className="mt-3"><button type="button" data-key="S" className={RESET_STATS_BTN_CLASS} onClick={handleResetStats}>Reset Stats</button></div>)}
+            {mode==='blitz'&&!perQ&&(()=>{const bk=getBlitzBk();const newF=blitzBestNew[bk]||{score:false,streak:false};const b=blitzBest[bk];const showTag=b&&b.scoreRoundId!=null&&b.streakRoundId!=null;return(<div className="mt-3 text-xs text-purple-300/60"><div className="flex flex-wrap items-start gap-4"><div className="min-w-[125px]">Best Score: {b?.score??'—'}{newF.score&&<NewBestStar/>}</div><div className="min-w-[125px]">Best Streak: {b?.streak??'—'}{newF.streak&&<NewBestStar/>}</div>{showTag&&<span className="shrink-0 ml-auto">{b.scoreRoundId===b.streakRoundId?"Same Round":"Different Rounds"}</span>}</div></div>);})()}
+            {mode==='blitz'&&perQ&&(()=>{const sk=getSuddenBk();return(<div className="mt-3 text-xs text-purple-300/60"><div className="flex flex-wrap items-start gap-4"><div className="min-w-[125px]">Best Score: {suddenBest[sk]?.score??'—'}{suddenBestNew[sk]&&<NewBestStar/>}</div></div></div>);})()}
+            {mode==='blitz'&&(<>
+              <div className="mt-3 flex gap-2">
                 <button type="button" onClick={toggleAllowMistakesBtn} className={`flex-1 px-2 py-1 rounded-xl text-xs font-medium border ${allowMistakes?"btn-solid border-transparent":"surface-toggle text-purple-100/80"}${(active||timerDone)?" opacity-60 pointer-events-none":""}`}>Allow Mistakes</button>
                 <button type="button" onClick={togglePerQBtn} className={`flex-1 px-2 py-1 rounded-xl text-xs font-medium border btn-solid border-transparent${(active||timerDone)?" opacity-60 pointer-events-none":""}`}>{perQ?"Per Question":"Per Round"}</button>
               </div>
-              {timerSettingControl}
-            </div>)}
-            {mode==='flash'&&(<>
-              <div className="mt-3"><button type="button" data-key="S" className="w-full px-3 py-1.5 rounded-xl btn-solid border border-transparent text-sm font-medium" onClick={handleResetStats}>Reset Stats</button></div>
               <div className="mt-3">{timerSettingControl}</div>
             </>)}
+            {mode==='flash'&&(<div className="mt-3">{timerSettingControl}</div>)}
           </>)}
           <AoxMode minY={minY} maxY={maxY} visible={mode==="aox"} fmtDate={fmtDate} useJulian={useJulian} genDate={genDate} leapChance={leapChance} forceJanFebOnLeap={forceJanFebOnLeap} randomFormat={randomFormat} dateFormat={dateFormat} saveStats={saveStats}/>
           {mode==="lookup"&&(<div className="mt-5"><LookupCard history={lookupHistory} onAddHistory={pushLookupHistory} onMoveHistory={moveHistoryEntryToTop} onClearHistory={clearLookupHistory} inputValue={lookupInput} onInputChange={setLookupInput} outputValue={lookupOutput} onOutputChange={setLookupOutput} calcDate={lookupCalcDate} onCalcDateChange={setLookupCalcDate} selectedHistoryId={lookupSelectedHistoryId} onSelectedHistoryIdChange={setLookupSelectedHistoryId} calcOpen={lookupCalcOpen} onCalcOpenChange={setLookupCalcOpen} fmtDate={fmtDate} dateFormat={dateFormat} useJulian={useJulian}/></div>)}
@@ -3092,7 +3231,7 @@
               </div>
               <div className="mt-4 rounded-2xl panel p-4">
                 <div className="text-center relative">
-                  {backDepth>0&&<span className="absolute right-0 top-0 text-[11px] tabular-nums text-purple-300/60">Q{dedStack.length+1}</span>}
+                  {backDepth>0&&<span className="absolute right-0 top-0 text-[11px] tabular-nums text-purple-300/60">Q{(dedStack[dedType]||[]).length+1}</span>}
                   <div className="text-3xl font-bold">{ded?fmtDatePartial(ded.y,ded.m,ded.d,ded._fmt,ded.type):"—"}</div>
                   {ded&&<div className="mt-1 text-lg text-purple-100">Weekday: <span className="font-semibold">{DAY[ded.w]}</span></div>}
                 </div>
@@ -3111,8 +3250,8 @@
                 <div className="grid grid-cols-4 gap-2">
                   <button type="button" data-key="N" className="col-span-1 px-3 py-2 rounded-xl border surface-button text-sm font-medium" onClick={()=>runDeductionRound()}>New</button>
                   <div className="col-span-1 flex gap-1">
-                    <button type="button" data-key="ArrowLeft" className={`flex-1 px-1 py-2 rounded-xl border surface-button text-sm font-medium flex items-center justify-center ${dedStack.length===0?"opacity-60 pointer-events-none":""}`} onClick={goBack}><span style={{position:'relative',top:'-1.5px'}}>&lt;</span></button>
-                    <button type="button" data-key="ArrowRight" className={`flex-1 px-1 py-2 rounded-xl border surface-button text-sm font-medium flex items-center justify-center ${dedForwardStack.length===0?"opacity-60 pointer-events-none":""}`} onClick={goForward}><span style={{position:'relative',top:'-1.5px'}}>&gt;</span></button>
+                    <button type="button" data-key="ArrowLeft" className={`flex-1 px-1 py-2 rounded-xl border surface-button text-sm font-medium flex items-center justify-center ${(dedStack[dedType]||[]).length===0?"opacity-60 pointer-events-none":""}`} onClick={goBack}><span style={{position:'relative',top:'-1.5px'}}>&lt;</span></button>
+                    <button type="button" data-key="ArrowRight" className={`flex-1 px-1 py-2 rounded-xl border surface-button text-sm font-medium flex items-center justify-center ${(dedForwardStack[dedType]||[]).length===0?"opacity-60 pointer-events-none":""}`} onClick={goForward}><span style={{position:'relative',top:'-1.5px'}}>&gt;</span></button>
                   </div>
                   <button type="button" data-key="R" className={`col-span-1 px-3 py-2 rounded-xl border surface-button text-sm font-medium text-center ${revealDisabled?"opacity-60 pointer-events-none":""}`} onClick={reveal}>Reveal</button>
                   <button type="button" data-key="O" className={`col-span-1 px-3 py-2 rounded-xl border surface-button text-sm font-medium text-center ${!overrideAvail?"opacity-60 pointer-events-none":""}`} onClick={override}>Override</button>
@@ -3160,7 +3299,7 @@
             <p><b>Back (&lt;)</b> — return to the previous date. The answer is shown and the card is locked. No stat penalty. You can go back through your entire history in Classic, Flash, and Deduction; in Blitz and AoX, you can browse the current round or run. Every entry in your history shows the correct answer in green; if you got it wrong, your wrong guess(es) appear as dimmed red alongside the green. While browsing back, a small <b>Q#</b> label appears at the top-right of the date card showing your position in history (e.g. Q3 means you're on the third question viewed).</p>
             <p><b>Forward (&gt;)</b> — move forward through dates you've browsed past with Back. The forward history clears whenever you answer a new question, press New/Begin/Reset, or take any action that advances the date. Overriding while browsing back does not clear the forward history. Each entry remembers its date format and calendar system, so a back-then-forward round trip never alters how a date was originally shown.</p>
             <p><b>Reveal</b> — show the correct answer without guessing. Counts as a wrong attempt. No penalty on unanswered dates while browsing back.</p>
-            <p><b>Override</b> — fix a mistake. You can override any date in your history by browsing to it with Back/Forward. After a wrong answer: gives you credit and adjusts your score. After a correct answer: undoes the credit and adjusts your score. You can also override the most recent past date directly from a fresh, untouched live question (in any mode) — Override is enabled when the live date hasn't been answered yet, and tapping it flips your previous date's right/wrong status. A previously correct date that's been retroactively flipped to wrong shows up with a green-and-red diagonal split (originally correct, now counted wrong). You can only override each date once. Overriding a wrong answer (regardless of how) clears any wrong highlights; only the correct answer is shown. In Blitz, you can override past dates after the round ends to adjust your score and saved bests. In AoX without Allow Mistakes, overriding a correct answer ends the run.</p>
+            <p><b>Override</b> — fix a mistake. You can override any date in your history by browsing to it with Back/Forward. After a wrong answer: gives you credit and adjusts your score. After a correct answer: undoes the credit and adjusts your score. You can also override the most recent past date directly from a fresh, untouched live question (in any mode) — Override is enabled when the live date hasn't been answered yet, and tapping it flips your previous date's right/wrong status. A previously correct date that's been retroactively flipped to wrong shows up with a green-and-red diagonal split: green-upper-left (originally correct) and red-lower-right (now counted wrong). You can only override each date once. Overriding a wrong answer (regardless of how) clears any wrong highlights; only the correct answer is shown. In Blitz, you can override past dates after the round ends to adjust your score and saved bests. In AoX without Allow Mistakes, overriding a correct answer ends the run.</p>
             <p><b>Show Codes</b> — reveals the calculation codes for the current date. Counts as wrong if you haven't already answered incorrectly. No penalty on unanswered dates while browsing back. In AoX without Allow Mistakes, opening Show Codes ends the run.</p>
           </GuideSection>
           <GuideSection id="stats" title="Stats" openId={open} onToggle={toggle}>
@@ -3168,6 +3307,9 @@
             <p><b>Accuracy</b> — percentage of questions answered correctly on the first try. Shows — until your first attempt.</p>
             <p><b>Streak</b> — your current consecutive correct streak / your best in this session.</p>
             <p><b>Last / Avg / Med</b> — timing stats, calculated using correct answers only. Last is your most recent correct time; Avg is the average across all correct answers; Med is the median, which is less skewed by outliers. Any time of 60 seconds or more — whether an individual solve, a computed average or median, or any Best — displays as "—". Times are still tracked internally and contribute to averages, medians, and best-tracking; only the display is capped.</p>
+            <p>Time formatting follows the WCA speedcubing convention: individual single times (Last) are <i>truncated</i> to hundredths — the third decimal is dropped, never rounded. Averages, medians, and bests are <i>rounded</i> to the nearest hundredth. Truncating singles prevents fortunate rounding boundaries on individual attempts; rounding aggregates avoids systematic downward bias.</p>
+            <p>One question = one attempt. Getting a question wrong then right still counts as one attempt, marked correct.</p>
+            <p>When you set a new best, a small ★ appears next to the value to flag it.</p>
             <p className="text-purple-300/70 text-[12px]">In modes designed for casual practice (Classic, Deduction, Flash), you can tap any stat to hide it. Tapping Score, Accuracy, or Streak hides all three; tapping any timing stat hides all three. Stats always track in the background regardless of visibility. Enabling timing stats resets all stats so the score and timing always reflect the same set of questions. When timing stats are off, leaving and returning to a mode preserves the current question exactly as you left it — same date, same answers, codes panel in the same state. In all other modes, stats are always visible.</p>
           </GuideSection>
           <Divider label="Settings"/>
@@ -3178,7 +3320,7 @@
           <GuideSection id="savestats" title="Save Stats" openId={open} onToggle={toggle}><p>Toggle via the ⚙ settings menu under Stats. On by default. When off, your answers don't update stats or saved bests. The stats panel dims to indicate the off state. The toggle works differently per mode:</p><p className="mt-2"><b>Classic, Deduction, Flash</b> — per-question. The toggle's value is locked in at the moment of your first stat-affecting action (your first wrong guess on the question, or your correct answer if you got it right on the first try). Toggling afterward doesn't change that question's outcome, but does apply to the next question. If you've already made a wrong guess on the current question, toggling Save Stats does not regenerate the date — the toggle's frozen value sticks for the question. When off, the question doesn't update stats and isn't pushed to history (Back can't browse to it). Override still advances to the next date the same way it normally would (or stays put if timing is hidden), just without any stat or history changes.</p><p className="mt-2"><b>Blitz</b> — round-level. In-round score, accuracy, streak, and Back/Forward navigation through round questions all work normally regardless of the toggle. Whatever the toggle is set to when the round ends determines whether the round's Best Score and Best Streak update.</p><p className="mt-2"><b>AoX</b> — run-level. In-run score, streak, times, and Back/Forward navigation all work normally regardless of the toggle. Whatever the toggle is set to when the run ends determines whether Best Average, Best Median, and Best Streak update. If a run finishes with Save Stats off, overriding entries after the run is a no-op on persistent bests; round-level stats still adjust.</p></GuideSection>
           <GuideSection id="theme" title="Theme" openId={open} onToggle={toggle}><p>Five themes: Dusk (default dark navy), Midnight (true black with purple), Nebula (deep purple), Light (clean white), and Parchment (warm cream). Accessible from the ⚙ settings menu in any tab. Enable Use System Settings to match your device's light/dark mode automatically, with separate theme choices for each. Disable to pick one manually.</p></GuideSection>
           <GuideSection id="reset-settings" title="Reset Settings" openId={open} onToggle={toggle}><p>The Reset Settings button at the bottom of the ⚙ menu restores everything in the menu to its defaults: Random Format on, Written MDY, Julian off, year range 1–10000, Leap Year Chance Random, Force Jan/Feb off, Save Stats on, and theme back to Use System Settings with Dusk (dark) and Light (light). It does not touch mode-specific config outside the menu (AoX N, timer durations, Deduction sub-types and toggles) or your stats and history. No confirmation prompt — tap to apply.</p></GuideSection>
-          <GuideSection id="keyboard" title="Keyboard Input" openId={open} onToggle={toggle}><p>On any device with a hardware keyboard (typically desktop), you can press keys to operate the site without tapping. The on-screen layout is identical to mobile — keyboard input is the only desktop-specific addition.</p><div className="mt-3 space-y-3"><div><div className="text-[10px] uppercase tracking-widest text-purple-300/60 mb-1.5">Answer Grid</div><div className="space-y-1 text-sm"><div className="flex items-center gap-2"><kbd className="inline-block panel rounded px-1.5 py-0.5 text-[11px] font-mono min-w-[1.5rem] text-center shrink-0">0</kbd><span>Sunday</span></div><div className="flex items-center gap-2"><kbd className="inline-block panel rounded px-1.5 py-0.5 text-[11px] font-mono min-w-[1.5rem] text-center shrink-0">1</kbd><span>Monday</span></div><div className="flex items-center gap-2"><kbd className="inline-block panel rounded px-1.5 py-0.5 text-[11px] font-mono min-w-[1.5rem] text-center shrink-0">2</kbd><span>Tuesday</span></div><div className="flex items-center gap-2"><kbd className="inline-block panel rounded px-1.5 py-0.5 text-[11px] font-mono min-w-[1.5rem] text-center shrink-0">3</kbd><span>Wednesday</span></div><div className="flex items-center gap-2"><kbd className="inline-block panel rounded px-1.5 py-0.5 text-[11px] font-mono min-w-[1.5rem] text-center shrink-0">4</kbd><span>Thursday</span></div><div className="flex items-center gap-2"><kbd className="inline-block panel rounded px-1.5 py-0.5 text-[11px] font-mono min-w-[1.5rem] text-center shrink-0">5</kbd><span>Friday</span></div><div className="flex items-center gap-2"><kbd className="inline-block panel rounded px-1.5 py-0.5 text-[11px] font-mono min-w-[1.5rem] text-center shrink-0">6</kbd><span>Saturday</span></div></div><p className="mt-2 text-xs italic">In Deduction Month and Year, the same keys map positionally to the boxes or year options on screen.</p></div><div><div className="text-[10px] uppercase tracking-widest text-purple-300/60 mb-1.5">Game Actions</div><div className="space-y-1 text-sm"><div className="flex items-center gap-2"><kbd className="inline-block panel rounded px-1.5 py-0.5 text-[11px] font-mono min-w-[1.5rem] text-center shrink-0">N</kbd><span>New / Begin / Reset</span></div><div className="flex items-center gap-2"><kbd className="inline-block panel rounded px-1.5 py-0.5 text-[11px] font-mono min-w-[1.5rem] text-center shrink-0">R</kbd><span>Reveal</span></div><div className="flex items-center gap-2"><kbd className="inline-block panel rounded px-1.5 py-0.5 text-[11px] font-mono min-w-[1.5rem] text-center shrink-0">O</kbd><span>Override</span></div><div className="flex items-center gap-2"><kbd className="inline-block panel rounded px-1.5 py-0.5 text-[11px] font-mono min-w-[1.5rem] text-center shrink-0">C</kbd><span>Show / Hide Codes</span></div><div className="flex items-center gap-2"><kbd className="inline-block panel rounded px-1.5 py-0.5 text-[11px] font-mono min-w-[1.5rem] text-center shrink-0">S</kbd><span>Reset Stats</span></div><div className="flex items-center gap-2"><kbd className="inline-block panel rounded px-1.5 py-0.5 text-[11px] font-mono min-w-[1.5rem] text-center shrink-0">←</kbd><span>Back</span></div><div className="flex items-center gap-2"><kbd className="inline-block panel rounded px-1.5 py-0.5 text-[11px] font-mono min-w-[1.5rem] text-center shrink-0">→</kbd><span>Forward</span></div></div></div><div><div className="text-[10px] uppercase tracking-widest text-purple-300/60 mb-1.5">Overlays</div><div className="space-y-1 text-sm"><div className="flex items-center gap-2"><kbd className="inline-block panel rounded px-1.5 py-0.5 text-[11px] font-mono min-w-[1.5rem] text-center shrink-0">H</kbd><span>How to Play (toggle)</span></div><div className="flex items-center gap-2"><kbd className="inline-block panel rounded px-1.5 py-0.5 text-[11px] font-mono min-w-[1.5rem] text-center shrink-0">G</kbd><span>Settings ⚙ (toggle)</span></div></div></div><div><div className="text-[10px] uppercase tracking-widest text-purple-300/60 mb-1.5">Mode Switching</div><div className="space-y-1 text-sm"><div className="flex items-center gap-2"><kbd className="inline-block panel rounded px-1.5 py-0.5 text-[11px] font-mono min-w-[1.5rem] text-center shrink-0">K</kbd><span>Classic</span></div><div className="flex items-center gap-2"><kbd className="inline-block panel rounded px-1.5 py-0.5 text-[11px] font-mono min-w-[1.5rem] text-center shrink-0">F</kbd><span>Flash</span></div><div className="flex items-center gap-2"><kbd className="inline-block panel rounded px-1.5 py-0.5 text-[11px] font-mono min-w-[1.5rem] text-center shrink-0">B</kbd><span>Blitz</span></div><div className="flex items-center gap-2"><kbd className="inline-block panel rounded px-1.5 py-0.5 text-[11px] font-mono min-w-[1.5rem] text-center shrink-0">A</kbd><span>AoX</span></div><div className="flex items-center gap-2"><kbd className="inline-block panel rounded px-1.5 py-0.5 text-[11px] font-mono min-w-[1.5rem] text-center shrink-0">D</kbd><span>Deduction</span></div><div className="flex items-center gap-2"><kbd className="inline-block panel rounded px-1.5 py-0.5 text-[11px] font-mono min-w-[1.5rem] text-center shrink-0">L</kbd><span>Lookup</span></div></div></div></div><p className="mt-3">Letter keys are case-insensitive. Keys are ignored when you're typing in an input field or when a modifier key (Ctrl/Cmd/Alt/Shift) is held. Locked or already-pressed buttons are skipped, just like a click would be.</p></GuideSection>
+          <GuideSection id="keyboard" title="Keyboard Input" openId={open} onToggle={toggle}><p>On any device with a hardware keyboard (typically desktop), you can press keys to operate the site without tapping. The on-screen layout is identical to mobile — keyboard input is the only desktop-specific addition.</p><div className="mt-3 space-y-3"><div><div className="text-[10px] uppercase tracking-widest text-purple-300/60 mb-1.5">Answer Grid</div><div className="space-y-1 text-sm"><div className="flex items-center gap-2"><kbd className="inline-block panel rounded px-1.5 py-0.5 text-[11px] font-mono min-w-[1.5rem] text-center shrink-0">0</kbd><span>Sunday</span></div><div className="flex items-center gap-2"><kbd className="inline-block panel rounded px-1.5 py-0.5 text-[11px] font-mono min-w-[1.5rem] text-center shrink-0">1</kbd><span>Monday</span></div><div className="flex items-center gap-2"><kbd className="inline-block panel rounded px-1.5 py-0.5 text-[11px] font-mono min-w-[1.5rem] text-center shrink-0">2</kbd><span>Tuesday</span></div><div className="flex items-center gap-2"><kbd className="inline-block panel rounded px-1.5 py-0.5 text-[11px] font-mono min-w-[1.5rem] text-center shrink-0">3</kbd><span>Wednesday</span></div><div className="flex items-center gap-2"><kbd className="inline-block panel rounded px-1.5 py-0.5 text-[11px] font-mono min-w-[1.5rem] text-center shrink-0">4</kbd><span>Thursday</span></div><div className="flex items-center gap-2"><kbd className="inline-block panel rounded px-1.5 py-0.5 text-[11px] font-mono min-w-[1.5rem] text-center shrink-0">5</kbd><span>Friday</span></div><div className="flex items-center gap-2"><kbd className="inline-block panel rounded px-1.5 py-0.5 text-[11px] font-mono min-w-[1.5rem] text-center shrink-0">6</kbd><span>Saturday</span></div></div><p className="mt-2 text-xs italic">In Deduction Month and Year, the same keys map positionally to the boxes or year options on screen.</p></div><div><div className="text-[10px] uppercase tracking-widest text-purple-300/60 mb-1.5">Game Actions</div><div className="space-y-1 text-sm"><div className="flex items-center gap-2"><kbd className="inline-block panel rounded px-1.5 py-0.5 text-[11px] font-mono min-w-[1.5rem] text-center shrink-0">N</kbd><span>New / Begin / Reset</span></div><div className="flex items-center gap-2"><kbd className="inline-block panel rounded px-1.5 py-0.5 text-[11px] font-mono min-w-[1.5rem] text-center shrink-0">R</kbd><span>Reveal</span></div><div className="flex items-center gap-2"><kbd className="inline-block panel rounded px-1.5 py-0.5 text-[11px] font-mono min-w-[1.5rem] text-center shrink-0">O</kbd><span>Override</span></div><div className="flex items-center gap-2"><kbd className="inline-block panel rounded px-1.5 py-0.5 text-[11px] font-mono min-w-[1.5rem] text-center shrink-0">C</kbd><span>Show / Hide Codes</span></div><div className="flex items-center gap-2"><kbd className="inline-block panel rounded px-1.5 py-0.5 text-[11px] font-mono min-w-[1.5rem] text-center shrink-0">S</kbd><span>Reset Stats</span></div><div className="flex items-center gap-2"><kbd className="inline-block panel rounded px-1.5 py-0.5 text-[11px] font-mono min-w-[1.5rem] text-center shrink-0">←</kbd><span>Back</span></div><div className="flex items-center gap-2"><kbd className="inline-block panel rounded px-1.5 py-0.5 text-[11px] font-mono min-w-[1.5rem] text-center shrink-0">→</kbd><span>Forward</span></div></div></div><div><div className="text-[10px] uppercase tracking-widest text-purple-300/60 mb-1.5">Overlays</div><div className="space-y-1 text-sm"><div className="flex items-center gap-2"><kbd className="inline-block panel rounded px-1.5 py-0.5 text-[11px] font-mono min-w-[1.5rem] text-center shrink-0">H</kbd><span>How to Play (toggle)</span></div><div className="flex items-center gap-2"><kbd className="inline-block panel rounded px-1.5 py-0.5 text-[11px] font-mono min-w-[1.5rem] text-center shrink-0">G</kbd><span>Settings ⚙ (toggle)</span></div></div></div><div><div className="text-[10px] uppercase tracking-widest text-purple-300/60 mb-1.5">Mode Switching</div><div className="space-y-1 text-sm"><div className="flex items-center gap-2"><kbd className="inline-block panel rounded px-1.5 py-0.5 text-[11px] font-mono min-w-[1.5rem] text-center shrink-0">K</kbd><span>Classic</span></div><div className="flex items-center gap-2"><kbd className="inline-block panel rounded px-1.5 py-0.5 text-[11px] font-mono min-w-[1.5rem] text-center shrink-0">F</kbd><span>Flash</span></div><div className="flex items-center gap-2"><kbd className="inline-block panel rounded px-1.5 py-0.5 text-[11px] font-mono min-w-[1.5rem] text-center shrink-0">B</kbd><span>Blitz</span></div><div className="flex items-center gap-2"><kbd className="inline-block panel rounded px-1.5 py-0.5 text-[11px] font-mono min-w-[1.5rem] text-center shrink-0">A</kbd><span>AoX</span></div><div className="flex items-center gap-2"><kbd className="inline-block panel rounded px-1.5 py-0.5 text-[11px] font-mono min-w-[1.5rem] text-center shrink-0">D</kbd><span>Deduction</span></div><div className="flex items-center gap-2"><kbd className="inline-block panel rounded px-1.5 py-0.5 text-[11px] font-mono min-w-[1.5rem] text-center shrink-0">L</kbd><span>Lookup</span></div></div></div></div><p className="mt-3">Letter keys are case-insensitive. Keys are ignored when you're typing in an input field or when a modifier key (Ctrl/Cmd/Alt/Shift) is held. Locked or already-pressed buttons are skipped, just like a click would be. Reset Stats (S) only applies to the casual modes (Classic, Deduction, Flash); pressing it in Blitz, AoX, or Lookup is a no-op since those modes don't have a separate Reset Stats button (their round/run Reset clears in-round/in-run stats; persistent bests update only when set).</p></GuideSection>
           <Divider label="Modes"/>
           <GuideSection id="classic" title="Classic" openId={open} onToggle={toggle}><p>The main practice mode with no time pressure. Answer at your own pace. Override works after both wrong and correct answers. Reset Stats clears your stats and question history.</p></GuideSection>
           <GuideSection id="aox" title="AoX" openId={open} onToggle={toggle}>
@@ -3188,9 +3330,11 @@
             <p><b>Last / Avg / Med</b> — tap any of these to show or hide all three time stats.</p>
             <p><b>Back/Forward</b> — browse previous dates from the current run without affecting it. Press Continue to resume; the date you were viewing and any forward entries are pushed back to your run history before a fresh date is generated, so nothing is lost. After a run completes, Back and Forward let you browse all dates from that run; press Reset to start fresh.</p>
             <p><b>Override</b> — after wrong: gives credit with time recorded, preserves streak. After correct: undoes the credit, resets streak, and either ends the run (Allow Mistakes off) or advances to a new date (Allow Mistakes on). You can also override past dates while browsing back with Back/Forward. If overriding on the last question with Allow Mistakes on, a new date is generated to complete the average. One override per question.</p>
-            <p>Stats in AoX are always visible and always track. Best average and best median are tracked independently per n and Allow Mistakes combination — they can come from different runs. Beneath each best, the companion metric from the run that set it is also shown (e.g. the median from the run that set your best average). When both bests come from the same run, a · Same Round tag appears on the right. If you override a correct answer that set a new best, the best is also restored. The score display freezes when a run ends and only resets after pressing Reset.</p>
+            <p>Stats in AoX are always visible and always track. Best average and best median are tracked independently — they can come from different runs. Beneath each best, the companion metric from the run that set it is also shown (e.g. the median from the run that set your best average). A <i>Same Round</i> or <i>Different Rounds</i> tag tells you whether your best average and best median came from the same exceptional run, or from two different strong ones. If you override a correct answer that set a new best, the best is also restored. The score display freezes when a run ends and only resets after pressing Reset.</p>
+            <p>Bests are tracked per exact configuration: AoX size (n), Allow Mistakes, Date Format (or Random Format on its own bucket), Leap Year Chance, Force Jan/Feb on Leap Years, year range, and Calendar System (Julian on/off). Changing any of these creates a separate bucket — your previous bests remain stored and reappear when you switch back to that exact config.</p>
+            <p>The small <b>Q#</b> label at the top-right of the date card appears not only while back-browsing but also at run end (done/failed) so you can identify which question of the run you're viewing in the summary.</p>
           </GuideSection>
-          <GuideSection id="deduction" title="Deduction" openId={open} onToggle={toggle}><p>Identify the missing piece of a date given the rest plus the weekday. Choose Day, Month, or Year mode. The displayed date follows your selected Date Format (or random format snapshot, if Random Format is on), with a fixed-width underscore placeholder where the missing piece would normally appear.</p><p className="mt-2"><b>Day</b> — seven consecutive days are shown, each with a unique day code. The correct day can appear in any position. <i>October 1582 with Julian on:</i> days 5–14 don't exist (the Gregorian transition skipped them), so the valid days are 1–4 and 15–31. When the window can't fit seven days on one side of the gap, it shrinks to four — codes 1, 2, 3, 4 repeat at days 15, 16, 17, 18, so a five-day window crossing the gap would have a duplicate code.</p><p className="mt-2"><b>Month</b> — seven fixed boxes group months that share the same month code, so tapping any month within a box gives the same weekday for that date. Tap the box containing the correct month. The boxes are always in the same position. In leap years, January shifts into the Apr/Jul box (becoming Jan/Apr/Jul) and February shifts into the Aug box (becoming Feb/Aug); the other boxes are unchanged. <i>Year 1582 with Julian on:</i> a special layout applies because the Julian/Gregorian transition splits the year — January through September and October 1–4 use Julian (year code +1), while October 15+ and November/December use Gregorian (year code −2). October's box position depends on the day: for days 1–4 it joins Jan and Nov ("Jan/Oct/Nov"); for days 15–31 it joins Jun ("Jun/Oct"); for days 5–14 it's excluded since those dates don't exist. The other six boxes are arranged differently from the standard layout — practice carefully.</p><p className="mt-2"><b>Year</b> — five consecutive year options. Each option has a unique year code, so only the correct year matches the displayed weekday. The correct year can appear in any position. <i>With Julian on:</i> when the five-year window would cross October 15, 1582 (the Julian/Gregorian boundary), it shrinks to two years — the calendar's 10-day jump produces a +5 weekday shift across that boundary that breaks distinctness for any longer window. <i>February 29:</i> only allowed when the window contains at least one leap year (Gregorian or Julian as appropriate). Non-leap years still appear as options but trivially can't be the answer, since Feb 29 doesn't exist in those years.</p><p className="mt-2"><b>Per-mode toggles</b> — Year mode adds <i>ab</i> Cross (left of Day/Month/Year) and Jul Cross (right of Day/Month/Year). Month mode adds 1582 Only (right of Day/Month/Year). These are mode-specific, not in the ⚙ Settings menu, since they only apply to one Deduction sub-mode.</p><p className="mt-2"><b><i>ab</i> Cross</b> (Year mode) — when on, the five-year window must cross a year ending in 00 (any 100-year boundary, both leap and non-leap centuries). Practice the <i>ab</i> code change mid-window. Disabled when your year range doesn't span any 100-year boundary.</p><p className="mt-2"><b>Jul Cross</b> (Year mode) — when on, the two-year window must cross October 15, 1582 (the Julian/Gregorian transition). N=2 always. Disabled when the Julian setting is off, or when your year range doesn't contain 1582 plus at least one of its neighbors (1581 or 1583).</p><p className="mt-2"><b>Both Year toggles on</b> — each puzzle randomly picks (50/50) which constraint to enforce. The two can't both be true for the same window.</p><p className="mt-2"><b>1582 Only</b> (Month mode) — when on, every puzzle uses year 1582, forcing the special split layout described above. Disabled when the Julian setting is off or your year range excludes 1582. When the answer's cell groups months from both calendars, Show Codes uses slash notation (e.g., 1/-3, Julian/Gregorian) for any value that differs across the cell's months; values that are the same across all months collapse to a single value.</p><p className="mt-2">Switch subtypes anytime — progress in each is preserved. Stats are tracked separately for each subtype. Reset Stats only resets the current subtype and clears its question history.</p></GuideSection>
+          <GuideSection id="deduction" title="Deduction" openId={open} onToggle={toggle}><p>Identify the missing piece of a date given the rest plus the weekday. Choose Day, Month, or Year mode. The displayed date follows your selected Date Format (or random format snapshot, if Random Format is on), with a fixed-width underscore placeholder where the missing piece would normally appear.</p><p className="mt-2"><b>Day</b> — seven consecutive days are shown, each with a unique day code. The correct day can appear in any position. <i>October 1582 with Julian on:</i> days 5–14 don't exist (the Gregorian transition skipped them), so the valid days are 1–4 and 15–31. When the window can't fit seven days on one side of the gap, it shrinks to four — codes 1, 2, 3, 4 repeat at days 15, 16, 17, 18, so a five-day window crossing the gap would have a duplicate code.</p><p className="mt-2"><b>Month</b> — seven fixed boxes group months that share the same month code, so tapping any month within a box gives the same weekday for that date. Tap the box containing the correct month. The boxes are always in the same position. In leap years, January shifts into the Apr/Jul box (becoming Jan/Apr/Jul) and February shifts into the Aug box (becoming Feb/Aug); the other boxes are unchanged. <i>Year 1582 with Julian on:</i> a special layout applies because the Julian/Gregorian transition splits the year — January through September and October 1–4 use Julian (year code +1), while October 15+ and November/December use Gregorian (year code −2). October's box position depends on the day: for days 1–4 it joins Jan and Nov ("Jan/Oct/Nov"); for days 15–31 it joins Jun ("Jun/Oct"); for days 5–14 it's excluded since those dates don't exist. The other six boxes are arranged differently from the standard layout — practice carefully.</p><p className="mt-2"><b>Year</b> — five consecutive year options. Each option has a unique year code, so only the correct year matches the displayed weekday. The correct year can appear in any position. <i>With Julian on:</i> when the five-year window would cross October 15, 1582 (the Julian/Gregorian boundary), it shrinks to two years — the calendar's 10-day jump produces a +5 weekday shift across that boundary that breaks distinctness for any longer window. <i>February 29:</i> only allowed when the window contains at least one leap year (Gregorian or Julian as appropriate). Non-leap years still appear as options but trivially can't be the answer, since Feb 29 doesn't exist in those years.</p><p className="mt-2"><b>Per-mode toggles</b> — Year mode adds <i>ab</i> Cross (left of Day/Month/Year) and Jul Cross (right of Day/Month/Year). Month mode adds 1582 Only (right of Day/Month/Year). These are mode-specific, not in the ⚙ Settings menu, since they only apply to one Deduction sub-mode.</p><p className="mt-2"><b><i>ab</i> Cross</b> (Year mode) — when on, the five-year window must cross a year ending in 00 (any 100-year boundary, both leap and non-leap centuries). Practice the <i>ab</i> code change mid-window. Disabled when your year range doesn't span any 100-year boundary.</p><p className="mt-2"><b>Jul Cross</b> (Year mode) — when on, the two-year window must cross October 15, 1582 (the Julian/Gregorian transition). N=2 always. Disabled when the Julian setting is off, or when your year range doesn't contain 1582 plus at least one of its neighbors (1581 or 1583).</p><p className="mt-2"><b>Both Year toggles on</b> — each puzzle randomly picks (50/50) which constraint to enforce. The two can't both be true for the same window.</p><p className="mt-2"><b>1582 Only</b> (Month mode) — when on, every puzzle uses year 1582, forcing the special split layout described above. Disabled when the Julian setting is off or your year range excludes 1582. When the answer's cell groups months from both calendars, Show Codes uses slash notation (e.g., 1/-3, Julian/Gregorian) for any value that differs across the cell's months; values that are the same across all months collapse to a single value.</p><p className="mt-2">Switch subtypes anytime — progress in each is preserved, including question history. Stats are tracked separately for each subtype, and Back/Forward only walks the current subtype's entries. Reset Stats clears the current subtype's stats and history only; the other subtypes' stats and history are untouched.</p></GuideSection>
           <GuideSection id="flash" title="Flash" openId={open} onToggle={toggle}><p>The date is briefly revealed (0.1s–3.0s, default 0.5s, adjustable via the slider) then hidden. Answer from memory. Reset Stats clears your stats and question history.</p></GuideSection>
           <GuideSection id="blitz" title="Blitz" openId={open} onToggle={toggle}>
             <p>Answer as many dates as possible before time runs out. Score shows correct answers for the current round only.</p>
@@ -3198,7 +3342,7 @@
             <p><b>Per Round / Per Question</b> — tap to switch. Per Round uses a single countdown for the whole round (10s–3m, default 60s). Per Question gives each question its own countdown (1s–20s, default 5s); running out of time ends the round. Per Question always enforces no mistakes: tapping Per Question auto-disables Allow Mistakes, and tapping Allow Mistakes on while in Per Question auto-switches back to Per Round.</p>
             <p>When the round ends, the correct answer for the current date is highlighted and your bests are recorded. You can then browse your round's history with Back/Forward and override past dates to adjust your score and saved bests. Overriding a wrong answer that ended the round resumes it.</p>
             <p>Streak is hidden in Per Question since any wrong answer ends the round, making streak equal to score.</p>
-            <p>Best scores are tracked per exact configuration (duration + Allow Mistakes + Per Round/Per Question). Best score and best streak are tracked independently in Per Round — they can come from different rounds. When both came from the same round, a · Same Round tag appears on the right of the Best row. If you leave Blitz after a round ends without pressing Reset, the round state (bests, history, final date) is preserved when you return. Press Reset to clear your current round, unlock the settings, and start fresh. Changing settings while idle resets the current round.</p>
+            <p>Best scores are tracked per exact configuration: timer duration, Allow Mistakes, Per Round/Per Question, Date Format (or Random Format as its own bucket), Leap Year Chance, Force Jan/Feb on Leap Years, year range, and Calendar System (Julian on/off). Changing any of these creates a separate bucket — your previous bests remain stored and reappear when you switch back. Best score and best streak are tracked independently in Per Round; a <i>Same Round</i> or <i>Different Rounds</i> tag tells you whether your best score and best streak came from the same exceptional round, or from two different strong ones. If you leave Blitz after a round ends without pressing Reset, the round state (bests, history, final date) is preserved when you return. Press Reset to clear your current round, unlock the settings, and start fresh. Changing settings while idle resets the current round.</p>
           </GuideSection>
           <GuideSection id="lookup" title="Lookup" openId={open} onToggle={toggle}><p>Enter any AD date to instantly see its weekday. Lookup input is always numeric and follows your selected Date Format (m/d/y, d.m.y, or y-m-d). Lookup ignores Random Format and always uses the selected format directly. Changing the Date Format clears the input box. Supports years 1–10000. Show Codes is available for all results and stays open as you browse your history. The history panel shows up to 10 entries before scrolling and re-renders live when you change the Date Format. October 5–14, 1582 never existed and will appear in history as "Does Not Exist" with Show Codes unavailable.</p></GuideSection>
         </div>
@@ -3329,7 +3473,7 @@
       const cdv=calcDate??null;const scd=typeof onCalcDateChange==="function"?onCalcDateChange:()=>{};
       const sid=selectedHistoryId??null;const ssid=typeof onSelectedHistoryIdChange==="function"?onSelectedHistoryIdChange:()=>{};
       const cov=!!calcOpen;
-      // Q10: Lookup history scroll-state tracking. Only fade is applied here (no
+      // Lookup history scroll-state tracking. Only fade is applied here (no
       // sticky element so no shadow needed). atBottom defaults to true so an empty
       // or short list (no overflow) shows no fade. ResizeObserver covers the case
       // where the list grows from 9→10 entries while the user is viewing it.
@@ -3356,15 +3500,9 @@
       const sco=typeof onCalcOpenChange==="function"?next=>onCalcOpenChange(!!next):()=>{};
       const lastLookupRef=React.useRef(null);
       const lookupInputRef=React.useRef(null);
-      function isLeapL(y){y=y>0?y:1-Math.abs(y);return y%400===0||(y%4===0&&y%100!==0);}
-      function dimL(y,m,julian=false){const leap=julian?(y%4===0):isLeapL(y);return m===2?(leap?29:28):[4,6,9,11].includes(m)?30:31;}
-      function wdayL(y,m,d){function jdn(y,m,d){const a=Math.floor((14-m)/12),y2=y+4800-a,m2=m-3+12*a;return d+Math.floor((153*m2+2)/5)+365*y2+Math.floor(y2/4)-Math.floor(y2/100)+Math.floor(y2/400)-32045;}return((jdn(y>0?y:1-Math.abs(y),m,d)+1)%7+7)%7;}
+      // LookupCard uses module-level isLeap/dim/wday/numericFormatOf — no local duplicates.
       // Map any selected dateFormat to its corresponding Numeric format for input parsing.
-      const numericFmtForInput=(()=>{
-        if(dateFormat==='written-mdy'||dateFormat==='numeric-mdy')return'numeric-mdy';
-        if(dateFormat==='written-dmy'||dateFormat==='numeric-dmy')return'numeric-dmy';
-        return'numeric-ymd';
-      })();
+      const numericFmtForInput=numericFormatOf(dateFormat);
       // Pattern + example based on which numeric format applies.
       const inputMeta=(()=>{
         if(numericFmtForInput==='numeric-mdy')return{label:'m/d/y',example:'7/4/1776',sep:'/',orderType:'mdy'};
@@ -3408,9 +3546,9 @@
           lastLookupRef.current=s;slo(gapMsg);scd(null);ssid(entry.id);sco(false);if(onAddHistory)onAddHistory(entry);lookupInputRef.current?.blur();return;
         }
         const julian=useJulian&&isJulianDate(yy,mm,dd);
-        const maxd=dimL(yy,mm,julian);
+        const maxd=dim(yy,mm,julian);
         if(dd<1||dd>maxd){ssid(null);slo(`Day must be 1–${maxd} for ${MONTH[mm-1]}`);lookupInputRef.current?.focus();return;}
-        const wd=julian?wdayJulian(yy,mm,dd):wdayL(yy,mm,dd);
+        const wd=julian?wdayJulian(yy,mm,dd):wday(yy,mm,dd);
         const d=DAY[wd];
         const displayDate=fmtDate?fmtDate(yy,mm,dd):`${MONTH[mm-1]} ${dd}, ${yy}`;
         const rt=`${displayDate} is a ${d}.`;
@@ -3425,15 +3563,15 @@
       // null, which triggers MethodBreakdownSection's hasDate auto-close effect.
       const selEntry=entry=>{if(!entry)return;ssid(entry.id);slo(entry?.result||"");if(entry.isGap){scd(null);lastLookupRef.current=null;}else{if(typeof entry.y==="number")scd({y:entry.y,m:entry.m,d:entry.d});}if(document.activeElement)document.activeElement.blur();};
       const clearHist=()=>{if(onClearHistory)onClearHistory();ssid(null);scd(null);slo("");sco(false);lastLookupRef.current=null;};
-      const displayNote=React.useMemo(()=>{const selectedEntry=entries.find(e=>e.id===sid);if(selectedEntry&&!selectedEntry.isGap&&typeof selectedEntry.y==='number'&&isJulianDate(selectedEntry.y,selectedEntry.m,selectedEntry.d)){const isJul=useJulian;const wd=isJul?wdayJulian(selectedEntry.y,selectedEntry.m,selectedEntry.d):wdayL(selectedEntry.y,selectedEntry.m,selectedEntry.d);const displayDate=fmtDate?fmtDate(selectedEntry.y,selectedEntry.m,selectedEntry.d):`${MONTH[selectedEntry.m-1]} ${selectedEntry.d}, ${selectedEntry.y}`;return`${displayDate} is a ${DAY[wd]} (${isJul?"Julian":"Gregorian"}).`;}return lo;},[sid,entries,useJulian,fmtDate,lo]);
-      const getEntryWeekday=e=>{if(e.isGap)return"Does Not Exist";if(typeof e.y==='number'&&isJulianDate(e.y,e.m,e.d)){const wd=useJulian?wdayJulian(e.y,e.m,e.d):wdayL(e.y,e.m,e.d);return DAY[wd];}return e.weekday;};
+      const displayNote=React.useMemo(()=>{const selectedEntry=entries.find(e=>e.id===sid);if(selectedEntry&&!selectedEntry.isGap&&typeof selectedEntry.y==='number'&&isJulianDate(selectedEntry.y,selectedEntry.m,selectedEntry.d)){const isJul=useJulian;const wd=isJul?wdayJulian(selectedEntry.y,selectedEntry.m,selectedEntry.d):wday(selectedEntry.y,selectedEntry.m,selectedEntry.d);const displayDate=fmtDate?fmtDate(selectedEntry.y,selectedEntry.m,selectedEntry.d):`${MONTH[selectedEntry.m-1]} ${selectedEntry.d}, ${selectedEntry.y}`;return`${displayDate} is a ${DAY[wd]} (${isJul?"Julian":"Gregorian"}).`;}return lo;},[sid,entries,useJulian,fmtDate,lo]);
+      const getEntryWeekday=e=>{if(e.isGap)return"Does Not Exist";if(typeof e.y==='number'&&isJulianDate(e.y,e.m,e.d)){const wd=useJulian?wdayJulian(e.y,e.m,e.d):wday(e.y,e.m,e.d);return DAY[wd];}return e.weekday;};
       // History entries are stored as {y,m,d} so changing dateFormat re-renders labels live.
       const renderedEntries=React.useMemo(()=>entries.map(e=>{if(e.isGap||typeof e.y!=='number')return e;return{...e,label:fmtDate?fmtDate(e.y,e.m,e.d):e.label};}),[entries,fmtDate,dateFormat]);
       return(
         <div className="mt-1 space-y-4">
           <div className="rounded-2xl panel p-4 space-y-4">
             <div className="flex flex-wrap items-stretch gap-2">
-              <input ref={lookupInputRef} value={li} onChange={e=>sli(e.target.value)} placeholder={`e.g., ${inputMeta.example}`} className="panel rounded-xl px-3 py-2 focus:outline-none focus-ring flex-1 min-w-0"/>
+              <input ref={lookupInputRef} value={li} onChange={e=>sli(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();runLookup();}}} placeholder={`e.g., ${inputMeta.example}`} className="panel rounded-xl px-3 py-2 focus:outline-none focus-ring flex-1 min-w-0"/>
               <button type="button" onClick={runLookup} onMouseDown={e=>e.preventDefault()} className="px-4 py-2 rounded-xl btn-solid text-sm font-medium">Lookup</button>
               <button type="button" onClick={clearLookup} onMouseDown={e=>e.preventDefault()} className="px-4 py-2 rounded-xl bg-zinc-700 text-white text-sm font-medium">Clear</button>
             </div>
