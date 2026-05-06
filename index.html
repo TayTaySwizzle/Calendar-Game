@@ -487,7 +487,7 @@
 
 
 
-    const DEPLOY_TS=new Date('2026-05-06T07:00:00Z');
+    const DEPLOY_TS=new Date('2026-05-06T08:50:00Z');
 
     function StatPanel({stats}){
       // For fractional values (Score, Streak as "X/Y"), shrink the value font
@@ -1147,17 +1147,23 @@
         const meta=document.querySelector("meta[name='theme-color']");
         if(meta&&tc)meta.content=tc;
       },[activeTheme]);
-      const [statsOffByMode,setStatsOffByMode]=useState({});
-      const [avgVisOffByMode,setAvgVisOffByMode]=useState({classic:true,deduction:true});
-      const statsOff=statsOffByMode[mode]??false;
-      const avgVisOff=avgVisOffByMode[mode]??false;
-      const toggleStatsOff=()=>setStatsOffByMode(p=>({...p,[mode]:!statsOff}));
+      // Two independent stat-display toggles, each affecting a trio of boxes in the stats row:
+      //   scoringOff: hides Score / Accuracy / Streak. Display only — these stats keep
+      //     tracking in the background, and re-enabling restores the same values.
+      //   timingOff:  hides Last / Average / Median. Pauses timing entirely — no times
+      //     are recorded while hidden, and re-enabling after any answers triggers a
+      //     full Reset Stats so score and timing always reflect the same question set.
+      const [scoringOffByMode,setScoringOffByMode]=useState({});
+      const [timingOffByMode,setTimingOffByMode]=useState({classic:true,deduction:true});
+      const scoringOff=scoringOffByMode[mode]??false;
+      const timingOff=timingOffByMode[mode]??false;
+      const toggleScoringOff=()=>setScoringOffByMode(p=>({...p,[mode]:!scoringOff}));
       // Turning timing stats ON after calcs happened with them off treats this as a full Reset Stats —
       // clear stacks, question state, and codes panel so score + timing reflect the same set of questions.
-      const toggleTimingVis=()=>{
-        const currentlyOff=avgVisOffByMode[mode]??false;
+      const toggleTimingOff=()=>{
+        const currentlyOff=timingOffByMode[mode]??false;
         const next=!currentlyOff;
-        setAvgVisOffByMode(p=>({...p,[mode]:next}));
+        setTimingOffByMode(p=>({...p,[mode]:next}));
         if(next){timesAtTimingOffRef.current=S.played;}
         else{
           const calcsWhileOff=timesAtTimingOffRef.current!==null&&S.played!==timesAtTimingOffRef.current;
@@ -1676,7 +1682,7 @@
             // Mirrors path 2 (canOverrideCorrect → undo correct). With stats off there's
             // nothing to undo — just advance / stay + clean up.
             setCanOverrideCorrect(false);
-            if(!avgVisOff){
+            if(!timingOff){
               pushAndNext();
               setPendingWrongOverride(null);
             }else{
@@ -1704,7 +1710,7 @@
             // With stats off, no credit to apply — just clear the pending state and advance.
             setPendingWrongOverride(null);
             preCalcPenaltySnapshotRef.current=null;
-            if(!avgVisOff){
+            if(!timingOff){
               pushAndNext();
               setPendingWrongOverride(null);
             }
@@ -1752,7 +1758,7 @@
           }
           prevStatsSnapshotRef.current=null;wrongTimeRef.current=null;setCanOverrideCorrect(false);setCountedWrong(true);
           if(u.wasWrong){if(mode==="deduction"){setDedStack(s=>{const arr=s[dedType]||[];if(!arr.length)return s;const last=arr[arr.length-1];const ci=dedCorrectIdxFor(last);return{...s,[dedType]:[...arr.slice(0,-1),{...last,btns:{[ci]:'correct'},overrideUsed:true}]};});}else{setStack(s=>{if(!s.length)return s;const last=s[s.length-1];const wd=activeWday(last.y,last.m,last.d);return[...s.slice(0,-1),{...last,btns:{[wd]:'correct'},overrideUsed:true}];});}}
-          if(!avgVisOff){pushAndNext();if(mode==="deduction")setDedStack(s=>{const arr=s[dedType]||[];if(!arr.length)return s;return{...s,[dedType]:[...arr.slice(0,-1),{...arr[arr.length-1],overrideUsed:true}]};});else setStack(s=>{if(!s.length)return s;return[...s.slice(0,-1),{...s[s.length-1],overrideUsed:true}];});}
+          if(!timingOff){pushAndNext();if(mode==="deduction")setDedStack(s=>{const arr=s[dedType]||[];if(!arr.length)return s;return{...s,[dedType]:[...arr.slice(0,-1),{...arr[arr.length-1],overrideUsed:true}]};});else setStack(s=>{if(!s.length)return s;return[...s.slice(0,-1),{...s[s.length-1],overrideUsed:true}];});}
           else{setLocked(false);setRevealed(false);setCalcPenalty(false);setCalcOpen(false);}
           return;
         }
@@ -1837,7 +1843,7 @@
             if(timerDone){const bk=getBlitzBk();setBlitzBest(prev=>{const cur=prev[bk]??{score:0,streak:0,scoreRoundId:null,streakRoundId:null};return{...prev,[bk]:{...cur,score:cur.score,streak:Math.max(cur.streak===blitzRoundStats.best?bestStreak:cur.streak,bestStreak)}};});}
           }
           setPendingWrongOverride(null);preCalcPenaltySnapshotRef.current=null;
-          if(!avgVisOff){pushAndNext();if(mode==="deduction")setDedStack(s=>{const arr=s[dedType]||[];if(!arr.length)return s;return{...s,[dedType]:[...arr.slice(0,-1),{...arr[arr.length-1],overrideUsed:true}]};});else setStack(s=>{if(!s.length)return s;return[...s.slice(0,-1),{...s[s.length-1],overrideUsed:true}];});}
+          if(!timingOff){pushAndNext();if(mode==="deduction")setDedStack(s=>{const arr=s[dedType]||[];if(!arr.length)return s;return{...s,[dedType]:[...arr.slice(0,-1),{...arr[arr.length-1],overrideUsed:true}]};});else setStack(s=>{if(!s.length)return s;return[...s.slice(0,-1),{...s[s.length-1],overrideUsed:true}];});}
           return;
         }
         // === PATH 5: RETROACTIVE OVERRIDE OF MOST RECENT STACK ENTRY ===
@@ -2370,7 +2376,7 @@
           }
         }
         // Preserve question state whenever leaving a timing-off mode (no interaction gate)
-        const leavingTimingOff=["classic","deduction","flash"].includes(prevMode)&&(avgVisOffByMode[prevMode]??false);
+        const leavingTimingOff=["classic","deduction","flash"].includes(prevMode)&&(timingOffByMode[prevMode]??false);
         if(leavingTimingOff){
           preservedByModeRef.current[prevMode]={persistBtns:{...persistBtns},locked,revealed,countedWrong,date:{...(dateByMode[prevMode]??dateByMode.classic)},calcOpen:prevCalcOpen};
           if(prevMode==="deduction"&&ded)setSavedDedByType(prev=>({...prev,[dedType]:captureDedSnap()}));
@@ -2380,9 +2386,9 @@
         // === RESET & RESTORE ===
         const snap=timerDoneSnapRef.current;
         const restoringTimerDone=(mode==="blitz")&&snap?.mode===mode;
-        const arrivedTimingOff=["classic","flash","deduction"].includes(mode)&&(avgVisOffByMode[mode]??false);
+        const arrivedTimingOff=["classic","flash","deduction"].includes(mode)&&(timingOffByMode[mode]??false);
         const preservedQ=arrivedTimingOff?preservedByModeRef.current[mode]:null;
-        const arrivedDedPreserve=mode==="deduction"&&(avgVisOffByMode["deduction"]??false)&&!!preservedByModeRef.current["deduction"];
+        const arrivedDedPreserve=mode==="deduction"&&(timingOffByMode["deduction"]??false)&&!!preservedByModeRef.current["deduction"];
         const savedStacks=stacksByModeRef.current[mode];
         if(restoringTimerDone){
           // Slim reset (no stat wipe), then restore full done state including override, browse, and codes state
@@ -2510,12 +2516,22 @@
       const calcTargetKey=calcTarget?`${calcTarget.y}-${calcTarget.m}-${calcTarget.d}`:"none";
       const lookupCalcTargetKey=lookupCalcDate?`${lookupCalcDate.y}-${lookupCalcDate.m}-${lookupCalcDate.d}`:"none";
       useEffect(()=>{const pm=prevModeRef.current;if(pm!==mode){prevModeRef.current=mode;return;}setCalcOpen(false);prevModeRef.current=mode;},[calcTargetKey,mode]);
-      const handleResetStats=()=>{resetStatsCurrent();if(mode==='blitz'){setBlitzBest({});setSuddenBest({});setBlitzBestNew({});setSuddenBestNew({});}setStack([]);setForwardStack([]);if(mode==='deduction'){setDedStack(s=>({...s,[dedType]:[]}));setDedForwardStack(s=>({...s,[dedType]:[]}));}else{setDedStack(blankDedStacks());setDedForwardStack(blankDedStacks());}setBackDepth(0);resetPB();setLocked(false);setRevealed(false);setCountedWrong(false);setCanOverrideCorrect(false);setPendingWrongOverride(null);setOverrideUsedThisQ(false);setCalcPenalty(false);setCalcOpen(false);wrongTimeRef.current=null;prevStatsSnapshotRef.current=null;preCalcPenaltySnapshotRef.current=null;saveStatsThisQRef.current=null;setDate(genDate(minY,maxY));if(mode==="deduction")spawnDed();tStartRef.current=performance.now();};
+      const handleResetStats=()=>{resetStatsCurrent();if(mode==='blitz'){setBlitzBest({});setSuddenBest({});setBlitzBestNew({});setSuddenBestNew({});}setStack([]);setForwardStack([]);if(mode==='deduction'){setDedStack(s=>({...s,[dedType]:[]}));setDedForwardStack(s=>({...s,[dedType]:[]}));}else{setDedStack(blankDedStacks());setDedForwardStack(blankDedStacks());}setBackDepth(0);resetPB();setLocked(false);setRevealed(false);setCountedWrong(false);setCanOverrideCorrect(false);setPendingWrongOverride(null);setOverrideUsedThisQ(false);setCalcPenalty(false);setCalcOpen(false);wrongTimeRef.current=null;prevStatsSnapshotRef.current=null;preCalcPenaltySnapshotRef.current=null;saveStatsThisQRef.current=null;
+        // Date regen rule for Reset Stats:
+        //   - Timing visible (timingOff false): always regen — fresh stats need a fresh date.
+        //   - Timing hidden (timingOff true): keep the current date unless it's been burned
+        //     (wrong answer, Reveal, or Show Codes) — you haven't used it yet.
+        //   - Flash mid-date: always regen and return to the dash state, regardless of visibility.
+        const flashMidDate=mode==='flash'&&active;
+        if(!effectiveTimingOff||countedWrong||revealed||flashMidDate){setDate(genDate(minY,maxY));if(mode==="deduction")spawnDed();}
+        if(flashMidDate){clearTimeout(flashTimerRef.current);flashTimerRef.current=null;setFlashPhase("dash");flashDeadlineRef.current=null;setFlashRemainMs(flashMs);resetFlashBar();setActive(false);setShowTimerDate(false);}
+        tStartRef.current=performance.now();
+      };
       const togglePerQBtn=()=>{if(active||timerDone)return;const newPerQ=!perQ;if(newPerQ&&allowMistakes)setAllowMistakes(false);setPerQ(newPerQ);};
       const toggleAllowMistakesBtn=()=>{if(active||timerDone)return;const newAM=!allowMistakes;if(newAM&&perQ)setPerQ(false);setAllowMistakes(newAM);};
       const canHideStats=["classic","deduction","flash"].includes(mode);
-      const effectiveStatsOff=canHideStats&&statsOff;
-      const effectiveAvgVisOff=canHideStats&&avgVisOff;
+      const effectiveScoringOff=canHideStats&&scoringOff;
+      const effectiveTimingOff=canHideStats&&timingOff;
       useEffect(()=>{
         if(mode!=="blitz")return;
         const prev=blitzConfigPrevRef.current;
@@ -3124,12 +3140,12 @@
         <div className="mx-auto px-4 pb-5 w-full max-w-[480px]">
           {showStats&&(<>
             <div className={saveStats?"":"opacity-50"}><StatPanel stats={[
-              {label:"Score",value:(mode==="blitz"&&!perQ)?`${blitzRoundStats.good}/${blitzRoundStats.played}`:`${S.good}/${S.played}`,off:effectiveStatsOff,fn:canHideStats?toggleStatsOff:null},
-              {label:"Accuracy",value:S.played?`${(S.good/S.played*100).toFixed(1)}%`:"—",off:effectiveStatsOff,fn:canHideStats?toggleStatsOff:null},
-              ...(!(mode==="blitz"&&perQ)?[{label:"Streak",value:`${S.streak}/${S.best}`,off:effectiveStatsOff,fn:canHideStats?toggleStatsOff:null}]:[]),
-              {label:"Last",value:truncTime(sLast),off:effectiveAvgVisOff,fn:canHideStats?toggleTimingVis:null},
-              {label:"Average",value:fmtTime(sAvg),off:effectiveAvgVisOff,fn:canHideStats?toggleTimingVis:null},
-              {label:"Median",value:fmtTime(sMed),off:effectiveAvgVisOff,fn:canHideStats?toggleTimingVis:null},
+              {label:"Score",value:(mode==="blitz"&&!perQ)?`${blitzRoundStats.good}/${blitzRoundStats.played}`:`${S.good}/${S.played}`,off:effectiveScoringOff,fn:canHideStats?toggleScoringOff:null},
+              {label:"Accuracy",value:S.played?`${(S.good/S.played*100).toFixed(1)}%`:"—",off:effectiveScoringOff,fn:canHideStats?toggleScoringOff:null},
+              ...(!(mode==="blitz"&&perQ)?[{label:"Streak",value:`${S.streak}/${S.best}`,off:effectiveScoringOff,fn:canHideStats?toggleScoringOff:null}]:[]),
+              {label:"Last",value:truncTime(sLast),off:effectiveTimingOff,fn:canHideStats?toggleTimingOff:null},
+              {label:"Average",value:fmtTime(sAvg),off:effectiveTimingOff,fn:canHideStats?toggleTimingOff:null},
+              {label:"Median",value:fmtTime(sMed),off:effectiveTimingOff,fn:canHideStats?toggleTimingOff:null},
             ]}/></div>
             {["classic","deduction","flash"].includes(mode)&&(<div className="mt-3"><button type="button" data-key="S" className={RESET_STATS_BTN_CLASS} onClick={handleResetStats}>Reset Stats</button></div>)}
             {mode==='blitz'&&!perQ&&(()=>{const bk=getBlitzBk();const newF=blitzBestNew[bk]||{score:false,streak:false};const b=blitzBest[bk];const showTag=b&&b.scoreRoundId!=null&&b.streakRoundId!=null;return(<div className="mt-3 text-xs text-purple-300/60"><div className="flex flex-wrap items-start gap-4"><div className="min-w-[125px]">Best Score: {b?.score??'—'}{newF.score&&<NewBestStar/>}</div><div className="min-w-[125px]">Best Streak: {b?.streak??'—'}{newF.streak&&<NewBestStar/>}</div>{showTag&&<span className="shrink-0 ml-auto">{b.scoreRoundId===b.streakRoundId?"Same Round":"Different Rounds"}</span>}</div></div>);})()}
@@ -3293,7 +3309,7 @@
             <p><b>New</b> — load a fresh date. In timer modes, only available after pressing Begin.</p>
             <p><b>Begin</b> — timer modes only (Blitz, Flash, AoX). Starts a round or run. After pressing Begin, the timer starts and the date is shown (Flash hides it after the configured duration; AoX hides it between solves only when One-By-One is on).</p>
             <p><b>Reset</b> — timer modes only. In Blitz, ends the current round and unlocks settings; saved bests for the round are preserved. In AoX, ends the current run; saved bests are preserved. Press Reset and then Begin to start a fresh round/run.</p>
-            <p><b>Reset Stats</b> — casual modes only (Classic, Flash, Deduction). Clears your stats and question history for the current mode (Deduction only resets the current sub-type's stats). Does not affect timer-mode bests.</p>
+            <p><b>Reset Stats</b> — casual modes only (Classic, Flash, Deduction). Clears your stats and question history for the current mode (Deduction only resets the current sub-type's stats). Generates a new date when timing stats are visible, or when you've burned the current date (answered wrong, revealed, or shown codes); otherwise the current date is kept. In Flash, mid-question Reset Stats always generates a new date and returns to the dash state. Does not affect timer-mode bests.</p>
             <p><b>Back (&lt;)</b> — return to the previous date. The answer is shown and the card is locked. No stat penalty. You can go back through your entire history in Classic, Flash, and Deduction; in Blitz and AoX, you can browse the current round or run. Every entry in your history shows the correct answer in green; if you got it wrong, your wrong guess(es) appear as dimmed red alongside the green. While browsing back, a small <b>Q#</b> label appears at the top-right of the date card showing your position in history (e.g. Q3 means you're on the third question viewed).</p>
             <p><b>Forward (&gt;)</b> — move forward through dates you've browsed past with Back. The forward history clears whenever you answer a new question, press New/Begin/Reset, or take any action that advances the date. Overriding while browsing back does not clear the forward history. Each entry remembers its date format and calendar system, so a back-then-forward round trip never alters how a date was originally shown.</p>
             <p><b>Reveal</b> — show the correct answer without guessing. Counts as a wrong attempt. No penalty on unanswered dates while browsing back.</p>
@@ -3308,7 +3324,7 @@
             <p>Time formatting follows the WCA speedcubing convention: individual single times (Last) are <i>truncated</i> to hundredths — the third decimal is dropped, never rounded. Averages, medians, and bests are <i>rounded</i> to the nearest hundredth. Truncating singles prevents fortunate rounding boundaries on individual attempts; rounding aggregates avoids systematic downward bias.</p>
             <p>One question = one attempt. Getting a question wrong then right still counts as one attempt, marked correct.</p>
             <p>When you set a new best, a small ★ appears next to the value to flag it.</p>
-            <p className="text-purple-300/70 text-[12px]">In modes designed for casual practice (Classic, Deduction, Flash), you can tap any stat to hide it. Tapping Score, Accuracy, or Streak hides all three; tapping any timing stat hides all three. Stats always track in the background regardless of visibility. Enabling timing stats resets all stats so the score and timing always reflect the same set of questions. When timing stats are off, leaving and returning to a mode preserves the current question exactly as you left it — same date, same answers, codes panel in the same state. In all other modes, stats are always visible.</p>
+            <p className="text-purple-300/70 text-[12px]">In modes designed for casual practice (Classic, Deduction, Flash), you can tap any stat to hide it. Tapping Score, Accuracy, or Streak hides all three; tapping any timing stat hides all three. Score, Accuracy, and Streak continue tracking in the background while hidden — re-enabling them brings the same numbers back. Timing stats behave differently: if you answer any questions while timing is hidden, re-enabling timing triggers a full reset of all stats so score and timing always reflect the same set of questions. When timing stats are off, leaving and returning to a mode preserves the current question exactly as you left it — same date, same answers, codes panel in the same state. In all other modes, stats are always visible.</p>
           </GuideSection>
           <Divider label="Settings"/>
           <GuideSection id="dateformat" title="Date Format" openId={open} onToggle={toggle}><p>Set via the ⚙ settings menu. Choose one of five real-world formats: <b>Written MDY</b> (April 27, 1828), <b>Written DMY</b> (27 April 1828), <b>Numeric MDY</b> (4/27/1828), <b>Numeric DMY</b> (27.4.1828), or <b>Numeric YMD</b> (1828-4-27). Numeric formats use a fixed separator convention: MDY uses '/', DMY uses '.', YMD uses '-'. Years always show in full, never abbreviated.</p><p>Only DMY, MDY, and YMD orderings are offered because those are the only orderings actually used in real life — orderings like YDM aren't standard anywhere.</p><p><b>Random Format</b>, when on, rolls one of the five formats per date in game modes only — your selected format is preserved underneath (the panels just lock visually). Lookup and the Last Updated timestamp ignore Random and always use the selected format. The Last Updated timestamp uses the numeric version of whichever format you've selected.</p><p>In Classic, Deduction, Flash, and AoX (idle), format changes on an unanswered, untouched date may regenerate the date. Turning Random Format on always regenerates (a fresh random format is rolled). Turning Random Format off regenerates only if the displayed format differs from your selected dropdown format. Changing the dropdown while Random Format is off regenerates only if the new selection differs from the displayed format. Changing the dropdown while Random Format is on does nothing visible — the dropdown is overridden by the random roll. If you've already made a wrong guess on the displayed date, format changes are deferred — the wrong-state is preserved and the new format applies on the next generated date. In active Blitz rounds and AoX runs, any format change ends the round.</p><p>In game modes' Show Codes, codes appear in the order the date is read (left to right), with Leap shown once you've seen both the year and month.</p></GuideSection>
@@ -3320,7 +3336,7 @@
           <GuideSection id="reset-settings" title="Reset Settings" openId={open} onToggle={toggle}><p>The Reset Settings button at the bottom of the ⚙ menu restores everything in the menu to its defaults: Random Format on, Written MDY, Julian off, year range 1–10000, Leap Year Chance Random, Force Jan/Feb off, Save Stats on, and theme back to Use System Settings with Dusk (dark) and Light (light). It does not touch mode-specific config outside the menu (AoX N, timer durations, Deduction sub-types and toggles) or your stats and history. No confirmation prompt — tap to apply.</p></GuideSection>
           <GuideSection id="keyboard" title="Keyboard Input" openId={open} onToggle={toggle}><p>On any device with a hardware keyboard (typically desktop), you can press keys to operate the site without tapping. The on-screen layout is identical to mobile — keyboard input is the only desktop-specific addition.</p><div className="mt-3 space-y-3"><div><div className="text-[10px] uppercase tracking-widest text-purple-300/60 mb-1.5">Answer Grid</div><div className="space-y-1 text-sm"><div className="flex items-center gap-2"><Kbd>0</Kbd><span>Sunday</span></div><div className="flex items-center gap-2"><Kbd>1</Kbd><span>Monday</span></div><div className="flex items-center gap-2"><Kbd>2</Kbd><span>Tuesday</span></div><div className="flex items-center gap-2"><Kbd>3</Kbd><span>Wednesday</span></div><div className="flex items-center gap-2"><Kbd>4</Kbd><span>Thursday</span></div><div className="flex items-center gap-2"><Kbd>5</Kbd><span>Friday</span></div><div className="flex items-center gap-2"><Kbd>6</Kbd><span>Saturday</span></div></div><p className="mt-2 text-xs italic">In Deduction Month and Year, the same keys map positionally to the boxes or year options on screen.</p></div><div><div className="text-[10px] uppercase tracking-widest text-purple-300/60 mb-1.5">Game Actions</div><div className="space-y-1 text-sm"><div className="flex items-center gap-2"><Kbd>N</Kbd><span>New / Begin / Reset</span></div><div className="flex items-center gap-2"><Kbd>R</Kbd><span>Reveal</span></div><div className="flex items-center gap-2"><Kbd>O</Kbd><span>Override</span></div><div className="flex items-center gap-2"><Kbd>C</Kbd><span>Show / Hide Codes</span></div><div className="flex items-center gap-2"><Kbd>S</Kbd><span>Reset Stats</span></div><div className="flex items-center gap-2"><Kbd>←</Kbd><span>Back</span></div><div className="flex items-center gap-2"><Kbd>→</Kbd><span>Forward</span></div></div></div><div><div className="text-[10px] uppercase tracking-widest text-purple-300/60 mb-1.5">Overlays</div><div className="space-y-1 text-sm"><div className="flex items-center gap-2"><Kbd>H</Kbd><span>How to Play (toggle)</span></div><div className="flex items-center gap-2"><Kbd>G</Kbd><span>Settings ⚙ (toggle)</span></div></div></div><div><div className="text-[10px] uppercase tracking-widest text-purple-300/60 mb-1.5">Mode Switching</div><div className="space-y-1 text-sm"><div className="flex items-center gap-2"><Kbd>K</Kbd><span>Classic</span></div><div className="flex items-center gap-2"><Kbd>F</Kbd><span>Flash</span></div><div className="flex items-center gap-2"><Kbd>B</Kbd><span>Blitz</span></div><div className="flex items-center gap-2"><Kbd>A</Kbd><span>AoX</span></div><div className="flex items-center gap-2"><Kbd>D</Kbd><span>Deduction</span></div><div className="flex items-center gap-2"><Kbd>L</Kbd><span>Lookup</span></div></div></div></div><p className="mt-3">Letter keys are case-insensitive. Keys are ignored when you're typing in an input field or when a modifier key (Ctrl/Cmd/Alt/Shift) is held. Locked or already-pressed buttons are skipped, just like a click would be. Reset Stats (S) only applies to the casual modes (Classic, Deduction, Flash); pressing it in Blitz, AoX, or Lookup is a no-op since those modes don't have a separate Reset Stats button (their round/run Reset clears in-round/in-run stats; persistent bests update only when set).</p></GuideSection>
           <Divider label="Modes"/>
-          <GuideSection id="classic" title="Classic" openId={open} onToggle={toggle}><p>The main practice mode with no time pressure. Answer at your own pace. Override works after both wrong and correct answers. Reset Stats clears your stats and question history.</p></GuideSection>
+          <GuideSection id="classic" title="Classic" openId={open} onToggle={toggle}><p>The main practice mode with no time pressure. Answer at your own pace. Override works after both wrong and correct answers. Reset Stats clears your stats and question history; when timing stats are hidden and you haven't burned the current date, the date is kept.</p></GuideSection>
           <GuideSection id="aox" title="AoX" openId={open} onToggle={toggle}>
             <p>Average your times over a set number of correct solves (2–1000). The score shows correct answers out of total attempts; the run ends when correct answers reach your target. Press Begin to start a run.</p>
             <p><b>Allow Mistakes</b> — wrong answers don't end the run but don't count toward your score.</p>
@@ -3332,8 +3348,8 @@
             <p>Bests are tracked per exact configuration: AoX size (n), Allow Mistakes, Date Format (or Random Format on its own bucket), Leap Year Chance, Force Jan/Feb on Leap Years, year range, and Calendar System (Julian on/off). Changing any of these creates a separate bucket — your previous bests remain stored and reappear when you switch back to that exact config.</p>
             <p>The small <b>Q#</b> label at the top-right of the date card appears not only while back-browsing but also at run end (done/failed) so you can identify which question of the run you're viewing in the summary.</p>
           </GuideSection>
-          <GuideSection id="deduction" title="Deduction" openId={open} onToggle={toggle}><p>Identify the missing piece of a date given the rest plus the weekday. Choose Day, Month, or Year mode. The displayed date follows your selected Date Format (or random format snapshot, if Random Format is on), with a fixed-width underscore placeholder where the missing piece would normally appear.</p><p className="mt-2"><b>Day</b> — seven consecutive days are shown, each with a unique day code. The correct day can appear in any position. <i>October 1582 with Julian on:</i> days 5–14 don't exist (the Gregorian transition skipped them), so the valid days are 1–4 and 15–31. When the window can't fit seven days on one side of the gap, it shrinks to four — codes 1, 2, 3, 4 repeat at days 15, 16, 17, 18, so a five-day window crossing the gap would have a duplicate code.</p><p className="mt-2"><b>Month</b> — seven fixed boxes group months that share the same month code, so tapping any month within a box gives the same weekday for that date. Tap the box containing the correct month. The boxes are always in the same position. In leap years, January shifts into the Apr/Jul box (becoming Jan/Apr/Jul) and February shifts into the Aug box (becoming Feb/Aug); the other boxes are unchanged. <i>Year 1582 with Julian on:</i> a special layout applies because the Julian/Gregorian transition splits the year — January through September and October 1–4 use Julian (year code +1), while October 15+ and November/December use Gregorian (year code −2). October's box position depends on the day: for days 1–4 it joins Jan and Nov ("Jan/Oct/Nov"); for days 15–31 it joins Jun ("Jun/Oct"); for days 5–14 it's excluded since those dates don't exist. The other six boxes are arranged differently from the standard layout — practice carefully.</p><p className="mt-2"><b>Year</b> — five consecutive year options. Each option has a unique year code, so only the correct year matches the displayed weekday. The correct year can appear in any position. <i>With Julian on:</i> when the five-year window would cross October 15, 1582 (the Julian/Gregorian boundary), it shrinks to two years — the calendar's 10-day jump produces a +5 weekday shift across that boundary that breaks distinctness for any longer window. <i>February 29:</i> only allowed when the window contains at least one leap year (Gregorian or Julian as appropriate). Non-leap years still appear as options but trivially can't be the answer, since Feb 29 doesn't exist in those years.</p><p className="mt-2"><b>Per-mode toggles</b> — Year mode adds <i>ab</i> Cross (left of Day/Month/Year) and Jul Cross (right of Day/Month/Year). Month mode adds 1582 Only (right of Day/Month/Year). These are mode-specific, not in the ⚙ Settings menu, since they only apply to one Deduction sub-mode.</p><p className="mt-2"><b><i>ab</i> Cross</b> (Year mode) — when on, the five-year window must cross a year ending in 00 (any 100-year boundary, both leap and non-leap centuries). Practice the <i>ab</i> code change mid-window. Disabled when your year range doesn't span any 100-year boundary.</p><p className="mt-2"><b>Jul Cross</b> (Year mode) — when on, the two-year window must cross October 15, 1582 (the Julian/Gregorian transition). N=2 always. Disabled when the Julian setting is off, or when your year range doesn't contain 1582 plus at least one of its neighbors (1581 or 1583).</p><p className="mt-2"><b>Both Year toggles on</b> — each puzzle randomly picks (50/50) which constraint to enforce. The two can't both be true for the same window.</p><p className="mt-2"><b>1582 Only</b> (Month mode) — when on, every puzzle uses year 1582, forcing the special split layout described above. Disabled when the Julian setting is off or your year range excludes 1582. When the answer's cell groups months from both calendars, Show Codes uses slash notation (e.g., 1/-3, Julian/Gregorian) for any value that differs across the cell's months; values that are the same across all months collapse to a single value.</p><p className="mt-2">Switch subtypes anytime — progress in each is preserved, including question history. Stats are tracked separately for each subtype, and Back/Forward only walks the current subtype's entries. Reset Stats clears the current subtype's stats and history only; the other subtypes' stats and history are untouched.</p></GuideSection>
-          <GuideSection id="flash" title="Flash" openId={open} onToggle={toggle}><p>The date is briefly revealed (0.1s–3.0s, default 0.5s, adjustable via the slider) then hidden. Answer from memory. Reset Stats clears your stats and question history.</p></GuideSection>
+          <GuideSection id="deduction" title="Deduction" openId={open} onToggle={toggle}><p>Identify the missing piece of a date given the rest plus the weekday. Choose Day, Month, or Year mode. The displayed date follows your selected Date Format (or random format snapshot, if Random Format is on), with a fixed-width underscore placeholder where the missing piece would normally appear.</p><p className="mt-2"><b>Day</b> — seven consecutive days are shown, each with a unique day code. The correct day can appear in any position. <i>October 1582 with Julian on:</i> days 5–14 don't exist (the Gregorian transition skipped them), so the valid days are 1–4 and 15–31. When the window can't fit seven days on one side of the gap, it shrinks to four — codes 1, 2, 3, 4 repeat at days 15, 16, 17, 18, so a five-day window crossing the gap would have a duplicate code.</p><p className="mt-2"><b>Month</b> — seven fixed boxes group months that share the same month code, so tapping any month within a box gives the same weekday for that date. Tap the box containing the correct month. The boxes are always in the same position. In leap years, January shifts into the Apr/Jul box (becoming Jan/Apr/Jul) and February shifts into the Aug box (becoming Feb/Aug); the other boxes are unchanged. <i>Year 1582 with Julian on:</i> a special layout applies because the Julian/Gregorian transition splits the year — January through September and October 1–4 use Julian (year code +1), while October 15+ and November/December use Gregorian (year code −2). October's box position depends on the day: for days 1–4 it joins Jan and Nov ("Jan/Oct/Nov"); for days 15–31 it joins Jun ("Jun/Oct"); for days 5–14 it's excluded since those dates don't exist. The other six boxes are arranged differently from the standard layout — practice carefully.</p><p className="mt-2"><b>Year</b> — five consecutive year options. Each option has a unique year code, so only the correct year matches the displayed weekday. The correct year can appear in any position. <i>With Julian on:</i> when the five-year window would cross October 15, 1582 (the Julian/Gregorian boundary), it shrinks to two years — the calendar's 10-day jump produces a +5 weekday shift across that boundary that breaks distinctness for any longer window. <i>February 29:</i> only allowed when the window contains at least one leap year (Gregorian or Julian as appropriate). Non-leap years still appear as options but trivially can't be the answer, since Feb 29 doesn't exist in those years.</p><p className="mt-2"><b>Per-mode toggles</b> — Year mode adds <i>ab</i> Cross (left of Day/Month/Year) and Jul Cross (right of Day/Month/Year). Month mode adds 1582 Only (right of Day/Month/Year). These are mode-specific, not in the ⚙ Settings menu, since they only apply to one Deduction sub-mode.</p><p className="mt-2"><b><i>ab</i> Cross</b> (Year mode) — when on, the five-year window must cross a year ending in 00 (any 100-year boundary, both leap and non-leap centuries). Practice the <i>ab</i> code change mid-window. Disabled when your year range doesn't span any 100-year boundary.</p><p className="mt-2"><b>Jul Cross</b> (Year mode) — when on, the two-year window must cross October 15, 1582 (the Julian/Gregorian transition). N=2 always. Disabled when the Julian setting is off, or when your year range doesn't contain 1582 plus at least one of its neighbors (1581 or 1583).</p><p className="mt-2"><b>Both Year toggles on</b> — each puzzle randomly picks (50/50) which constraint to enforce. The two can't both be true for the same window.</p><p className="mt-2"><b>1582 Only</b> (Month mode) — when on, every puzzle uses year 1582, forcing the special split layout described above. Disabled when the Julian setting is off or your year range excludes 1582. When the answer's cell groups months from both calendars, Show Codes uses slash notation (e.g., 1/-3, Julian/Gregorian) for any value that differs across the cell's months; values that are the same across all months collapse to a single value.</p><p className="mt-2">Switch subtypes anytime — progress in each is preserved, including question history. Stats are tracked separately for each subtype, and Back/Forward only walks the current subtype's entries. Reset Stats clears the current subtype's stats and history only; the other subtypes' stats and history are untouched. When timing stats are hidden and you haven't burned the current question, the question is kept.</p></GuideSection>
+          <GuideSection id="flash" title="Flash" openId={open} onToggle={toggle}><p>The date is briefly revealed (0.1s–3.0s, default 0.5s, adjustable via the slider) then hidden. Answer from memory. Reset Stats clears your stats and question history. Mid-question, Reset Stats always generates a new date and returns to the dash state.</p></GuideSection>
           <GuideSection id="blitz" title="Blitz" openId={open} onToggle={toggle}>
             <p>Answer as many dates as possible before time runs out. Score shows correct answers for the current round only.</p>
             <p><b>Allow Mistakes</b> — when on, wrong answers count against accuracy but don't end the round. When off, a wrong answer ends the round immediately.</p>
